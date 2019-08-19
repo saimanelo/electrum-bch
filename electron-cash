@@ -281,8 +281,9 @@ def init_cmdline(config_options, server):
         print_stderr("In particular, DO NOT use 'redeem private key' services proposed by third parties.")
 
     # commands needing password
-    if (cmd.requires_wallet and storage.is_encrypted() and server is None)\
-       or (cmd.requires_password and (storage.get('use_encryption') or storage.is_encrypted())):
+    if  ( (cmd.requires_wallet and storage.is_encrypted() and server is False)\
+       or (cmdname == 'load_wallet' and storage.is_encrypted())\
+       or (cmd.requires_password and (storage.is_encrypted() or storage.get('use_encryption')))):
         if config.get('password'):
             password = config.get('password')
         else:
@@ -402,8 +403,6 @@ def run_start(config, config_options, subcommand):
 def run_daemon(config, config_options):
     """Run the daemon"""
     subcommand = config.get("subcommand")
-    if subcommand in ["load_wallet"]:
-        init_daemon(config_options)
     if subcommand in [None, "start"]:
         return run_start(config, config_options, subcommand)
     server = daemon.get_server(config)
