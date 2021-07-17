@@ -106,6 +106,8 @@ class SimpleConfig(PrintError):
             make_dir(path)
         elif self.get('chipnet'):
             path = os.path.join(path, 'chipnet')
+        elif self.get('regtest'):
+            path = os.path.join(path, 'regtest')
             make_dir(path)
 
         obsolete_file = os.path.join(path, 'recent_servers')

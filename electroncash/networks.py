@@ -39,6 +39,7 @@ def _read_json_dict(filename):
 
 class AbstractNet:
     TESTNET = False
+    REGTEST = False
     LEGACY_POW_TARGET_TIMESPAN = 14 * 24 * 60 * 60   # 2 weeks
     LEGACY_POW_TARGET_INTERVAL = 10 * 60  # 10 minutes
     LEGACY_POW_RETARGET_BLOCKS = LEGACY_POW_TARGET_TIMESPAN // LEGACY_POW_TARGET_INTERVAL  # 2016 blocks
@@ -184,6 +185,24 @@ class ScaleNet(TestNet):
     asert_daa = ASERTDaa(is_testnet=False)  # Despite being a "testnet", ScaleNet uses 2d half-life
     asert_daa.anchor = None  # Intentionally not specified because it's after checkpoint; blockchain.py will calculate
 
+class RegtestNet(TestNet):
+    GENESIS = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"
+    TITLE = 'Electron Cash Regtest'
+    CASHADDR_PREFIX = "bchreg"
+    REGTEST = True
+
+    BITCOIN_CASH_FORK_BLOCK_HEIGHT = 0
+    BITCOIN_CASH_FORK_BLOCK_HASH = GENESIS
+
+    # FIXME: due to asertdaa, we need a blockchain with at least 127+100 blocks
+    # if verification block is not set, otherwise verification block hash is dynamic
+    # if it is set, we still need 147 blocks
+    VERIFICATION_BLOCK_HEIGHT = 200
+    VERIFICATION_BLOCK_MERKLE_ROOT = "bba85e63a92947479e922acc55b398e1ce2b1e78aa375e5d50bda9ae84b312de"
+    asert_daa = ASERTDaa(is_testnet=True)
+
+    DEFAULT_SERVERS = _read_json_dict('servers_regtest.json')  # DO NOT MODIFY IN CLIENT CODE
+
 
 # All new code should access this to get the current network config.
 net = MainNet
@@ -217,6 +236,11 @@ def set_testnet4():
 def set_scalenet():
     global net
     net = ScaleNet
+    _set_units()
+
+def set_regtest():
+    global net
+    net = RegtestNet
     _set_units()
 
 

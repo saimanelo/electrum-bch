@@ -187,6 +187,7 @@ setup(
             'servers_testnet.json',
             'servers_testnet4.json',
             'servers_scalenet.json',
+            'servers_regtest.json',
             'currencies.json',
             'www/index.html',
             'wordlist/*.txt',
