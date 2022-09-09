@@ -1268,11 +1268,13 @@ class Transaction:
                             for item in need_dl_txids[txid]:
                                 ii, n = item
                                 assert n < len(tx.outputs())
-                                outp = tx.outputs()[n]
+                                tup = tx.outputs(tokens=True)[n]
+                                outp, token_data = tup
                                 addr, value = outp[1], outp[2]
                                 inps[ii]['value'] = value
                                 inps[ii]['address'] = addr
-                                print_error("fetch_input_data: fetched from network", ii, addr, value)
+                                inps[ii]['tokenData'] = token_data
+                                print_error("fetch_input_data: fetched from network", ii, addr, value, token_data)
                             prog(i, q_ct)  # tell interested code of progress
                         except queue.Empty:
                             print_error("fetch_input_data: timed out after 10.0s fetching from network, giving up.")

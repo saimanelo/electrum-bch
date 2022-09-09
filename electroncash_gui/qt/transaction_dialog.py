@@ -678,6 +678,19 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                     # Schnorr
                     cursor.insertText(' {}'.format(SCHNORR_SIGIL), ext)
                     has_schnorr = True
+                if x.get('tokenData'):
+                    cursor.insertBlock()
+                    cr_text = '\u21b3 '
+                    cursor.insertText(cr_text, ext)
+                    input_token_text = repr(x['tokenData'])
+                    fmt = text_format(addr)
+                    # Set token background color to a slightly different shade of the change/receive color
+                    brush = fmt.background()
+                    color = brush.color()
+                    color.setAlpha(0x77)
+                    brush.setColor(color)
+                    tok.setBackground(brush)
+                    cursor.insertText(input_token_text, tok)
             cursor.insertBlock()
 
         self.schnorr_label.setVisible(has_schnorr)
@@ -718,9 +731,6 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             # our preferred yellow/green for change/receiving and also
             # linkify it.
             addrstr = addr.to_ui_string()
-            tokstr = ""
-            if token_data is not None:
-                tokstr = " " + repr(token_data)
             my_addr_in_script_str = my_addr_in_script and my_addr_in_script.to_ui_string()
             idx = my_addr_in_script_str and addrstr.find(my_addr_in_script_str)
             if idx is not None and idx > -1:
@@ -732,7 +742,22 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 # Regular format. Was not a Cash Accounts script, just
                 # any old Address/ScriptOutput/PublicKey output.
                 cursor.insertText(addrstr, text_format(addr))
-            if tokstr:
+            # /CashAccounts support
+            # Mark B. Lundeberg's patented output formatter logic™
+            if v is not None:
+                if len(addrstr) > 42:  # for long outputs, make a linebreak.
+                    cursor.insertBlock()
+                    addrstr = '\u21b3'
+                    cursor.insertText(addrstr, ext)
+                # insert enough spaces until column 43, to line up amounts
+                cursor.insertText(' '*(43 - len(addrstr)), ext)
+                cursor.insertText(format_amount(v), ext)
+            # /Mark B. Lundeberg's patented output formatting logic™
+            if token_data is not None:
+                tokstr = repr(token_data)
+                cursor.insertBlock()
+                cr_text = '\u21b3 '
+                cursor.insertText(cr_text, ext)
                 fmt = text_format(addr)
                 # Set token background color to a slightly different shade of the change/receive color
                 brush = fmt.background()
@@ -741,19 +766,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 brush.setColor(color)
                 tok.setBackground(brush)
                 cursor.insertText(tokstr, tok)
-            # /CashAccounts support
-            # Mark B. Lundeberg's patented output formatter logic™
-            if v is not None:
-                if len(addrstr) + len(tokstr) > 42: # for long outputs, make a linebreak.
-                    cursor.insertBlock()
-                    addrstr = '\u21b3'
-                    tokstr = ''
-                    cursor.insertText(addrstr, ext)
-                # insert enough spaces until column 43, to line up amounts
-                cursor.insertText(' '*(43 - len(addrstr) - len(tokstr)), ext)
-                cursor.insertText(format_amount(v), ext)
             cursor.insertBlock()
-            # /Mark B. Lundeberg's patented output formatting logic™
 
         # Cash Accounts support
         if ca_script:
