@@ -1,7 +1,7 @@
 import unittest
 from pprint import pprint
 
-from .. import transaction
+from .. import serialize, transaction
 from ..address import Address, ScriptOutput, PublicKey
 from ..bitcoin import TYPE_ADDRESS, TYPE_PUBKEY, TYPE_SCRIPT
 
@@ -17,12 +17,12 @@ nonmin_blob = '010000000142b88360bd83813139af3a251922b7f3d2ac88e45a2a703c28db8ee
 class TestBCDataStream(unittest.TestCase):
 
     def test_compact_size(self):
-        s = transaction.BCDataStream()
+        s = serialize.BCDataStream()
         values = [0, 1, 252, 253, 2**16-1, 2**16, 2**32-1, 2**32, 2**64-1]
         for v in values:
             s.write_compact_size(v)
 
-        with self.assertRaises(transaction.SerializationError):
+        with self.assertRaises(serialize.SerializationError):
             s.write_compact_size(-1)
 
         self.assertEqual(bh2u(s.input),
@@ -30,12 +30,12 @@ class TestBCDataStream(unittest.TestCase):
         for v in values:
             self.assertEqual(s.read_compact_size(), v)
 
-        with self.assertRaises(transaction.SerializationError):
+        with self.assertRaises(serialize.SerializationError):
             s.read_compact_size()
 
     def test_string(self):
-        s = transaction.BCDataStream()
-        with self.assertRaises(transaction.SerializationError):
+        s = serialize.BCDataStream()
+        with self.assertRaises(serialize.SerializationError):
             s.read_string()
 
         msgs = ['Hello', ' ', 'World', '', '!']
@@ -44,11 +44,11 @@ class TestBCDataStream(unittest.TestCase):
         for msg in msgs:
             self.assertEqual(s.read_string(), msg)
 
-        with self.assertRaises(transaction.SerializationError):
+        with self.assertRaises(serialize.SerializationError):
             s.read_string()
 
     def test_bytes(self):
-        s = transaction.BCDataStream()
+        s = serialize.BCDataStream()
         s.write(b'foobar')
         self.assertEqual(s.read_bytes(3), b'foo')
         self.assertEqual(s.read_bytes(2), b'ba')

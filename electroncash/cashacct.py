@@ -42,7 +42,8 @@ from . import bitcoin
 from . import util
 from .address import Address, OpCodes, Script, ScriptError, UnknownAddress
 from .address import ScriptOutput as ScriptOutputBase
-from .transaction import BCDataStream, Transaction
+from .serialize import BCDataStream
+from .transaction import Transaction
 from . import verifier
 from . import blockchain
 from . import caches

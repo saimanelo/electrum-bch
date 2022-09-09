@@ -220,6 +220,8 @@ class OpCodes(IntEnum):
     # additional byte string operations
     OP_REVERSEBYTES = 0xbc
 
+    # Available opcodes: 0xbd, 0xbe, 0xbf
+
     # Native Introspection opcodes
     OP_INPUTINDEX = 0xc0
     OP_ACTIVEBYTECODE = 0xc1
@@ -235,6 +237,21 @@ class OpCodes(IntEnum):
     OP_INPUTSEQUENCENUMBER = 0xcb
     OP_OUTPUTVALUE = 0xcc
     OP_OUTPUTBYTECODE = 0xcd
+
+    # Native Introspection of tokens(SCRIPT_ENABLE_TOKENS must be set, e.g. Upgrade9 activated)
+    OP_UTXOTOKENCATEGORY = 0xce
+    OP_UTXOTOKENCOMMITMENT = 0xcf
+    OP_UTXOTOKENAMOUNT = 0xd0
+    OP_OUTPUTTOKENCATEGORY = 0xd1
+    OP_OUTPUTTOKENCOMMITMENT = 0xd2
+    OP_OUTPUTTOKENAMOUNT = 0xd3
+
+    OP_RESERVED3 = 0xd4
+    OP_RESERVED4 = 0xd5
+
+    SPECIAL_TOKEN_PREFIX = 0xef  # Not a real op-code, reserved for token prefix
+
+    FIRST_INVALID_OPCODE = 0xf0
 
 
 class InvalidPadding(Exception):
