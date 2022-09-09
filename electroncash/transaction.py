@@ -224,7 +224,24 @@ def parse_input(vds):
             d['type'] = 'unknown'
         if not Transaction.is_txin_complete(d):
             del d['scriptSig']
-            d['value'] = vds.read_uint64()
+            val = vds.read_uint64()
+            if val >= 0xff_ff_ff_ff_ff_ff_ff_f0:
+                # Hack to stuff utxo data into txin (this breaks older clients, however)
+                ext_version = val & 0xf  # "extension" version is low-order nybble
+                # Future-proof this hack: version 0xf (if extending this, use 0xe, 0xd, 0xc etc..)
+                if ext_version == 0xf:
+                    val = vds.read_compact_size(strict=True)
+                    wspk = vds.read_bytes(strict=True)
+                    assert wspk and wspk[0] == token.PREFIX_BYTE[0], "Expected serialized token data"
+                    token_data, spk = token.unwrap_spk(wspk)
+                    assert not spk  # For now, we never serialize the prevout's spk and it must be empty
+                    d['value'] = val  # For being able to sign offline
+                    d['tokenData'] = token_data  # For being able to sign token inputs offline
+                else:
+                    raise SerializationError(f"Unknown txn format extension: {ext_version:x}")
+            else:
+                # Legacy format
+                d['value'] = val
     return d
 
 
@@ -601,11 +618,20 @@ class Transaction:
         b += var_int_bytes(len(script))
         b += script
         b += int_to_bytes(txin.get('sequence', 0xffffffff - 1), 4)
-        # offline signing needs to know the input value
+        # offline signing needs to know the input value (and possibly also the tokenData)
         if ('value' in txin
                 and txin.get('scriptSig') is None
                 and not (estimate_size or cls.is_txin_complete(txin))):
-            b += int_to_bytes(txin['value'], 8)
+            if txin.get('tokenData'):
+                # New format, encapsulate value + token data (for token signing)
+                b += int_to_bytes(0xff_ff_ff_ff_ff_ff_ff_ff, 8)  # Special marker for extended format
+                b += var_int_bytes(txin['value'])  # Extended format value is a compactsize to save space
+                wspk = token.wrap_spk(txin['tokenData'], b'')  # Shortcut to get PREFIX_BYTE + serialized_token_data
+                b += var_int_bytes(len(wspk))  # write compact size
+                b += wspk
+            else:
+                # Legacy format, we write the value directly
+                b += int_to_bytes(txin['value'], 8)
         return bytes(b)
 
     def BIP69_sort(self):
