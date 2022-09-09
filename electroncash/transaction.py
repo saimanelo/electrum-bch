@@ -724,7 +724,7 @@ class Transaction:
         txin = self.inputs()[i]
         outpoint = self.serialize_outpoint_bytes(txin)
         preimage_script = bfh(self.get_preimage_script(txin))
-        input_token = txin.get("token")
+        input_token = txin.get("tokenData")
         if input_token is not None:
             serInputToken = token.PREFIX_BYTE + input_token.serialize()
         else:
