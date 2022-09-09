@@ -12,7 +12,6 @@ from typing import Optional, Tuple
 
 from .bitcoin import OpCodes
 from .serialize import BCDataStream, SerializationError
-from .util import print_error
 
 
 class Structure(IntEnum):
@@ -48,22 +47,23 @@ class OutputData:
         self.id = b[::-1]
 
     def deserialize(self, *, buffer: Optional[bytes] = None, ds: Optional[BCDataStream] = None):
-        assert bool(buffer) + bool(ds) == 1  # Only one of these may be valid at once
-        if buffer:
+        assert bool(buffer is not None) + bool(ds is not None) == 1  # Only one of these may be valid at once
+        if ds is None:
             ds = BCDataStream(buffer)
-        self.id = ds.read_bytes(32)
-        self.bitfield = struct.unpack("<B", ds.read_bytes(1))[0]
+        self.id = ds.read_bytes(32, strict=True)
+        self.bitfield = struct.unpack("<B", ds.read_bytes(1, strict=True))[0]
         if self.has_commitment_length():
-            self.commitment = ds.read_bytes()
+            self.commitment = ds.read_bytes(strict=True)
         else:
             self.commitment = b''
         if self.has_amount():
-            self.amount = ds.read_compact_size()
+            self.amount = ds.read_compact_size(strict=True)
         else:
             self.amount = 0
         if (not self.is_valid_bitfield() or (self.has_amount() and not self.amount)
                 or self.amount < 0 or self.amount > 2**63-1
-                or (self.has_commitment_length() and not self.commitment)):
+                or (self.has_commitment_length() and not self.commitment)
+                or (not self.amount and not self.has_nft())):
             # Bad bitfield or 0 serialized amount or bad amount or empty serialized commitment is
             # a deserialization error
             raise SerializationError('Unable to parse token data or token data is invalid')
@@ -139,12 +139,11 @@ def unwrap_spk(wrapped_spk: bytes) -> Tuple[Optional[OutputData], bytes]:
         return None, wrapped_spk
     token_data = OutputData()
     ds = BCDataStream(wrapped_spk)
-    pfx = ds.read_bytes(1)  # consume prefix byte
+    pfx = ds.read_bytes(1, strict=True)  # consume prefix byte
     assert pfx == PREFIX_BYTE
     try:
         token_data.deserialize(ds=ds)  # unserialize token_data from buffer after prefix_byte
-    except SerializationError as e:
-        print_error(repr(e))
+    except SerializationError:
         # Unable to deserialize or parse token data. This is ok. Just return all the bytes as the full scriptPubKey
         return None, wrapped_spk
     # leftover bytes go to real spk

@@ -77,12 +77,14 @@ class BCDataStream:
         self.write_compact_size(len(string))
         self.write(string)
 
-    def read_bytes(self, length=None):
+    def read_bytes(self, length=None, *, strict=False) -> bytes:
         if length is None:
             # Special case if length is None, we auto-read compactSize to determine length
-            length = self.read_compact_size()
+            length = self.read_compact_size(strict=strict)
         try:
             result = self.input[self.read_cursor:self.read_cursor+length]
+            if strict and len(result) != length:
+                raise IndexError()
             self.read_cursor += length
             return result
         except IndexError:
@@ -109,17 +111,24 @@ class BCDataStream:
     def write_int64(self, val): return self._write_num('<q', val)
     def write_uint64(self, val): return self._write_num('<Q', val)
 
-    def read_compact_size(self):
+    def read_compact_size(self, *, strict=False):
         try:
-            size = self.input[self.read_cursor]
+            val = self.input[self.read_cursor]
             self.read_cursor += 1
-            if size == 253:
-                size = self._read_num('<H')
-            elif size == 254:
-                size = self._read_num('<I')
-            elif size == 255:
-                size = self._read_num('<Q')
-            return size
+            if val == 253:
+                val = self._read_num('<H')
+                min_val = 253
+            elif val == 254:
+                val = self._read_num('<I')
+                min_val = 2**16
+            elif val == 255:
+                val = self._read_num('<Q')
+                min_val = 2**32
+            else:
+                min_val = 0
+            if strict and val < min_val:
+                raise SerializationError("CompactSize is not minimally encoded")
+            return val
         except IndexError:
             raise SerializationError("attempt to read past end of buffer")
 
