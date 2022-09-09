@@ -8,7 +8,7 @@
 
 from enum import IntEnum
 import struct
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 from .bitcoin import OpCodes
 from .serialize import BCDataStream, SerializationError
@@ -29,12 +29,38 @@ class Capability(IntEnum):
 class OutputData:
     __slots__ = ("id", "bitfield", "amount", "commitment")
 
-    def __init__(self, id: bytes = b'\x00' * 32, amount: int = 1, commitment: bytes = b'',
-                 bitfield: int = Structure.HasAmount):
+    def __init__(self, id: Union[bytes, str] = b'\x00' * 32, amount: int = 1, commitment: Union[bytes, str] = b'',
+                 bitfield: Union[int, str, bytes] = Structure.HasAmount):
+        if isinstance(id, str):
+            # Convert from hex and reverse
+            id = bytes.fromhex(id)[::-1]
+        if isinstance(commitment, str):
+            # Convert from hex, don't reverse
+            commitment = bytes.fromhex(commitment)
+        if isinstance(bitfield, str):
+            # Convert from hex (must be 1 byte hex)
+            assert len(bitfield) == 2
+            bitfield = bytes.fromhex(bitfield)[0]
+        elif isinstance(bitfield, bytes):
+            # Convert from bytes (must be length 1)
+            assert len(bitfield) == 1
+            bitfield = bitfield[0]
+        assert len(id) == 32 and (isinstance(id, bytes) and isinstance(commitment, bytes) and isinstance(bitfield, int)
+                                  and isinstance(amount, int))
         self.id = id
         self.amount = amount
         self.commitment = commitment
         self.bitfield = bitfield
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, OutputData):
+            return False
+        return (self.id, self.bitfield, self.amount, self.commitment) == (other.id, other.bitfield, other.amount,
+                                                                          other.commitment)
+
+    def __repr__(self) -> str:
+        return f"<token.OutputData(id={self.id_hex}, bitfield={self.bitfield:02x}, amount={self.amount}, " \
+               f"commitment={self.commitment[:40].hex()})>"
 
     @property
     def id_hex(self) -> str:
@@ -47,7 +73,7 @@ class OutputData:
         self.id = b[::-1]
 
     def deserialize(self, *, buffer: Optional[bytes] = None, ds: Optional[BCDataStream] = None):
-        assert bool(buffer is not None) + bool(ds is not None) == 1  # Only one of these may be valid at once
+        assert bool(buffer is not None) + bool(ds is not None) == 1  # Exactly one of these must be valid
         if ds is None:
             ds = BCDataStream(buffer)
         self.id = ds.read_bytes(32, strict=True)
@@ -113,10 +139,6 @@ class OutputData:
         if not self.has_nft() and self.has_commitment_length():
             return False
         return True
-
-    def __repr__(self) -> str:
-        return f"token.OutputData(id={self.id_hex} bitfield={self.bitfield:02x} amount={self.amount} " \
-               f"commitment={self.commitment[:40].hex()})"
 
 
 PREFIX_BYTE = bytes([OpCodes.SPECIAL_TOKEN_PREFIX])

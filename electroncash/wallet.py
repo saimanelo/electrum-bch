@@ -177,7 +177,7 @@ def sweep(privkeys, network, config, recipient, fee=None, imax=100, sign_schnorr
     locktime = network.get_local_height()
 
     tx = Transaction.from_io(inputs, outputs, locktime=locktime, sign_schnorr=sign_schnorr)
-    tx.BIP_LI01_sort()
+    tx.BIP69_sort()
     tx.sign(keypairs)
     return tx
 
@@ -2009,7 +2009,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             raise ExcessiveFee()
 
         # Sort the inputs and outputs deterministically
-        tx.BIP_LI01_sort()
+        tx.BIP69_sort()
         # Timelock tx to current height.
         locktime = self.get_local_height()
         if locktime == -1: # We have no local height data (no headers synced).

@@ -340,6 +340,7 @@ def pw_encode(s, password):
     else:
         return s
 
+
 def pw_decode(s, password):
     if password is not None:
         secret = Hash(password)
@@ -356,23 +357,29 @@ def rev_hex(s):
     return bh2u(bfh(s)[::-1])
 
 
-def int_to_hex(i, length=1):
+def int_to_bytes(i: int, length: int = 1) -> bytes:
     assert isinstance(i, int)
-    s = hex(i)[2:].rstrip('L')
-    s = "0"*(2*length - len(s)) + s
-    return rev_hex(s)
+    return i.to_bytes(length=length, byteorder='little')
 
 
-def var_int(i):
+def int_to_hex(i: int, length: int = 1) -> str:
+    return int_to_bytes(i, length).hex()
+
+
+def var_int_bytes(i: int) -> bytes:
     # https://en.bitcoin.it/wiki/Protocol_specification#Variable_length_integer
-    if i<0xfd:
-        return int_to_hex(i)
-    elif i<=0xffff:
-        return "fd"+int_to_hex(i,2)
-    elif i<=0xffffffff:
-        return "fe"+int_to_hex(i,4)
+    if i < 0xfd:
+        return int_to_bytes(i)
+    elif i <= 0xffff:
+        return b"\xfd" + int_to_bytes(i, 2)
+    elif i <= 0xffffffff:
+        return b"\xfe" + int_to_bytes(i, 4)
     else:
-        return "ff"+int_to_hex(i,8)
+        return b"\xff" + int_to_bytes(i, 8)
+
+
+def var_int(i: int) -> str:
+    return var_int_bytes(i).hex()
 
 
 def op_push_bytes(data_len: int) -> bytes:

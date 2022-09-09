@@ -54,7 +54,7 @@ class BCDataStream:
         else:
             if not isinstance(self.input, bytearray):
                 self.input = bytearray(self.input)
-            self.input += bytearray(_bytes)
+            self.input.extend(_bytes)
 
     def read_string(self, encoding='ascii'):
         # Strings are encoded depending on length:
@@ -85,6 +85,8 @@ class BCDataStream:
             result = self.input[self.read_cursor:self.read_cursor+length]
             if strict and len(result) != length:
                 raise IndexError()
+            if isinstance(result, bytearray):
+                result = bytes(result)
             self.read_cursor += length
             return result
         except IndexError:

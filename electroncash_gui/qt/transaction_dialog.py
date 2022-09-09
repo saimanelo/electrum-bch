@@ -622,6 +622,10 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         rec.setBackground(QBrush(ColorScheme.GREEN.as_color(background=True)))
         chg = QTextCharFormat(lnk)
         chg.setBackground(QBrush(ColorScheme.YELLOW.as_color(True)))
+        tok = QTextCharFormat(ext)
+        tok.setFontItalic(True)
+        tok.setToolTip("This output contains a CashToken")
+
         rec_ct, chg_ct = 0, 0
 
         def text_format(addr):
@@ -682,10 +686,11 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         cursor = o_text.textCursor()
         ca_script = None
         opret_ct = 0
-        for i, tup in enumerate(self.tx.outputs()):
+        for i, tup0 in enumerate(self.tx.outputs(tokens=True)):
             my_addr_in_script = None
+            tup, token_data = tup0
             typ, addr, v = tup
-            for fmt in (ext, rec, chg, lnk):
+            for fmt in (ext, rec, chg, lnk, tok):
                 fmt.setAnchorNames([f"output {i}"])  # anchor name for this line (remember input#); used by context menu creation
             # CashAccounts support
             if isinstance(addr, ScriptOutput) and addr.is_opreturn():
@@ -713,6 +718,9 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             # our preferred yellow/green for change/receiving and also
             # linkify it.
             addrstr = addr.to_ui_string()
+            tokstr = ""
+            if token_data is not None:
+                tokstr = " " + repr(token_data)
             my_addr_in_script_str = my_addr_in_script and my_addr_in_script.to_ui_string()
             idx = my_addr_in_script_str and addrstr.find(my_addr_in_script_str)
             if idx is not None and idx > -1:
@@ -724,15 +732,25 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 # Regular format. Was not a Cash Accounts script, just
                 # any old Address/ScriptOutput/PublicKey output.
                 cursor.insertText(addrstr, text_format(addr))
+            if tokstr:
+                fmt = text_format(addr)
+                # Set token background color to a slightly different shade of the change/receive color
+                brush = fmt.background()
+                color = brush.color()
+                color.setAlpha(0x77)
+                brush.setColor(color)
+                tok.setBackground(brush)
+                cursor.insertText(tokstr, tok)
             # /CashAccounts support
             # Mark B. Lundeberg's patented output formatter logic™
             if v is not None:
-                if len(addrstr) > 42: # for long outputs, make a linebreak.
+                if len(addrstr) + len(tokstr) > 42: # for long outputs, make a linebreak.
                     cursor.insertBlock()
                     addrstr = '\u21b3'
+                    tokstr = ''
                     cursor.insertText(addrstr, ext)
                 # insert enough spaces until column 43, to line up amounts
-                cursor.insertText(' '*(43 - len(addrstr)), ext)
+                cursor.insertText(' '*(43 - len(addrstr) - len(tokstr)), ext)
                 cursor.insertText(format_amount(v), ext)
             cursor.insertBlock()
             # /Mark B. Lundeberg's patented output formatting logic™
@@ -875,12 +893,19 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             i = int(name.split()[1])  # split "output N", translate N -> int
             ignored, addr, value = (self.tx.outputs())[i]
             ca_script = (isinstance(addr, cashacct.ScriptOutput) and addr) or None
+            token_data = self.tx.token_datas()[i]
             menu.addAction(_("Output") + " #" + str(i)).setDisabled(True)
             menu.addSeparator()
             self._add_addr_to_io_menu_lists_for_widget(addr, show_list, copy_list, o_text)
             if isinstance(value, int):
                 value_fmtd = self.main_window.format_amount(value)
                 copy_list += [ ( _("Copy Amount"), lambda: self._copy_to_clipboard(value_fmtd, o_text) ) ]
+            if token_data:
+                copy_list += [ ( _("Copy Token ID"), lambda: self._copy_to_clipboard(token_data.id_hex, o_text) ) ]
+                if token_data.has_amount():
+                    copy_list += [(_("Copy Token Amount"), lambda: self._copy_to_clipboard(str(token_data.amount), o_text))]
+                if token_data.has_commitment_length():
+                    copy_list += [(_("Copy Token Commitment"), lambda: self._copy_to_clipboard(token_data.commitment.hex(), o_text))]
             if ca_script:
                 copy_list += [ ( _("Copy Address (Embedded)"), lambda: self._copy_to_clipboard(ca_script.address.to_ui_string(), o_text) ) ]
                 if ca_script.is_complete() and self.tx_hash:
