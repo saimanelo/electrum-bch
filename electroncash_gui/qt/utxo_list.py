@@ -71,6 +71,8 @@ class UTXOList(MyTreeWidget):
         self.blue = ColorScheme.BLUE.as_color(True)
         self.cyanBlue = QColor('#3399ff')
         self.slpBG = ColorScheme.SLPGREEN.as_color(True)
+        self.cashTokenBG = QColor(self.slpBG)
+        self.cashTokenBG.setAlpha(0x77)
         self.immatureColor = ColorScheme.BLUE.as_color(False)
         self.output_point_prefix_text = columns[self.Col.output_point]
 
@@ -114,7 +116,7 @@ class UTXOList(MyTreeWidget):
         ca_by_addr = defaultdict(list)
         if self.show_cash_accounts:
             addr_set = set()
-            self.utxos = self.wallet.get_utxos(addr_set_out=addr_set, exclude_slp=False)
+            self.utxos = self.wallet.get_utxos(addr_set_out=addr_set, exclude_slp=False, exclude_tokens=False)
             # grab all cash accounts so that we may add the emoji char
             for info in self.wallet.cashacct.get_cashaccounts(addr_set):
                 ca_by_addr[info.address].append(info)
@@ -124,7 +126,7 @@ class UTXOList(MyTreeWidget):
                 del ca_list  # reference still exists inside ca_by_addr dict, this is just deleted here because we re-use this name below.
             del addr_set  # clean-up. We don't want the below code to ever depend on the existence of this cell.
         else:
-            self.utxos = self.wallet.get_utxos(exclude_slp=False)
+            self.utxos = self.wallet.get_utxos(exclude_slp=False, exclude_tokens=False)
         for x in self.utxos:
             address = x['address']
             address_text = address.to_ui_string()
@@ -157,6 +159,7 @@ class UTXOList(MyTreeWidget):
             c_frozen = x['is_frozen_coin']
             toolTipMisc = ''
             slp_token = x['slp_token']
+            cash_token = x['token_data'] is not None
             if is_immature:
                 for colNum in range(self.columnCount()):
                     if colNum == self.Col.label:
@@ -166,6 +169,9 @@ class UTXOList(MyTreeWidget):
             elif slp_token:
                 utxo_item.setBackground(0, self.slpBG)
                 toolTipMisc = _('Coin contains an SLP token')
+            elif cash_token:
+                utxo_item.setBackground(0, self.cashTokenBG)
+                toolTipMisc = _('Coin contains a CashToken')
             elif a_frozen and not c_frozen:
                 # address is frozen, coin is not frozen
                 # emulate the "Look" off the address_list .py's frozen entry

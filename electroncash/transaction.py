@@ -236,7 +236,7 @@ def parse_input(vds):
                     token_data, spk = token.unwrap_spk(wspk)
                     assert not spk  # For now, we never serialize the prevout's spk and it must be empty
                     d['value'] = val  # For being able to sign offline
-                    d['tokenData'] = token_data  # For being able to sign token inputs offline
+                    d['token_data'] = token_data  # For being able to sign token inputs offline
                 else:
                     raise SerializationError(f"Unknown txn format extension: {ext_version:x}")
             else:
@@ -249,10 +249,10 @@ def parse_output(vds, i):
     d = {}
     d['value'] = vds.read_int64()
     wrappedScriptPubKey = vds.read_bytes(vds.read_compact_size())
-    tokenData, scriptPubKey = token.unwrap_spk(wrappedScriptPubKey)
+    token_data, scriptPubKey = token.unwrap_spk(wrappedScriptPubKey)
     d['type'], d['address'] = get_address_from_output_script(scriptPubKey)
     d['scriptPubKey'] = bh2u(scriptPubKey)
-    d['tokenData'] = tokenData
+    d['token_data'] = token_data
     d['prevout_n'] = i
     return d
 
@@ -444,7 +444,7 @@ class Transaction:
         self.invalidate_common_sighash_cache()
         self._inputs = d['inputs']
         self._outputs = [(x['type'], x['address'], x['value']) for x in d['outputs']]
-        self._token_datas = [x['tokenData'] for x in d['outputs']]
+        self._token_datas = [x['token_data'] for x in d['outputs']]
         assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
                    for output in self._outputs)
         assert all(isinstance(td, (token.OutputData, type(None)))
@@ -618,15 +618,15 @@ class Transaction:
         b += var_int_bytes(len(script))
         b += script
         b += int_to_bytes(txin.get('sequence', 0xffffffff - 1), 4)
-        # offline signing needs to know the input value (and possibly also the tokenData)
+        # offline signing needs to know the input value (and possibly also the token_data)
         if ('value' in txin
                 and txin.get('scriptSig') is None
                 and not (estimate_size or cls.is_txin_complete(txin))):
-            if txin.get('tokenData'):
+            if txin.get('token_data'):
                 # New format, encapsulate value + token data (for token signing)
                 b += int_to_bytes(0xff_ff_ff_ff_ff_ff_ff_ff, 8)  # Special marker for extended format
                 b += var_int_bytes(txin['value'])  # Extended format value is a compactsize to save space
-                wspk = token.wrap_spk(txin['tokenData'], b'')  # Shortcut to get PREFIX_BYTE + serialized_token_data
+                wspk = token.wrap_spk(txin['token_data'], b'')  # Shortcut to get PREFIX_BYTE + serialized_token_data
                 b += var_int_bytes(len(wspk))  # write compact size
                 b += wspk
             else:
@@ -639,7 +639,7 @@ class Transaction:
         self._inputs.sort(key=lambda txin: (txin['prevout_hash'], txin['prevout_n']))
         zipped_outputs = self.outputs(tokens=True)
 
-        # sort by (nValue, scriptPubKey, tokenData)
+        # sort by (nValue, scriptPubKey, token_data)
         def output_as_tup(tup):
             output, token_data = tup
             typ, addr_like, value = output
@@ -750,7 +750,7 @@ class Transaction:
         txin = self.inputs()[i]
         outpoint = self.serialize_outpoint_bytes(txin)
         preimage_script = bfh(self.get_preimage_script(txin))
-        input_token = txin.get("tokenData")
+        input_token = txin.get('token_data')
         if input_token is not None:
             serInputToken = token.PREFIX_BYTE + input_token.serialize()
         else:
@@ -1273,7 +1273,7 @@ class Transaction:
                                 addr, value = outp[1], outp[2]
                                 inps[ii]['value'] = value
                                 inps[ii]['address'] = addr
-                                inps[ii]['tokenData'] = token_data
+                                inps[ii]['token_data'] = token_data
                                 print_error("fetch_input_data: fetched from network", ii, addr, value, token_data)
                             prog(i, q_ct)  # tell interested code of progress
                         except queue.Empty:

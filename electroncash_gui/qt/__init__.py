@@ -636,6 +636,7 @@ class ElectrumGui(QObject, PrintError):
                     if wallet is not None:
                         self.daemon.cmd_runner.wallet = wallet
                 except BaseException as e:
+                    traceback.print_exc(file=sys.stdout)  # Deleteme TODO Calin
                     self.print_error(repr(e))
                     if self.windows:
                         # *Not* starting up. Propagate exception out to present

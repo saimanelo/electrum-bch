@@ -678,11 +678,11 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                     # Schnorr
                     cursor.insertText(' {}'.format(SCHNORR_SIGIL), ext)
                     has_schnorr = True
-                if x.get('tokenData'):
+                if x.get('token_data'):
                     cursor.insertBlock()
                     cr_text = '\u21b3 '
                     cursor.insertText(cr_text, ext)
-                    input_token_text = repr(x['tokenData'])
+                    input_token_text = repr(x['token_data'])
                     fmt = text_format(addr)
                     # Set token background color to a slightly different shade of the change/receive color
                     brush = fmt.background()

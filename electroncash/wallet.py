@@ -33,6 +33,7 @@
 import copy
 import errno
 import json
+import hashlib
 import itertools
 import os
 import queue
@@ -47,6 +48,7 @@ from typing import ItemsView, List, Optional, Set, Tuple, Union, ValuesView
 from .i18n import ngettext
 from .util import (NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time,
                    finalization_print_error, to_string, TimeoutException)
+from . import util
 
 from .address import Address, Script, ScriptOutput, PublicKey, OpCodes
 from .bitcoin import *
@@ -67,6 +69,7 @@ from .rpa.rpa_manager import RpaManager
 from . import schnorr
 from . import ecc_fast
 from .blockchain import NULL_HASH_HEX
+from . import token
 
 
 from . import paymentrequest
@@ -402,31 +405,207 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     for tx_hash, value in txi.items()
                     # skip empty entries to save memory and disk space
                     if value}
+        # Map of tx_hash -> map of address -> list of tuple(prevout_n, value, iscoinbase)
         txo = self.storage.get('txo', {})
         self.txo = {tx_hash: self.to_Address_dict(value)
                     for tx_hash, value in txo.items()
                     # skip empty entries to save memory and disk space
                     if value}
+        # Populates self.ct_txi: Map of tx_hash -> map of address -> map of "prevout_hash" -> map of n -> token_data
+        bad_ct_entry_ctr = self.load_ct_txi()
+        # Populates self.ct_txo: Map of tx_hash -> map of address -> map of prevout_n -> token.OutputData
+        bad_ct_entry_ctr += self.load_ct_txo()
+        # Detect if user opened wallet in older EC and we need to rebuild ct_txi and ct_txo
+        ct_txid_hash = self.storage.get('ct_txid_hash', None) if not bad_ct_entry_ctr else None
         self.tx_fees = self.storage.get('tx_fees', {})
         self.pruned_txo = self.storage.get('pruned_txo', {})
         self.pruned_txo_values = set(self.pruned_txo.values())
         tx_list = self.storage.get('transactions', {})
         self.transactions = {}
+        txid_hasher = hashlib.sha256() if not bad_ct_entry_ctr else None
         for tx_hash, raw in tx_list.items():
+            if txid_hasher:
+                txid_hasher.update(bytes.fromhex(tx_hash))
             tx = Transaction(raw)
             self.transactions[tx_hash] = tx
-            if not self.txi.get(tx_hash) and not self.txo.get(tx_hash) and (tx_hash not in self.pruned_txo_values):
+            if (not self.txi.get(tx_hash) and not self.txo.get(tx_hash) and (tx_hash not in self.pruned_txo_values)
+                    and not self.ct_txi.get(tx_hash) and not self.ct_txo.get(tx_hash)):
                 self.print_error("removing unreferenced tx", tx_hash)
                 self.transactions.pop(tx_hash)
                 self.cashacct.remove_transaction_hook(tx_hash)
                 self.slp.rm_tx(tx_hash)
+        if txid_hasher is None or txid_hasher.digest().hex() != ct_txid_hash:
+            # Need to rebuild ct_txi and ct_txo
+            # This code is here to detect case where user opened same wallet in an older version of
+            # electron cash which does not track CashTokens
+            self.rebuild_ct_txi_txo()
+
+    @profiler
+    def load_ct_txo(self) -> int:
+        """Populates self.ct_txo from storage key 'ct_txo'. """
+        ct_txo = self.storage.get('ct_txo', {})
+        self.ct_txo = {tx_hash: self.to_Address_dict(value)
+                       for tx_hash, value in ct_txo.items()
+                       # skip empty entries to save memory and disk space
+                       if value}
+        # Convert hex data values to token.OutputData
+        bad_ct_entry_ctr = 0
+        for tx_hash, addrmap in self.ct_txo.items():
+            for addr, outputmap in addrmap.items():
+                for n, hexdata in outputmap.copy().items():
+                    token_data = token.OutputData.fromhex(hexdata)
+                    if not token_data:
+                        bad_ct_entry_ctr += 1
+                        del outputmap[n]
+                        self.print_error(f"load_ct_txo: cannot deserialize token for {tx_hash}:{n} hexdata: {hexdata},"
+                                         f" skipping")
+                        continue
+                    outputmap[n] = token_data
+        return bad_ct_entry_ctr
+
+    @profiler
+    def save_ct_txo(self):
+        ct_txo = {tx_hash: self.from_Address_dict(value)
+                  for tx_hash, value in self.ct_txo.items()
+                  # skip empty entries to save memory and disk space
+                  if value}
+        ct_txo = copy.deepcopy(ct_txo)  # Take a deep copy since we mutate this below
+        # Convert token.OutputData values to hexdata
+        for tx_hash, addrmap in ct_txo.items():
+            for addr_txt, outputmap in addrmap.items():
+                for n, token_data in outputmap.copy().items():
+                    if not token_data:
+                        continue
+                    hexdata = token_data.hex()
+                    outputmap[n] = hexdata
+        self.storage.put('ct_txo', ct_txo)
+
+    @profiler
+    def load_ct_txi(self) -> int:
+        """Populates self.ct_txi:
+           Map of tx_hash -> map of address -> map of "prevout_hash" -> map of prevout_n -> token_data"""
+        ct_txi = self.storage.get('ct_txi', {})
+        self.ct_txi = {tx_hash: self.to_Address_dict(value)
+                       for tx_hash, value in ct_txi.items()
+                       # skip empty entries to save memory and disk space
+                       if value}
+        # Convert hex data values to token.OutputData
+        bad_ct_entry_ctr = 0
+        for tx_hash, addrmap in self.ct_txi.items():
+            for addr, prevout_hash_map in addrmap.items():
+                for prevout_hash, token_data_map in prevout_hash_map.items():
+                    for prevout_n, hexdata in token_data_map.copy().items():
+                        token_data = token.OutputData.fromhex(hexdata)
+                        if not token_data:
+                            bad_ct_entry_ctr += 1
+                            del token_data_map[prevout_n]
+                            self.print_error(f"load_ct_txi: cannot deserialize token for {tx_hash}:{prevout_n}"
+                                             f" hexdata: {hexdata}, skipping")
+                            continue
+                        token_data_map[prevout_n] = token_data  # Convert hexdata to token.OutputData for usage
+        return bad_ct_entry_ctr
+
+    @profiler
+    def save_ct_txi(self):
+        ct_txi = {tx_hash: self.from_Address_dict(value)
+                  for tx_hash, value in self.ct_txi.items()
+                  # skip empty entries to save memory and disk space
+                  if value}
+        ct_txi = copy.deepcopy(ct_txi)  # Take a deep copy since we mutate this below
+        # Convert token.outputData values to hexdata
+        for tx_hash, addrmap in ct_txi.items():
+            for addr, prevout_hash_map in addrmap.items():
+                for prevout_hash, token_data_map in prevout_hash_map.items():
+                    for prevout_n, token_data in token_data_map.copy().items():
+                        if not token_data:
+                            continue
+                        hexdata = token_data.hex()
+                        token_data_map[prevout_n] = hexdata  # Overwrite token_data with hex for storage
+        self.storage.put('ct_txi', ct_txi)
+
+    @profiler
+    def rebuild_ct_txi_txo(self):
+        self.print_error("Rebuilding CashTokens-specific txi and txo maps ...")
+        self.ct_txo.clear()
+        self.ct_txi.clear()
+        # First, do txo
+        # Populates self.ct_txo: Map of tx_hash -> map of address -> map of prevout_n -> token.OutputData
+        for tx_hash, addrmap in self.txo.items():
+            if not addrmap:
+                self.print_error(f"ct_txo: no addrmap for {tx_hash}")
+                continue
+            tx = self.transactions.get(tx_hash)
+            if not tx:
+                self.print_error(f"rebuild_ct_txi_txo: Unknown transaction in self.txo: {tx_hash}")
+                continue
+            tx = copy.deepcopy(tx)  # Take a deep copy to avoid deserializing txn from map and wasting memory
+            tx_outputs = tx.outputs(tokens=True)
+            ct_addr_map = self.ct_txo.get(tx_hash, {})
+            ct_addr_map_was_empty = not ct_addr_map
+            for addr, outputlist in addrmap.items():
+                ct_output_map = ct_addr_map.get(addr, {})
+                ct_output_map_was_empty = not ct_output_map
+                for ll in outputlist:
+                    n, value, is_coinbase = ll
+                    token_data = tx_outputs[n][1]
+                    if token_data is not None:
+                        self.print_error(f"ct_txo: Adding {tx_hash} -> {addr} -> {n} -> {token_data!r}")
+                        ct_output_map[n] = token_data
+                if ct_output_map_was_empty and ct_output_map:
+                    ct_addr_map[addr] = ct_output_map
+            if ct_addr_map_was_empty and ct_addr_map:
+                self.ct_txo[tx_hash] = ct_addr_map
+        # Next, do txi
+        # Populates self.ct_txi: Map of tx_hash -> map of address -> map of "prevout_hash" -> map of n -> token_data
+        for tx_hash, addrmap in self.txi.items():
+            if not addrmap:
+                self.print_error(f"ct_txi: no addrmap for {tx_hash}")
+                continue
+            ct_addr_map = self.ct_txi.get(tx_hash, {})
+            ct_addr_map_was_empty = not ct_addr_map
+            for addr, ll in addrmap.items():
+                if not ll:
+                    self.print_error(f"ct_txi: no ll for {tx_hash} -> {addr}")
+                ct_prevout_hash_map = ct_addr_map.get(addr, {})
+                ct_prevout_hash_map_was_empty = not ct_prevout_hash_map
+                for tup in ll:
+                    ser, _ = tup
+                    try:
+                        prevout_hash, prevout_n = ser.split(':', 1)
+                        prevout_n = int(prevout_n)
+                    except ValueError:
+                        self.print_error(f"rebuild_ct_txi_txo: Bad output point serialization in self.txi: {ser}")
+                        continue
+                    token_data = self.ct_txo.get(prevout_hash, {}).get(addr, {}).get(prevout_n, None)
+                    if not token_data and False:
+                        # Fall-back to trying to deser a known txn
+                        tx = self.transactions.get(prevout_hash)
+                        if not tx:
+                            self.print_error(f"rebuild_ct_txi_txo: Unknown transaction in self.txi: {prevout_hash}")
+                            continue
+                        tx = copy.deepcopy(tx)  # Take a deep copy to save memory
+                        _, token_data = tx.outputs(tokens=True)[prevout_n]
+                    if token_data is not None:
+                        self.print_error(f"ct_txi: Adding {tx_hash} -> {addr} -> {prevout_hash} -> {prevout_n} -> {token_data!r}")
+                        ct_prevout_n_map = ct_prevout_hash_map.get(prevout_hash, {})
+                        ct_prevout_n_map_was_empty = not ct_prevout_n_map
+                        ct_prevout_n_map[prevout_n] = token_data
+                        if ct_prevout_n_map_was_empty:
+                            ct_prevout_hash_map[prevout_hash] = ct_prevout_n_map
+                if ct_prevout_hash_map_was_empty and ct_prevout_hash_map:
+                    ct_addr_map[addr] = ct_prevout_hash_map
+            if ct_addr_map_was_empty and ct_addr_map:
+                self.ct_txi[tx_hash] = ct_addr_map
+        self.print_error(f"rebuild_ct_txi_txo: ct_txi: {len(self.ct_txi)}, ct_txo: {len(self.ct_txo)}")
 
     @profiler
     def save_transactions(self, write=False):
         with self.lock:
+            txid_hasher = hashlib.sha256()
             tx = {}
-            for k,v in self.transactions.items():
-                tx[k] = str(v)
+            for tx_hash, txn in self.transactions.items():
+                txid_hasher.update(bytes.fromhex(tx_hash))
+                tx[tx_hash] = str(txn)
             self.storage.put('transactions', tx)
             txi = {tx_hash: self.from_Address_dict(value)
                    for tx_hash, value in self.txi.items()
@@ -443,6 +622,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             history = self.from_Address_dict(self._history)
             self.storage.put('addr_history', history)
             self.slp.save()
+            self.storage.put('ct_txid_hash', None)
+            self.save_ct_txi()
+            self.save_ct_txo()
+            ct_txid_hash = txid_hasher.digest().hex()
+            self.storage.put('ct_txid_hash', ct_txid_hash)
             if write:
                 self.storage.write()
 
@@ -464,6 +648,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         with self.lock:
             self.txi = {}
             self.txo = {}
+            self.ct_txi = {}
+            self.ct_txo = {}
             self.tx_fees = {}
             self.pruned_txo = {}
             self.pruned_txo_values = set()
@@ -941,8 +1127,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         sent = {}
         for tx_hash, height in h:
             l = self.txo.get(tx_hash, {}).get(address, [])
+            ct_txo_tx_hash_addr_dict = self.ct_txo.get(tx_hash, {}).get(address, {})
             for n, v, is_cb in l:
-                received[tx_hash + ':%d'%n] = (height, v, is_cb)
+                token_data = ct_txo_tx_hash_addr_dict.get(n)
+                received[tx_hash + ':%d'%n] = (height, v, is_cb, token_data)
         for tx_hash, height in h:
             l = self.txi.get(tx_hash, {}).get(address, [])
             for txi, v in l:
@@ -958,8 +1146,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.frozen_coins_tmp.discard(txi)
         out = {}
         for txo, v in coins.items():
-            tx_height, value, is_cb = v
-            prevout_hash, prevout_n = txo.split(':')
+            tx_height, value, is_cb, token_data = v
+            prevout_hash, prevout_n = txo.split(':', 1)
             x = {
                 'address':address,
                 'value':value,
@@ -969,6 +1157,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 'coinbase':is_cb,
                 'is_frozen_coin':txo in self.frozen_coins or txo in self.frozen_coins_tmp,
                 'slp_token':self.slp.token_info_for_txo(txo),  # (token_id_hex, qty) tuple or None
+                'token_data': token_data,
             }
             out[txo] = x
         return out
@@ -976,7 +1165,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     # return the total amount ever received by an address
     def get_addr_received(self, address):
         received, sent = self.get_addr_io(address)
-        return sum([v for height, v, is_cb in received.values()])
+        return sum([v for height, v, is_cb, token_data in received.values()])
 
     def get_addr_balance(self, address, exclude_frozen_coins=False):
         ''' Returns the balance of a bitcoin address as a tuple of:
@@ -992,7 +1181,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         received, sent = self.get_addr_io(address)
         c = u = x = 0
         had_cb = False
-        for txo, (tx_height, v, is_cb) in received.items():
+        for txo, (tx_height, v, is_cb, token_data) in received.items():
             if exclude_frozen_coins and (txo in self.frozen_coins or txo in self.frozen_coins_tmp):
                 continue
             had_cb = had_cb or is_cb  # remember if this address has ever seen a coinbase txo
@@ -1044,22 +1233,24 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self._addr_bal_cache[address] = result
         return result
 
-    def get_spendable_coins(self, domain, config, isInvoice = False):
+    def get_spendable_coins(self, domain, config, isInvoice=False):
         confirmed_only = config.get('confirmed_only', DEFAULT_CONFIRMED_ONLY)
         if isInvoice:
             confirmed_only = True
-        return self.get_utxos(domain, exclude_frozen=True, mature=True, confirmed_only=confirmed_only, exclude_slp=True)
+        return self.get_utxos(domain, exclude_frozen=True, mature=True, confirmed_only=confirmed_only, exclude_slp=True,
+                              # For now, we will prohibit spending cash tokens TODO: Implement CashToken spending!
+                              exclude_tokens=True)
 
-    def get_utxos(self, domain = None, exclude_frozen = False, mature = False, confirmed_only = False,
-                  *, addr_set_out = None, exclude_slp = True):
-        '''Note that exclude_frozen = True checks for BOTH address-level and
+    def get_utxos(self, domain=None, exclude_frozen=False, mature=False, confirmed_only=False,
+                  *, addr_set_out=None, exclude_slp=True, exclude_tokens=True):
+        """Note that exclude_frozen = True checks for BOTH address-level and
         coin-level frozen status.
 
         exclude_slp skips coins that also have SLP tokens on them.  This defaults
         to True in EC 4.0.10+ in order to prevent inadvertently burning tokens.
 
         Optional kw-only arg `addr_set_out` specifies a set in which to add all
-        addresses encountered in the utxos returned. '''
+        addresses encountered in the utxos returned. """
         with self.lock:
             mempoolHeight = self.get_local_height() + 1
             coins = []
@@ -1071,6 +1262,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 utxos = self.get_addr_utxo(addr)
                 len_before = len(coins)
                 for x in utxos.values():
+                    if exclude_tokens and x['token_data']:
+                        continue
                     if exclude_slp and x['slp_token']:
                         continue
                     if exclude_frozen and x['is_frozen_coin']:
@@ -1097,8 +1290,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return self.get_receiving_addresses() + self.get_change_addresses()
 
     def get_change_addresses(self):
-        ''' Reimplemented in subclasses for wallets that have a change address set/derivation path. '''
+        """ Reimplemented in subclasses for wallets that have a change address set/derivation path. """
         return []
+
+    def get_receiving_addresses(self):
+        """ Must be reimplemented in subclasses """
+        raise RuntimeError("'get_receiving_addresses' is not implemented in this class: " + str(type(self)))
 
     def get_frozen_balance(self):
         if not self.frozen_coins and not self.frozen_coins_tmp:
@@ -1277,7 +1474,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         is_coinbase = tx.inputs()[0]['type'] == 'coinbase'
         with self.lock:
             # HELPER FUNCTIONS
-            def add_to_self_txi(tx_hash, addr, ser, v):
+            def add_to_self_txi(tx_hash, addr, ser, v, token_data):
                 ''' addr must be 'is_mine' '''
                 d = self.txi.get(tx_hash)
                 if d is None:
@@ -1286,6 +1483,22 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 if l is None:
                     d[addr] = l = []
                 l.append((ser, v))
+                # Next, update self.ct_txi
+                if token_data is not None:
+                    d = self.ct_txi.get(tx_hash)
+                    if d is None:
+                        self.ct_txi[tx_hash] = d = {}
+                    dd = d.get(addr)
+                    if dd is None:
+                        d[addr] = dd = {}
+                    prevout_hash, prevout_n = ser.split(':', 1)
+                    prevout_n = int(prevout_n)
+                    ddd = dd.get(prevout_hash)
+                    if ddd is None:
+                        dd[prevout_hash] = ddd = {}
+                    ddd[prevout_n] = token_data
+                    self.print_error(f"Adding CashTokens txi: {tx_hash} -> {addr} -> {prevout_hash} -> {n} -> {token_data!r}")
+
             def find_in_self_txo(prevout_hash: str, prevout_n: int) -> tuple:
                 """Returns a tuple of the (Address,value) for a given
                 prevout_hash:prevout_n, or (None, None) if not found. If valid
@@ -1296,8 +1509,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 for addr2, item in dd.items():
                     for n, v, is_cb in item:
                         if n == prevout_n:
-                            return addr2, v
-                return (None, None)
+                            token_data = self.ct_txo.get(prevout_hash, {}).get(addr2, {}).get(prevout_n)
+                            return addr2, v, token_data
+                return (None, None, None)
             def txin_get_info(txi):
                 prevout_hash = txi['prevout_hash']
                 prevout_n = txi['prevout_n']
@@ -1319,6 +1533,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
             # add inputs
             self.txi[tx_hash] = d = {}
+            self.ct_txi[tx_hash] = ct_d = {}
             for txi in tx.inputs():
                 if txi['type'] == 'coinbase':
                     continue
@@ -1329,7 +1544,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     dd = self.txo.get(prevout_hash, {})
                     for n, v, is_cb in dd.get(addr, []):
                         if n == prevout_n:
-                            add_to_self_txi(tx_hash, addr, ser, v)
+                            token_data = self.ct_txo.get(prevout_hash, {}).get(addr, {}).get(prevout_n, None)
+                            add_to_self_txi(tx_hash, addr, ser, v, token_data)
                             break
                     else:
                         # Coin's spend tx came in before its receive tx: flag
@@ -1344,9 +1560,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     # See issue #895.
                     prevout_hash, prevout_n, ser = txin_get_info(txi)
                     # Find address in self.txo for this prevout_hash:prevout_n
-                    addr2, v = find_in_self_txo(prevout_hash, prevout_n)
+                    addr2, v, token_data = find_in_self_txo(prevout_hash, prevout_n)
                     if addr2 is not None and self.is_mine(addr2):
-                        add_to_self_txi(tx_hash, addr2, ser, v)
+                        add_to_self_txi(tx_hash, addr2, ser, v, token_data)
                         self._addr_bal_cache.pop(addr2, None)  # invalidate cache entry
                     else:
                         # Not found in self.txo. It may still be one of ours
@@ -1370,12 +1586,16 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # don't keep empty entries in self.txi
             if not d:
                 self.txi.pop(tx_hash, None)
+            if not ct_d:
+                self.ct_txi.pop(tx_hash, None)
 
             # add outputs
             self.txo[tx_hash] = d = {}
+            self.ct_txo[tx_hash] = ct_d = {}
             op_return_ct = 0
             deferred_cashacct_add = None
-            for n, txo in enumerate(tx.outputs()):
+            for n, tup in enumerate(tx.outputs(tokens=True)):
+                txo, token_data = tup
                 ser = tx_hash + ':%d'%n
                 _type, addr, v = txo
                 mine = False
@@ -1398,15 +1618,22 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     if l is None:
                         d[addr] = l = []
                     l.append((n, v, is_coinbase))
-                    del l
+                    if token_data is not None:
+                        ct_dd = ct_d.get(addr)
+                        if ct_dd is None:
+                            ct_d[addr] = ct_dd = {}
+                        ct_dd[n] = token_data
+                        self.print_error(f"Adding CashTokens txo: {tx_hash} -> {addr} -> {n} -> {token_data!r}")
                     self._addr_bal_cache.pop(addr, None)  # invalidate cache entry
                 # give v to txi that spends me
                 next_tx = pop_pruned_txo(ser)
                 if next_tx is not None and mine:
-                    add_to_self_txi(next_tx, addr, ser, v)
+                    add_to_self_txi(next_tx, addr, ser, v, token_data)
             # don't keep empty entries in self.txo
             if not d:
                 self.txo.pop(tx_hash, None)
+            if not ct_d:
+                self.ct_txo.pop(tx_hash, None)
 
 
             # save
@@ -1451,6 +1678,14 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         dd.pop(addr)
                     else:
                         dd[addr] = l
+            # undo the self.ct_txi addition
+            empties = []
+            for next_tx, addrmap in self.ct_txi.items():
+                addrmap.pop(tx_hash, None)
+                if not addrmap:
+                    empties.append(next_tx)
+            for next_tx in empties:
+                self.ct_txi.pop(next_tx, None)
 
             # invalidate addr_bal_cache for outputs involving this tx
             d = self.txo.get(tx_hash, {})
@@ -1461,6 +1696,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             except KeyError: self.print_error("tx was not in input history", tx_hash)
             try: self.txo.pop(tx_hash)
             except KeyError: self.print_error("tx was not in output history", tx_hash)
+            self.ct_txi.pop(tx_hash, None)
+            self.ct_txo.pop(tx_hash, None)
 
             # do this with the lock held
             self.cashacct.remove_transaction_hook(tx_hash)
@@ -2270,9 +2507,18 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # Bitcoin Cash needs value to sign
             received, spent = self.get_addr_io(address)
             item = received.get(txin['prevout_hash']+':%d'%txin['prevout_n'])
-            tx_height, value, is_cb = item
+            tx_height, value, is_cb, token_data = item
             txin['value'] = value
+            txin['token_data'] = token_data
             self.add_input_sig_info(txin, address)
+
+    def add_input_sig_info(self, txin, address):
+        """ Must be reimplemented in subclasses """
+        raise RuntimeError("'add_input_sig_info' is not implemented in this class: " + str(type(self)))
+
+    def get_keystores(self):
+        """ Must be reimplemented in subclasses """
+        raise RuntimeError("'get_keystores' is not implemented in this class: " + str(type(self)))
 
     def can_sign(self, tx):
         if tx.is_complete():
@@ -2301,18 +2547,22 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         tx = self.transactions.get(tx_hash)
         if not tx and self.network:
             request = ('blockchain.transaction.get', [tx_hash])
-            tx = Transaction(self.network.synchronous_get(request))
+            try:
+                tx = Transaction(self.network.synchronous_get(request))
+            except util.ServerError:
+                return None
         return tx
 
     def add_input_values_to_tx(self, tx):
         """ add input values to the tx, for signing"""
         for txin in tx.inputs():
-            if 'value' not in txin:
+            if 'value' not in txin or 'token_data' not in txin:
                 inputtx = self.get_input_tx(txin['prevout_hash'])
                 if inputtx is not None:
-                    out_zero, out_addr, out_val = inputtx.outputs()[txin['prevout_n']]
+                    (out_zero, out_addr, out_val), token_data = inputtx.outputs(tokens=True)[txin['prevout_n']]
                     txin['value'] = out_val
                     txin['prev_tx'] = inputtx   # may be needed by hardware wallets
+                    txin['token_data'] = token_data
 
     def add_hw_info(self, tx):
         # add previous tx for hw wallets, if needed and not already there

@@ -74,7 +74,7 @@ class TestTransaction(unittest.TestCase):
             'outputs': [{'address': Address.from_string('1MYXdf4moacvaEKZ57ozerpJ3t9xSeN6LK'),
                          'prevout_n': 0,
                          'scriptPubKey': '76a914e158fb15c888037fdc40fb9133b4c1c3c688706488ac',
-                         'tokenData': None,
+                         'token_data': None,
                          'type': 0,
                          'value': 20112408}],
             'version': 1}
@@ -117,7 +117,7 @@ class TestTransaction(unittest.TestCase):
             'outputs': [{'address': Address.from_string('1MYXdf4moacvaEKZ57ozerpJ3t9xSeN6LK'),
                          'prevout_n': 0,
                          'scriptPubKey': '76a914e158fb15c888037fdc40fb9133b4c1c3c688706488ac',
-                         'tokenData': None,
+                         'token_data': None,
                          'type': 0,
                          'value': 20112408}],
             'version': 1
@@ -157,25 +157,25 @@ class TestTransaction(unittest.TestCase):
                         'scriptSig': '47304402203080d4d635e32746094d7dc2ee5e448fdea75486965b419346b1e32a0e46f4740220276087388b4c98512ca5135f9e7914786c31f976861013f14df7f4487472673a412102abaad90841057ddb1ed929608b536535b0cd8a18ba0a90dba66ba7b1c1f7b4ea'}],
             'outputs': [{'value': 100000, 'type': 0, 'address': Address.from_string('qq9rw090p2eu9drv6ptztwx4ghpftwfa0gyqvlvx2q', net=networks.TestNet4),
                          'scriptPubKey': '76a9140a373caf0ab3c2b46cd05625b8d545c295b93d7a88ac',
-                         'tokenData': token.OutputData(id=bfh('ccd25c348064d50357d837a3319bb4755c2db0708c45e7814127e1274104c143')[::-1],
-                                                       bitfield=0x10,
-                                                       amount=9223372036854775807,
-                                                       commitment=b''),
+                         'token_data': token.OutputData(id=bfh('ccd25c348064d50357d837a3319bb4755c2db0708c45e7814127e1274104c143')[::-1],
+                                                        bitfield=0x10,
+                                                        amount=9223372036854775807,
+                                                        commitment=b''),
                          'prevout_n': 0},
                         {'value': 799990000,
                          'type': 0,
                          'address': Address.from_string('qr4gww42l0wh5lr56ulwz96wgtmzpv9p3sz4wxrydq', net=networks.TestNet4),
                          'scriptPubKey': '76a914ea873aaafbdd7a7c74d73ee1174e42f620b0a18c88ac',
-                         'tokenData': None,
+                         'token_data': None,
                          'prevout_n': 1},
                         {'value': 100000,
                          'type': 0,
                          'address': Address.from_string('qq9rw090p2eu9drv6ptztwx4ghpftwfa0gyqvlvx2q', net=networks.TestNet4),
                          'scriptPubKey': '76a9140a373caf0ab3c2b46cd05625b8d545c295b93d7a88ac',
-                         'tokenData': token.OutputData(id=bfh('ccd25c348064d50357d837a3319bb4755c2db0708c45e7814127e1274104c143')[::-1],
-                                                       bitfield=0x62,
-                                                       amount=0,
-                                                       commitment=bfh('596f596f596f2121')),
+                         'token_data': token.OutputData(id=bfh('ccd25c348064d50357d837a3319bb4755c2db0708c45e7814127e1274104c143')[::-1],
+                                                        bitfield=0x62,
+                                                        amount=0,
+                                                        commitment=bfh('596f596f596f2121')),
                          'prevout_n': 2}],
             'lockTime': 0
         }
@@ -213,7 +213,7 @@ class TestTransaction(unittest.TestCase):
                          'type': 0,
                          'address': Address.from_string('qq9rw090p2eu9drv6ptztwx4ghpftwfa0gyqvlvx2q', net=networks.TestNet4),
                          'scriptPubKey': '76a9140a373caf0ab3c2b46cd05625b8d545c295b93d7a88ac',
-                         'tokenData': token.OutputData(
+                         'token_data': token.OutputData(
                              id=bfh('ccd25c348064d50357d837a3319bb4755c2db0708c45e7814127e1274104c143')[::-1],
                              bitfield=0x62,
                              amount=0,
@@ -223,7 +223,7 @@ class TestTransaction(unittest.TestCase):
                           'type': 0,
                           'address': Address.from_string('qq9rw090p2eu9drv6ptztwx4ghpftwfa0gyqvlvx2q', net=networks.TestNet4),
                           'scriptPubKey': '76a9140a373caf0ab3c2b46cd05625b8d545c295b93d7a88ac',
-                          'tokenData': token.OutputData(
+                          'token_data': token.OutputData(
                               id='ccd25c348064d50357d837a3319bb4755c2db0708c45e7814127e1274104c143',
                               bitfield="10",
                               amount=9223372036854775807,
@@ -233,7 +233,7 @@ class TestTransaction(unittest.TestCase):
                          'type': 0,
                          'address': Address.from_string('qr4gww42l0wh5lr56ulwz96wgtmzpv9p3sz4wxrydq', net=networks.TestNet4),
                          'scriptPubKey': '76a914ea873aaafbdd7a7c74d73ee1174e42f620b0a18c88ac',
-                         'tokenData': None,
+                         'token_data': None,
                          'prevout_n': 2}
                         ],
             'lockTime': 0
@@ -262,7 +262,7 @@ class TestTransaction(unittest.TestCase):
             'outputs': [{'address': Address.from_pubkey('034a29987f30ad5d23d79ed5215e034c51f6825bdb2aa595c2bdeb37902960b3d1'),
                          'prevout_n': 0,
                          'scriptPubKey': '76a914480d1be8ab76f8cdd85ce4077f51d35b0baaa25a88ac',
-                         'tokenData': None,
+                         'token_data': None,
                          'type': 0,
                          'value': 814}],
             'version': 1

@@ -62,6 +62,21 @@ class OutputData:
         return f"<token.OutputData(id={self.id_hex}, bitfield={self.bitfield:02x}, amount={self.amount}, " \
                f"commitment={self.commitment[:40].hex()})>"
 
+    @classmethod
+    def fromhex(cls, hexdata: str) -> Optional[object]:
+        """Convenience: Attempts to parse hexdata (which should already have PREFIX_BYTE chopped off) as if it were a
+        serialized token as one would get from self.tohex(). Returns None on parse failure, or a valid
+        token.OutputData instance on success."""
+        ret = OutputData()
+        try:
+            ret.deserialize(buffer=bytes.fromhex(hexdata))
+            return ret
+        except SerializationError:
+            return None
+
+    def hex(self):
+        return self.serialize().hex()
+
     @property
     def id_hex(self) -> str:
         return self.id[::-1].hex()
