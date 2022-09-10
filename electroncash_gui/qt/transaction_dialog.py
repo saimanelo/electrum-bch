@@ -412,9 +412,13 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         desc = self.desc
         base_unit = self.main_window.base_unit()
         format_amount = self.main_window.format_amount
-        delta2, info2 = self.wallet.get_tx_extended_info(self.tx)
+        delta2, info3 = self.wallet.get_tx_extended_info(self.tx, ver=3)
         spends_coins_mine = delta2.spends_coins_mine
-        tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n, status_enum = info2
+        (tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n, status_enum,
+         input_token_data) = info3
+        for i, txin in enumerate(self.tx.inputs()):
+            if 'token_data' not in txin:
+                txin['token_data'] = input_token_data[i]
         self.tx_height = height or self.tx.ephemeral.get('block_height') or None
         self.tx_hash = tx_hash
         desc = label or desc

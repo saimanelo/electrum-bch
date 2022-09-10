@@ -528,17 +528,22 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         self.print_error("Rebuilding CashTokens-specific txi and txo maps ...")
         self.ct_txo.clear()
         self.ct_txi.clear()
+        txn_cache = {}
         # First, do txo
         # Populates self.ct_txo: Map of tx_hash -> map of address -> map of prevout_n -> token.OutputData
         for tx_hash, addrmap in self.txo.items():
             if not addrmap:
                 self.print_error(f"ct_txo: no addrmap for {tx_hash}")
                 continue
-            tx = self.transactions.get(tx_hash)
+            tx = txn_cache.get(tx_hash) or self.transactions.get(tx_hash)
             if not tx:
                 self.print_error(f"rebuild_ct_txi_txo: Unknown transaction in self.txo: {tx_hash}")
                 continue
-            tx = copy.deepcopy(tx)  # Take a deep copy to avoid deserializing txn from map and wasting memory
+            if tx is self.transactions.get(tx_hash):
+                # Take a deep copy to avoid deserializing txn from map and wasting memory, temporarily cache the result
+                txn_cache[tx_hash] = tx = copy.deepcopy(tx)
+            # Next, walk through every entry in self.txo and figure out if it has token_data, and if so, put token_data
+            # into self.ct_txo
             tx_outputs = tx.outputs(tokens=True)
             ct_addr_map = self.ct_txo.get(tx_hash, {})
             ct_addr_map_was_empty = not ct_addr_map
@@ -577,14 +582,16 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         self.print_error(f"rebuild_ct_txi_txo: Bad output point serialization in self.txi: {ser}")
                         continue
                     token_data = self.ct_txo.get(prevout_hash, {}).get(addr, {}).get(prevout_n, None)
-                    if not token_data and False:
-                        # Fall-back to trying to deser a known txn
-                        tx = self.transactions.get(prevout_hash)
-                        if not tx:
-                            self.print_error(f"rebuild_ct_txi_txo: Unknown transaction in self.txi: {prevout_hash}")
-                            continue
-                        tx = copy.deepcopy(tx)  # Take a deep copy to save memory
-                        _, token_data = tx.outputs(tokens=True)[prevout_n]
+                    # The below is commented-out for now since it should not be necessary to deserialize the same
+                    # txns again that we already processed for self.ct_txo
+                    # if not token_data:
+                    #     # Fall-back to trying to deser a known txn
+                    #     tx = self.transactions.get(prevout_hash)
+                    #     if not tx:
+                    #         self.print_error(f"rebuild_ct_txi_txo: Unknown transaction in self.txi: {prevout_hash}")
+                    #         continue
+                    #     tx = copy.deepcopy(tx)  # Take a deep copy to save memory
+                    #     _, token_data = tx.outputs(tokens=True)[prevout_n]
                     if token_data is not None:
                         self.print_error(f"ct_txi: Adding {tx_hash} -> {addr} -> {prevout_hash} -> {prevout_n} -> {token_data!r}")
                         ct_prevout_n_map = ct_prevout_hash_map.get(prevout_hash, {})
@@ -622,7 +629,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             history = self.from_Address_dict(self._history)
             self.storage.put('addr_history', history)
             self.slp.save()
-            self.storage.put('ct_txid_hash', None)
             self.save_ct_txi()
             self.save_ct_txo()
             ct_txid_hash = txid_hasher.digest().hex()
@@ -1044,20 +1050,22 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         PartiallySigned = auto()
 
     TxInfo2 = namedtuple("TxInfo2", TxInfo._fields + ("status_enum",))
+    TxInfo3 = namedtuple("TxInfo3", TxInfo._fields + ("status_enum", "token_data",))
 
     def get_tx_info(self, tx) -> TxInfo:
         """ Return information for a transaction """
         return self._get_tx_info(tx, self.get_wallet_delta(tx), ver=1)
 
-    def get_tx_extended_info(self, tx) -> Tuple[WalletDelta2, TxInfo2]:
+    def get_tx_extended_info(self, tx, ver=2) -> Tuple[Union[WalletDelta, WalletDelta2],
+                                                       Union[TxInfo, TxInfo2, TxInfo3]]:
         """ Get extended information for a transaction, combined into 1 call (for performance) """
-        delta2 = self._get_wallet_delta(tx, ver=2)
-        info2 = self._get_tx_info(tx, delta2, ver=2)
-        return (delta2, info2)
+        delta_x = self._get_wallet_delta(tx, ver=min(ver, 2))
+        info_x = self._get_tx_info(tx, delta_x, ver=ver)
+        return delta_x, info_x
 
-    def _get_tx_info(self, tx, delta, *, ver=1) -> Union[TxInfo, TxInfo2]:
+    def _get_tx_info(self, tx, delta, *, ver=1) -> Union[TxInfo, TxInfo2, TxInfo3]:
         """ get_tx_info implementation """
-        assert ver in (1, 2)
+        assert ver in (1, 2, 3)
         if isinstance(delta, self.WalletDelta):
             is_relevant, is_mine, v, fee = delta
         else:
@@ -1068,6 +1076,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         height = conf = timestamp = None
         status_enum = None
         tx_hash = tx.txid()
+        input_token_data = []
         if tx.is_complete():
             if tx_hash in self.transactions:
                 label = self.get_label(tx_hash)
@@ -1091,6 +1100,20 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         size = tx.estimated_size()
                         fee_per_kb = fee * 1000 / size
                         exp_n = self.network.config.reverse_dynfee(fee_per_kb)
+                if ver >= 3:
+                    # For version 3 or above, we return a list of token_data as well for all the inputs to a txn
+                    for i, txin in enumerate(tx.inputs()):
+                        if 'token_data' not in txin:
+                            address = txin.get('address')
+                            if address:
+                                prevout_hash = txin.get('prevout_hash')
+                                prevout_n = txin.get('prevout_n')
+                                token_data = self.ct_txi.get(tx_hash, {}).get(address, {}).get(prevout_hash, {}).get(prevout_n)
+                            else:
+                                token_data = None
+                        else:
+                            token_data = txin['token_data']
+                        input_token_data.append(token_data)
             else:
                 status = _("Signed")
                 status_enum = self.StatusEnum.Signed
@@ -1118,8 +1141,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if ver == 1:
             return self.TxInfo(tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n)
         assert status_enum is not None
-        return self.TxInfo2(tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n,
-                            status_enum)
+        if ver == 2:
+            return self.TxInfo2(tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n,
+                                status_enum)
+        return self.TxInfo3(tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n,
+                            status_enum, input_token_data)
 
     def get_addr_io(self, address):
         h = self.get_address_history(address)
@@ -1148,16 +1174,17 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         for txo, v in coins.items():
             tx_height, value, is_cb, token_data = v
             prevout_hash, prevout_n = txo.split(':', 1)
+            prevout_n = int(prevout_n)
             x = {
-                'address':address,
-                'value':value,
-                'prevout_n':int(prevout_n),
-                'prevout_hash':prevout_hash,
-                'height':tx_height,
-                'coinbase':is_cb,
-                'is_frozen_coin':txo in self.frozen_coins or txo in self.frozen_coins_tmp,
-                'slp_token':self.slp.token_info_for_txo(txo),  # (token_id_hex, qty) tuple or None
-                'token_data': token_data,
+                'address': address,
+                'value': value,
+                'prevout_n': prevout_n,
+                'prevout_hash': prevout_hash,
+                'height': tx_height,
+                'coinbase': is_cb,
+                'is_frozen_coin': txo in self.frozen_coins or txo in self.frozen_coins_tmp,
+                'slp_token': self.slp.token_info_for_txo(txo),  # (token_id_hex, qty) tuple or None
+                'token_data': token_data,  # token.OutputData instance or None
             }
             out[txo] = x
         return out

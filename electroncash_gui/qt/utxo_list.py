@@ -50,6 +50,7 @@ class UTXOList(MyTreeWidget):
         address      = Qt.UserRole + 2
         cash_account = Qt.UserRole + 3  # this may not always be there for a particular item
         slp_token    = Qt.UserRole + 4  # this is either a tuple of (token_id, qty) or None
+        cash_token   = Qt.UserRole + 5  # this is either a token.OutputData or None
 
     filter_columns = [Col.address, Col.label]
     default_sort = MyTreeWidget.SortSpec(Col.amount, Qt.DescendingOrder)  # sort by amount, descending
@@ -159,7 +160,7 @@ class UTXOList(MyTreeWidget):
             c_frozen = x['is_frozen_coin']
             toolTipMisc = ''
             slp_token = x['slp_token']
-            cash_token = x['token_data'] is not None
+            cash_token = x['token_data']
             if is_immature:
                 for colNum in range(self.columnCount()):
                     if colNum == self.Col.label:
@@ -187,7 +188,9 @@ class UTXOList(MyTreeWidget):
                 utxo_item.setForeground(0, self.cyanBlue)
                 toolTipMisc = _("Coin & Address are frozen")
             # save the address-level-frozen and coin-level-frozen flags to the data item for retrieval later in create_menu() below.
-            utxo_item.setData(0, self.DataRoles.frozen_flags, "{}{}{}{}".format(("a" if a_frozen else ""), ("c" if c_frozen else ""), ("s" if slp_token else ""), ("i" if is_immature else "")))
+            utxo_item.setData(0, self.DataRoles.frozen_flags, "{}{}{}{}{}".format(
+                ("a" if a_frozen else ""), ("c" if c_frozen else ""), ("s" if slp_token else ""),
+                ("i" if is_immature else ""), "t" if cash_token else ""))
             # store the address
             utxo_item.setData(0, self.DataRoles.address, address)
             # store the ca_info for this address -- if any
@@ -195,6 +198,8 @@ class UTXOList(MyTreeWidget):
                 utxo_item.setData(0, self.DataRoles.cash_account, ca_info)
             # store the slp_token
             utxo_item.setData(0, self.DataRoles.slp_token, slp_token)
+            # store the cash token
+            utxo_item.setData(0, self.DataRoles.cash_token, cash_token)
             if toolTipMisc:
                 utxo_item.setToolTip(0, toolTipMisc)
             run_hook("utxo_list_item_setup", self, utxo_item, x, name)
@@ -213,21 +218,23 @@ class UTXOList(MyTreeWidget):
                 output_point_text = self.output_point_prefix_text
             headerItem.setText(self.Col.output_point, output_point_text)
 
-
     def get_selected(self):
-        return { x.data(0, self.DataRoles.name) : x.data(0, self.DataRoles.frozen_flags) # dict of "name" -> frozen flags string (eg: "ac")
-                for x in self.selectedItems() }
+        # dict of "name" -> frozen flags string (eg: "ac")
+        return {x.data(0, self.DataRoles.name): x.data(0, self.DataRoles.frozen_flags)
+                for x in self.selectedItems()}
 
     @if_not_dead
     def create_menu(self, position):
         menu = QMenu()
         selected = self.get_selected()
+
         def create_menu_inner():
             if not selected:
                 return
             coins = filter(lambda x: self.get_name(x) in selected, self.utxos)
             if not coins:
                 return
+            # Spendable coins are ones that have NO frozen_flags
             spendable_coins = list(filter(lambda x: not selected.get(self.get_name(x), ''), coins))
             # Unconditionally add the "Spend" option but leave it disabled if there are no spendable_coins
             spend_action = menu.addAction(_("Spend"), lambda: self.parent.spend_coins(spendable_coins))
@@ -242,6 +249,7 @@ class UTXOList(MyTreeWidget):
                 column_title = self.headerItem().text(col)
                 alt_column_title, alt_copy_text = None, None
                 slp_token = item.data(0, self.DataRoles.slp_token)
+                cash_token = item.data(0, self.DataRoles.cash_token)
                 ca_info = None
                 if col == self.Col.output_point:
                     copy_text = item.data(0, self.DataRoles.name)
@@ -290,7 +298,9 @@ class UTXOList(MyTreeWidget):
                 else:
                     menu.addAction(_("Freeze Address"), lambda: self.set_frozen_addresses_for_coins(list(selected.keys()), True))
                 if not spend_action.isEnabled():
-                    if slp_token:
+                    if cash_token:
+                        spend_action.setText(_("Cash Token: Spend Locked"))
+                    elif slp_token:
                         spend_action.setText(_("SLP Token: Spend Locked"))
                     elif 'i' in frozen_flags:  # immature coinbase
                         spend_action.setText(_("Immature Coinbase: Spend Locked"))

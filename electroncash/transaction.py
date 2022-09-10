@@ -1162,9 +1162,11 @@ class Transaction:
                     if tx:
                         if n < len(tx.outputs()):
                             outp = tx.outputs()[n]
+                            token_data = tx.token_datas()[n]
                             addr, value = outp[1], outp[2]
                             inp['value'] = value
                             inp['address'] = addr
+                            inp['token_data'] = token_data
                             print_error("fetch_input_data: fetched cached", i, addr, value)
                         else:
                             print_error("fetch_input_data: ** FIXME ** should never happen -- n={} >= len(tx.outputs())={} for prevout {}".format(n, len(tx.outputs()), prevout_hash))
