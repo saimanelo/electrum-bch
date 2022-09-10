@@ -460,6 +460,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         self.print_error(f"load_ct_txo: cannot deserialize token for {tx_hash}:{n} hexdata: {hexdata},"
                                          f" skipping")
                         continue
+                    del outputmap[n]
+                    n = int(n)  # JSON doesn't support non-string keys, so convert this key back to int
                     outputmap[n] = token_data
         return bad_ct_entry_ctr
 
@@ -502,6 +504,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             self.print_error(f"load_ct_txi: cannot deserialize token for {tx_hash}:{prevout_n}"
                                              f" hexdata: {hexdata}, skipping")
                             continue
+                        del token_data_map[prevout_n]
+                        # JSON doesn't support non-string keys, so convert this key back to int
+                        prevout_n = int(prevout_n)
                         token_data_map[prevout_n] = token_data  # Convert hexdata to token.OutputData for usage
         return bad_ct_entry_ctr
 
