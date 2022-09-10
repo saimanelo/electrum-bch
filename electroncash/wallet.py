@@ -1100,20 +1100,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         size = tx.estimated_size()
                         fee_per_kb = fee * 1000 / size
                         exp_n = self.network.config.reverse_dynfee(fee_per_kb)
-                if ver >= 3:
-                    # For version 3 or above, we return a list of token_data as well for all the inputs to a txn
-                    for i, txin in enumerate(tx.inputs()):
-                        if 'token_data' not in txin:
-                            address = txin.get('address')
-                            if address:
-                                prevout_hash = txin.get('prevout_hash')
-                                prevout_n = txin.get('prevout_n')
-                                token_data = self.ct_txi.get(tx_hash, {}).get(address, {}).get(prevout_hash, {}).get(prevout_n)
-                            else:
-                                token_data = None
-                        else:
-                            token_data = txin['token_data']
-                        input_token_data.append(token_data)
             else:
                 status = _("Signed")
                 status_enum = self.StatusEnum.Signed
@@ -1126,6 +1112,21 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             else:
                 status =_('Partially signed') + ' (%d/%d)'%(s,r)
                 status_enum = self.StatusEnum.PartiallySigned
+
+        if ver >= 3:
+            # For version 3 or above, we return a list of token_data as well for all the inputs to a txn
+            for i, txin in enumerate(tx.inputs()):
+                if 'token_data' not in txin:
+                    address = txin.get('address')
+                    if address:
+                        prevout_hash = txin.get('prevout_hash')
+                        prevout_n = txin.get('prevout_n')
+                        token_data = self.ct_txi.get(tx_hash, {}).get(address, {}).get(prevout_hash, {}).get(prevout_n)
+                    else:
+                        token_data = None
+                else:
+                    token_data = txin['token_data']
+                input_token_data.append(token_data)
 
         if is_relevant:
             if is_mine:
