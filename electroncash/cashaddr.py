@@ -142,6 +142,8 @@ def _decode_payload(addr):
 
 PUBKEY_TYPE = 0
 SCRIPT_TYPE = 1
+TOKEN_PUBKEY_TYPE = 2
+TOKEN_SCRIPT_TYPE = 3
 
 def decode(address):
     '''Given a cashaddr address, return a triple
@@ -174,7 +176,7 @@ def decode(address):
                          .format(len(addr_hash), size))
 
     kind = version >> 3
-    if kind not in (SCRIPT_TYPE, PUBKEY_TYPE):
+    if kind not in (SCRIPT_TYPE, PUBKEY_TYPE, TOKEN_PUBKEY_TYPE, TOKEN_SCRIPT_TYPE):
         raise ValueError('unrecognised address type {}'.format(kind))
 
     return prefix, kind, addr_hash
@@ -188,7 +190,7 @@ def encode(prefix, kind, addr_hash):
     if not isinstance(addr_hash, (bytes, bytearray)):
         raise TypeError('addr_hash must be binary bytes')
 
-    if kind not in (SCRIPT_TYPE, PUBKEY_TYPE):
+    if kind not in (SCRIPT_TYPE, PUBKEY_TYPE, TOKEN_PUBKEY_TYPE, TOKEN_SCRIPT_TYPE):
         raise ValueError('unrecognised address type {}'.format(kind))
 
     payload = _pack_addr_data(kind, addr_hash)
