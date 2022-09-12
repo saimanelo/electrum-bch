@@ -307,7 +307,7 @@ class AddressList(MyTreeWidget):
                     alt_copy_text, alt_column_title = addr.to_full_string(Address.FMT_CASHADDR), _('Cash Address')
                 else:
                     alt_copy_text, alt_column_title = addr.to_full_string(Address.FMT_LEGACY), _('Legacy Address')
-                token_text = addr.to_tokenized().to_full_string(Address.FMT_CASHADDR)
+                token_text = addr.to_full_token_string()
                 if token_text in (copy_text, alt_copy_text):
                     token_text = None
             else:

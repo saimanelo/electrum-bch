@@ -263,7 +263,7 @@ class UTXOList(MyTreeWidget):
                     else:
                         alt_copy_text, alt_column_title = addr.to_full_string(Address.FMT_LEGACY), _('Legacy Address')
                     ca_info = item.data(0, self.DataRoles.cash_account)  # may be None
-                    token_text = addr.to_tokenized().to_full_string(Address.FMT_CASHADDR)
+                    token_text = addr.to_full_token_string()
                     if token_text in (copy_text, alt_copy_text):
                         token_text = None
                     del addr

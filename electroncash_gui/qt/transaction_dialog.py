@@ -628,7 +628,9 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         chg.setBackground(QBrush(ColorScheme.YELLOW.as_color(True)))
         tok = QTextCharFormat(ext)
         tok.setFontItalic(True)
-        tok.setToolTip("This output contains a CashToken")
+        tok.setToolTip(_("This output contains a CashToken"))
+        tok_inp = QTextCharFormat(tok)
+        tok_inp.setToolTip(_("This inpput contains a CashToken"))
 
         rec_ct, chg_ct = 0, 0
 
@@ -636,8 +638,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             nonlocal rec_ct, chg_ct
             ret = None
             try:
-                if isinstance(addr, Address) and self.wallet.is_mine(addr, token_case_insensitive=True):
-                    if self.wallet.is_change(addr, token_case_insensitive=True):
+                if isinstance(addr, Address) and self.wallet.is_mine(addr):
+                    if self.wallet.is_change(addr):
                         chg_ct += 1
                         chg2 = QTextCharFormat(chg)
                         chg2.setAnchorHref(addr.to_ui_string())
@@ -649,17 +651,17 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                         rec2.setAnchorHref(addr.to_ui_string())
                         ret = rec2
                         return ret
-                ret = ext
+                ret = QTextCharFormat(ext)
                 return ret
             finally:
-                if ret and isinstance(addr, Address) and addr.is_tokenized():
+                if ret and isinstance(addr, Address) and addr.to_ui_string() != addr.to_token_string():
                     tt = ret.toolTip()
-                    tt = _('Token-aware version of:') + ' ' + addr.to_untokenized().to_ui_string() + '\n' + tt
+                    tt = (tt + '<br><br>'
+                          + _('Token-aware encoding:') + ' <b><i>' + addr.to_token_string())
                     ret.setToolTip(tt)
 
-
         def format_amount(amt):
-            return self.main_window.format_amount(amt, whitespaces = True)
+            return self.main_window.format_amount(amt, whitespaces=True)
 
         i_text.clear()
         cursor = i_text.textCursor()
@@ -704,8 +706,9 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                     color = brush.color()
                     color.setAlpha(0x77)
                     brush.setColor(color)
-                    tok.setBackground(brush)
-                    cursor.insertText(input_token_text, tok)
+                    tokfmt = QTextCharFormat(tok_inp)
+                    tokfmt.setBackground(brush)
+                    cursor.insertText(input_token_text, tokfmt)
             cursor.insertBlock()
 
         self.schnorr_label.setVisible(has_schnorr)
@@ -779,8 +782,9 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 color = brush.color()
                 color.setAlpha(0x77)
                 brush.setColor(color)
-                tok.setBackground(brush)
-                cursor.insertText(tokstr, tok)
+                tokfmt = QTextCharFormat(tok)
+                tokfmt.setBackground(brush)
+                cursor.insertText(tokstr, tokfmt)
             cursor.insertBlock()
 
         # Cash Accounts support
@@ -825,7 +829,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         assert target
         if Address.is_valid(target):
             # target was an address, open address dialog
-            self.main_window.show_address(Address.from_string(target).to_untokenized(), parent=self)
+            self.main_window.show_address(Address.from_string(target), parent=self)
         else:
             # target was a txid, open new tx dialog
             self.main_window.do_process_from_txid(txid=target, parent=self)
@@ -887,7 +891,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
     def _add_addr_to_io_menu_lists_for_widget(self, addr, show_list, copy_list, widget):
         if hasattr(addr, 'to_ui_string'):
             addr_text = addr.to_ui_string()
-            if isinstance(addr, Address) and self.wallet.is_mine(addr, token_case_insensitive=True):
+            if isinstance(addr, Address) and self.wallet.is_mine(addr):
                 show_list += [ ( _("Address Details"), lambda: self._open_internal_link(addr_text) ) ]
                 addr_URL = web.BE_URL(self.main_window.config, 'addr', addr)
                 if addr_URL:
@@ -899,6 +903,11 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             else:
                 action_text = _("Copy Address")
             copy_list += [ ( action_text, lambda: self._copy_to_clipboard(addr_text, widget) ) ]
+            if isinstance(addr, Address):
+                token_text = addr.to_token_string()
+                if token_text != addr_text:
+                    copy_list += [(_("Copy Address") + ' ' + _("(token-aware)"),
+                                   lambda: self._copy_to_clipboard(token_text, widget))]
             # also add script hex copy to clipboard
             if isinstance(addr, ScriptOutput):
                 hex_text = addr.to_script().hex() or ''

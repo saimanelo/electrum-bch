@@ -594,52 +594,76 @@ class TestCashAddrAddress(unittest.TestCase):
             self.assertEqual(dkind, kind)
             self.assertEqual(payload, dhash)
 
+            net = networks.MainNet()
+            # Fudge prefix
+            net.CASHADDR_PREFIX = prefix
+
             # Test Address class optionally if the test vector matches something it supports
-            if len(payload) in (20, 32) and kind in (address.Address.ADDR_P2PKH, address.Address.ADDR_P2SH,
-                                                     address.Address.ADDR_P2PKH_TOKEN, address.Address.ADDR_P2SH_TOKEN):
-                net = networks.MainNet()
-                # Fudge prefix
-                net.CASHADDR_PREFIX = prefix
+            if len(payload) in (20, 32) and kind in (address.Address.ADDR_P2PKH, address.Address.ADDR_P2SH):
+                if len(payload) == 32 and kind == address.Address.ADDR_P2PKH:
+                    # Address class doesn't support P2PKH with 32-byte hash, so skip, but first test that it raises
+                    with self.assertRaises(address.AddressError):
+                        address.Address.from_string(addrstring, net=net)
+                    self.assertFalse(address.Address.is_valid(addrstring, net=net))
+                    continue
                 # Test decode the string
                 addr = address.Address.from_string(addrstring, net=net)
                 self.assertEqual(addr.kind, kind)
                 self.assertEqual(addr.hash, payload)
+                self.assertFalse(address.Address.is_token(addrstring, net=net))
+                self.assertFalse(address.Address.is_legacy(addrstring, net=net))
+                self.assertTrue(address.Address.is_valid(addrstring, net=net))
                 # Test encodes back identically
                 self.assertEqual(addr.to_full_string(address.Address.FMT_CASHADDR, net=net), addrstring)
                 # Test constructor works as expected
                 self.assertEqual(addr, address.Address(payload, kind))
-                # Test the "untokenified" version (removes _TOKEN)
-                untok_addr = addr.to_untokenized()
-                self.assertEqual(untok_addr.hash, payload)
-                untok_legstr = None
-                if len(payload) == 20 or untok_addr.kind == address.Address.ADDR_P2SH:
-                    # We only support length 32 payload legacy addresses for P2SH
-                    untok_legstr = untok_addr.to_string(address.Address.FMT_LEGACY, net=net)
-                    untok_addr2 = address.Address.from_string(untok_legstr, net=net)
-                    self.assertEqual(untok_addr, untok_addr2)
-                untok_cashaddr_str = untok_addr.to_string(address.Address.FMT_CASHADDR, net=net)
-                untok_addr3 = address.Address.from_string(untok_cashaddr_str, net=net)
-                self.assertEqual(untok_addr, untok_addr3)
+                # Test the "token-aware" addrstring parses back to an identical address object
+                tok_addrstring = addr.to_full_token_string(net=net)
+                self.assertEqual(address.Address.from_string(tok_addrstring, net=net), addr)
+                tok_addrstring = addr.to_token_string(net=net)
+                self.assertTrue(address.Address.is_token(tok_addrstring, net=net))
+                self.assertEqual(address.Address.from_string(tok_addrstring, net=net), addr)
+                _, ca_type = address.Address.from_cashaddr_string(tok_addrstring, net=net, return_ca_type=True)
+                self.assertTrue((kind == address.Address.ADDR_P2PKH and ca_type == cashaddr.TOKEN_PUBKEY_TYPE)
+                                or (kind == address.Address.ADDR_P2SH and ca_type == cashaddr.TOKEN_SCRIPT_TYPE))
+                # Test legacy encode/decode cycle produces identical results
+                legstr = addr.to_string(fmt=address.Address.FMT_LEGACY, net=net)
+                self.assertNotEqual(legstr, addrstring)
+                self.assertNotEqual(legstr, tok_addrstring)
+                self.assertTrue(address.Address.is_valid(legstr, net=net))
+                self.assertEqual(address.Address.from_string(legstr, net=net), addr)
 
-                # Test "re-tokenified" version (adds _TOKEN)
-                tok_addr = addr.to_tokenized()
-                self.assertEqual(tok_addr.hash, payload)
-                tok_cashaddr_str = tok_addr.to_string(address.Address.FMT_CASHADDR, net=net)
-                tok_addr2 = address.Address.from_string(tok_cashaddr_str, net=net)
-                self.assertEqual(tok_addr, tok_addr2)
-                if untok_legstr:
-                    # The legacy string doesn't capture the token type.. it flattens out to the base type:
-                    # ADDR_P2PKH or ADDR_P2SH, so both untokenified and tokenified legacy are equal always.
-                    tok_legacy_str = tok_addr.to_string(address.Address.FMT_LEGACY, net=net)
-                    self.assertEqual(tok_legacy_str, untok_legstr)
                 # Check locking script matches what we expect
-                if kind in (address.Address.ADDR_P2PKH, address.Address.ADDR_P2PKH_TOKEN) and len(payload) == 20:
+                if kind == address.Address.ADDR_P2PKH:
                     self.assertEqual(addr.to_script(), address.P2PKH_prefix + payload + address.P2PKH_suffix)
-                elif kind in (address.Address.ADDR_P2SH, address.Address.ADDR_P2SH_TOKEN):
+                else:
                     if len(payload) == 32:
                         self.assertEqual(addr.to_script(), address.P2SH32_prefix + payload + address.P2SH32_suffix)
                     else:
                         self.assertEqual(addr.to_script(), address.P2SH_prefix + payload + address.P2SH_suffix)
+            elif len(payload) in (20, 32) and kind in (cashaddr.TOKEN_PUBKEY_TYPE, cashaddr.TOKEN_SCRIPT_TYPE):
+                if len(payload) == 32 and kind == cashaddr.TOKEN_PUBKEY_TYPE:
+                    # Address class doesn't support P2PKH with 32-byte hash, so skip, but first test that it raises
+                    with self.assertRaises(address.AddressError):
+                        address.Address.from_string(addrstring, net=net)
+                    self.assertFalse(address.Address.is_valid(addrstring, net=net))
+                    continue
+                self.assertTrue(address.Address.is_valid(addrstring, net=net))
+                addr = address.Address.from_string(addrstring, net=net)
+                self.assertEqual(addr.to_full_token_string(net=net), addrstring)
+                self.assertNotEqual(addr.to_full_string(address.Address.FMT_CASHADDR, net=net), addrstring)
+                self.assertEqual(addr.hash, payload)
+                self.assertTrue((not kind == cashaddr.TOKEN_PUBKEY_TYPE or addr.kind == address.Address.ADDR_P2PKH)
+                                and ((not kind == cashaddr.TOKEN_SCRIPT_TYPE
+                                      or addr.kind == address.Address.ADDR_P2SH)))
+            else:
+                # Ensure that for everything else is invalid according to the Address class
+                self.assertFalse(address.Address.is_valid(addrstring, net=net))
+                with self.assertRaises(address.AddressError):
+                    address.Address.from_string(addrstring, net=net)
+                with self.assertRaises(AssertionError):
+                    # Directly constructing an invalid should raise as well
+                    address.Address(payload, kind)
 
 
 if __name__ == '__main__':

@@ -1127,8 +1127,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_token_address_e.setReadOnly(True)
         msg = _('Bitcoin Cash address where the payment should be received. Note that each payment request uses a'
                 ' different Bitcoin Cash address.')
-        msg2 = _("This a token-aware Bitcoin Cash address belonging to this wallet where CashTokens should be"
-                 " received.  It is the token-aware version of the 'Receiving address'")
+        msg2 = _("This a token-aware synonym for the above address where CashTokens should be received.")
         label = HelpLabel(_('&Receiving address'), msg)
         label.setBuddy(self.receive_address_e)
         self.receive_address_e.textChanged.connect(self.update_receive_qr)
@@ -1521,7 +1520,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         text_token = ''
         if self.receive_address:
             text = self.receive_address.to_full_ui_string()
-            text_token = self.receive_address.to_tokenized().to_full_string(Address.FMT_CASHADDR)
+            text_token = self.receive_address.to_full_token_string()
         self.receive_address_e.setText(text)
         self.receive_token_address_e.setText(text_token)
         self.cash_account_e.set_cash_acct()
@@ -2714,20 +2713,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         widgets = [
             (cash_address, Address.FMT_CASHADDR),
             (legacy_address, Address.FMT_LEGACY),
-            (token_address, Address.FMT_CASHADDR)
+            (token_address, Address.FMT_TOKEN)
         ]
 
         def convert_address():
             try:
-                addr = Address.from_string(source_address.text().strip()).to_untokenized()
+                addr = Address.from_string(source_address.text().strip())
             except:
                 addr = None
             for widget, fmt in widgets:
                 if addr:
-                    if widget is token_address:
-                        text = addr.to_tokenized().to_full_string(fmt)
-                    else:
-                        text = addr.to_full_string(fmt)
+                    text = addr.to_full_string(fmt)
                     widget.setText(text)
                 else:
                     widget.setText('')
@@ -5270,7 +5266,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 webopen('https://www.cashaccount.info/')
             elif link == 'addr':
                 if self.wallet.is_mine(addr):
-                    self.show_address(addr.to_untokenized())
+                    self.show_address(addr)
                 else:
                     url = web.BE_URL(self.config, 'addr', addr)
                     if url:  webopen(url)
