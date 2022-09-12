@@ -391,8 +391,8 @@ class ScriptOutput(ScriptOutputBase):
         bcd.push_data(
             # type byte: 0x1 for ADDR_P2PKH, 0x2 for ADDR_P2SH
             _i2b(_addr_kind_data_types[address.kind])
-            # 20 byte haash160
-            + address.hash160
+            # 20 byte hash160
+            + address.hash
         )
 
         return cls(bytes(bcd.input))

@@ -707,6 +707,8 @@ class WalletData(util.PrintError):
         txos (spend and/or unspent) that have ever received tokens for a
         particular address.
         Call this with locks held and/or copy the set if you want to be thread-safe. '''
+        if isinstance(addr, address.Address):
+            addr = addr.to_untokenized()
         return self.txo_byaddr.get(addr, set())
     def get_batons(self, token_id_hex, *, ret_class = list) -> List[str]:
         ''' Returns the list of txo's containing a token baton for a particular
@@ -742,6 +744,8 @@ class WalletData(util.PrintError):
             if txo.rsplit(':', 1)[0] == txid:
                 self.txo_token_id.pop(txo, None)
         for addr, txo_set in self.txo_byaddr.copy().items():
+            if isinstance(addr, address.Address):
+                addr = addr.to_untokenized()  # Reduce to base type
             for txo in list(txo_set):
                 if txo.rsplit(':', 1)[0] == txid:
                     txo_set.discard(txo)  # this actually points to the real txo_set instance in the dict
@@ -792,6 +796,8 @@ class WalletData(util.PrintError):
     def _add_txo(self, token_id_hex, txid, n, addr, token_qty):
         ''' Adds txid:n to requisite data structures, registering
         this token output, etc. '''
+        if isinstance(addr, address.Address):
+            addr = addr.to_untokenized()
         if not isinstance(addr, address.Address) or not self.wallet.is_mine(addr):
             # ignore txo's for addresses that are not "mine", or that are not TYPE_ADDRESS
             return
@@ -808,6 +814,8 @@ class WalletData(util.PrintError):
         self._add_token_qty(token_id_hex, name, token_qty)
 
     def _add_mint_baton(self, token_id_hex, txid, n, addr):
+        if isinstance(addr, address.Address):
+            addr = addr.to_untokenized()
         self._add_txo(token_id_hex, txid, n, addr, -1)
 
     def _add_genesis_or_mint_tx(self, so, outputs, txid, tx):
@@ -818,6 +826,8 @@ class WalletData(util.PrintError):
         token_id_hex = txid if is_genesis else so.message.token_id_hex
         assert token_type in valid_token_types, "Invalid token type: FIXME"  # paranoia
         r_type, r_addr, _dummy = outputs[1]  # may raise
+        if isinstance(r_addr, address.Address):
+            r_addr = r_addr.to_untokenized()
 
         # Not clear here if we should be rejecting the whole message or
         # just the output.  Comment this out when that becomes clear.
@@ -830,6 +840,8 @@ class WalletData(util.PrintError):
         token_qty = so.message.initial_token_mint_quantity if is_genesis else so.message.additional_token_quantity
         if baton_vout is not None:
             b_type, b_addr, _dummy = outputs[baton_vout] # may raise
+            if isinstance(b_addr, address.Address):
+                b_addr = b_addr.to_untokenized()
             # SLP wallet silently ignored non-TYPE_ADDRESS, so we do same here.
             #assert b_type == bitcoin.TYPE_ADDRESS, f"Token baton vout ({baton_vout}) != TYPE_ADDRESS, ignoring tx"
             self._add_mint_baton(token_id_hex, txid, baton_vout, b_addr)  # this silently ignores non-TYPE_ADDRESS
@@ -848,4 +860,6 @@ class WalletData(util.PrintError):
             if qty <= 0:  # safely ignore 0 qty as per spec
                 continue
             _type, addr, _dummy = outputs[n]  # shouldn't raise since we truncated list above
+            if isinstance(addr, address.Address):
+                addr = addr.to_untokenized()
             self._add_txo(token_id_hex, txid, n, addr, qty)

@@ -791,11 +791,13 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         of is_mine below is sufficient."""
         self._recv_address_set_cached, self._change_address_set_cached = frozenset(), frozenset()
 
-    def is_mine(self, address):
+    def is_mine(self, address, *, token_case_insensitive=False):
         """Note this method assumes that the entire address set is
         composed of self.get_change_addresses() + self.get_receiving_addresses().
         In subclasses, if that is not the case -- REIMPLEMENT this method!"""
         assert not isinstance(address, str)
+        if token_case_insensitive and isinstance(address, Address):
+            address = address.to_untokenized()
         # assumption here is get_receiving_addresses and get_change_addresses
         # are cheap constant-time operations returning a list reference.
         # If that is not the case -- reimplement this function.
@@ -817,15 +819,19 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return (address in self._recv_address_set_cached
                 or address in self._change_address_set_cached)
 
-    def is_change(self, address):
+    def is_change(self, address, *, token_case_insensitive=False):
         assert not isinstance(address, str)
+        if token_case_insensitive and isinstance(address, Address):
+            address = address.to_untokenized()
         ca = self.get_change_addresses()
         if len(ca) != len(self._change_address_set_cached):
             # re-create cache if lengths don't match
             self._change_address_set_cached = frozenset(ca)
         return address in self._change_address_set_cached
 
-    def get_address_index(self, address):
+    def get_address_index(self, address, *, token_case_insensitive=False):
+        if token_case_insensitive and isinstance(address, Address):
+            address = address.to_untokenized()
         try:
             return False, self.receiving_addresses.index(address)
         except ValueError:
@@ -1571,6 +1577,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 if txi['type'] == 'coinbase':
                     continue
                 addr = txi.get('address')
+                if isinstance(addr, Address):
+                    # Reduce address down to its base type, so that is_mine below works, and so self.txi and self.txo
+                    # also work ok.
+                    addr = addr.to_untokenized()
                 # find value from prev output
                 if self.is_mine(addr):
                     prevout_hash, prevout_n, ser = txin_get_info(txi)
@@ -1627,10 +1637,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.ct_txo[tx_hash] = ct_d = {}
             op_return_ct = 0
             deferred_cashacct_add = None
-            for n, tup in enumerate(tx.outputs(tokens=True)):
-                txo, token_data = tup
+            for n, (txo, token_data) in enumerate(tx.outputs(tokens=True)):
                 ser = tx_hash + ':%d'%n
                 _type, addr, v = txo
+                if isinstance(addr, Address):
+                    # Reduce address to its base type so it matches wallet
+                    addr = addr.to_untokenized()
                 mine = False
                 if isinstance(addr, ScriptOutput):
                     if addr.is_opreturn():
@@ -2670,7 +2682,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         received, sent = self.get_addr_io(address)
         l = []
         for txo, x in received.items():
-            h, v, is_cb = x
+            h, v, is_cb, token_data = x
             txid, n = txo.split(':')
             info = self.verified_tx.get(txid)
             if info:
@@ -3097,7 +3109,7 @@ class ImportedWalletBase(Simple_Wallet):
     def is_deterministic(self):
         return False
 
-    def is_change(self, address):
+    def is_change(self, address, *, token_case_insensitive=False):
         return False
 
     def get_master_public_keys(self):

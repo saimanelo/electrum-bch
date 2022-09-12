@@ -36,7 +36,7 @@ from .caches import ExpiringCache
 from .bitcoin import *
 from .address import (PublicKey, Address, Script, ScriptOutput, hash160,
                       UnknownAddress, OpCodes as opcodes,
-                      P2PKH_prefix, P2PKH_suffix, P2SH_prefix, P2SH_suffix)
+                      P2PKH_prefix, P2PKH_suffix, P2SH_prefix, P2SH_suffix, P2SH32_prefix, P2SH32_suffix)
 from .serialize import BCDataStream, SerializationError
 from . import schnorr
 from . import token
@@ -172,6 +172,10 @@ def get_address_from_output_script(_bytes):
     if scriptlen == 23 and _bytes.startswith(P2SH_prefix) and _bytes.endswith(P2SH_suffix):
         # Pay-to-script-hash
         return TYPE_ADDRESS, Address.from_P2SH_hash(_bytes[2:22])
+
+    if scriptlen == 35 and _bytes.startswith(P2SH32_prefix) and _bytes.endswith(P2SH32_suffix):
+        # P2SH32
+        return TYPE_ADDRESS, Address.from_P2SH_hash(_bytes[2:34])
 
     if scriptlen == 25 and _bytes.startswith(P2PKH_prefix) and _bytes.endswith(P2PKH_suffix):
         # Pay-to-pubkey-hash

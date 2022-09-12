@@ -300,19 +300,24 @@ class AddressList(MyTreeWidget):
                 return
             addr = addrs[0]
 
-            alt_copy_text, alt_column_title = None, None
+            alt_copy_text, alt_column_title, token_text = None, None, None
             if col == 0:
                 copy_text = addr.to_full_ui_string()
                 if Address.FMT_UI == Address.FMT_LEGACY:
                     alt_copy_text, alt_column_title = addr.to_full_string(Address.FMT_CASHADDR), _('Cash Address')
                 else:
                     alt_copy_text, alt_column_title = addr.to_full_string(Address.FMT_LEGACY), _('Legacy Address')
+                token_text = addr.to_tokenized().to_full_string(Address.FMT_CASHADDR)
+                if token_text in (copy_text, alt_copy_text):
+                    token_text = None
             else:
                 copy_text = item.text(col)
             menu.addAction(_("Copy {}").format(column_title), lambda: doCopy(copy_text))
             if alt_copy_text and alt_column_title:
                 # Add 'Copy Legacy Address' and 'Copy Cash Address' alternates if right-click is on column 0
                 menu.addAction(_("Copy {}").format(alt_column_title), lambda: doCopy(alt_copy_text))
+            if token_text:
+                menu.addAction(_("Copy {}").format(_("Token Address")), lambda: doCopy(token_text))
             a = menu.addAction(_('Details') + "...", lambda: self.parent.show_address(addr))
             if col == 0:
                 where_to_insert_dupe_copy_cash_account = a

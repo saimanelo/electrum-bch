@@ -634,18 +634,29 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
 
         def text_format(addr):
             nonlocal rec_ct, chg_ct
-            if isinstance(addr, Address) and self.wallet.is_mine(addr):
-                if self.wallet.is_change(addr):
-                    chg_ct += 1
-                    chg2 = QTextCharFormat(chg)
-                    chg2.setAnchorHref(addr.to_ui_string())
-                    return chg2
-                else:
-                    rec_ct += 1
-                    rec2 = QTextCharFormat(rec)
-                    rec2.setAnchorHref(addr.to_ui_string())
-                    return rec2
-            return ext
+            ret = None
+            try:
+                if isinstance(addr, Address) and self.wallet.is_mine(addr, token_case_insensitive=True):
+                    if self.wallet.is_change(addr, token_case_insensitive=True):
+                        chg_ct += 1
+                        chg2 = QTextCharFormat(chg)
+                        chg2.setAnchorHref(addr.to_ui_string())
+                        ret = chg2
+                        return ret
+                    else:
+                        rec_ct += 1
+                        rec2 = QTextCharFormat(rec)
+                        rec2.setAnchorHref(addr.to_ui_string())
+                        ret = rec2
+                        return ret
+                ret = ext
+                return ret
+            finally:
+                if ret and isinstance(addr, Address) and addr.is_tokenized():
+                    tt = ret.toolTip()
+                    tt = _('Token-aware version of:') + ' ' + addr.to_untokenized().to_ui_string() + '\n' + tt
+                    ret.setToolTip(tt)
+
 
         def format_amount(amt):
             return self.main_window.format_amount(amt, whitespaces = True)
@@ -814,7 +825,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         assert target
         if Address.is_valid(target):
             # target was an address, open address dialog
-            self.main_window.show_address(Address.from_string(target), parent=self)
+            self.main_window.show_address(Address.from_string(target).to_untokenized(), parent=self)
         else:
             # target was a txid, open new tx dialog
             self.main_window.do_process_from_txid(txid=target, parent=self)
@@ -876,7 +887,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
     def _add_addr_to_io_menu_lists_for_widget(self, addr, show_list, copy_list, widget):
         if hasattr(addr, 'to_ui_string'):
             addr_text = addr.to_ui_string()
-            if isinstance(addr, Address) and self.wallet.is_mine(addr):
+            if isinstance(addr, Address) and self.wallet.is_mine(addr, token_case_insensitive=True):
                 show_list += [ ( _("Address Details"), lambda: self._open_internal_link(addr_text) ) ]
                 addr_URL = web.BE_URL(self.main_window.config, 'addr', addr)
                 if addr_URL:

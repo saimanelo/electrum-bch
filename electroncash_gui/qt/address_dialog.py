@@ -47,6 +47,7 @@ class AddressDialog(PrintError, WindowModalDialog):
         windowParent = windowParent or parent
         WindowModalDialog.__init__(self, windowParent, _("Address"))
         self.address = address
+        self.token_address = self.address.to_tokenized()
         self.parent = parent
         self.config = parent.config
         self.wallet = parent.wallet
@@ -64,6 +65,22 @@ class AddressDialog(PrintError, WindowModalDialog):
         self.addr_e.addCopyButton()
         self.addr_e.setReadOnly(True)
         vbox.addWidget(self.addr_e)
+
+        if self.address != self.token_address:
+            tooltip = _('This is the token-aware version of this address.')
+            lbl = QLabel(_("Token Address:"))
+            lbl.setToolTip(tooltip)
+            vbox.addWidget(lbl)
+            self.tok_addr_e = ButtonsLineEdit()
+            icon = ":icons/qrcode_white.svg" if ColorScheme.dark_scheme else ":icons/qrcode.svg"
+            self.tok_addr_e.addButton(icon, self.show_token_addr_qr, _("Show QR Code"))
+            self.tok_addr_e.addCopyButton()
+            self.tok_addr_e.setReadOnly(True)
+            self.tok_addr_e.setToolTip(tooltip)
+            vbox.addWidget(self.tok_addr_e)
+        else:
+            self.tok_addr_e = ButtonsLineEdit()
+
         self.update_addr()
 
         try:
@@ -151,6 +168,8 @@ class AddressDialog(PrintError, WindowModalDialog):
 
     def update_addr(self):
         self.addr_e.setText(self.address.to_full_ui_string())
+        if self.address != self.token_address:
+            self.tok_addr_e.setText(self.token_address.to_full_string(Address.FMT_CASHADDR))
 
     def update_cash_accounts(self, ca_infos=None):
         gb = self.cashacct_gb
@@ -180,6 +199,13 @@ class AddressDialog(PrintError, WindowModalDialog):
         text = self.address.to_full_ui_string()
         try:
             self.parent.show_qrcode(text, 'Address', parent=self)
+        except Exception as e:
+            self.show_message(str(e))
+
+    def show_token_addr_qr(self):
+        text = self.token_address.to_full_ui_string()
+        try:
+            self.parent.show_qrcode(text, 'Token Address', parent=self)
         except Exception as e:
             self.show_message(str(e))
 

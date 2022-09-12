@@ -251,6 +251,7 @@ class UTXOList(MyTreeWidget):
                 slp_token = item.data(0, self.DataRoles.slp_token)
                 cash_token = item.data(0, self.DataRoles.cash_token)
                 ca_info = None
+                token_text = None
                 if col == self.Col.output_point:
                     copy_text = item.data(0, self.DataRoles.name)
                 elif col == self.Col.address:
@@ -262,6 +263,9 @@ class UTXOList(MyTreeWidget):
                     else:
                         alt_copy_text, alt_column_title = addr.to_full_string(Address.FMT_LEGACY), _('Legacy Address')
                     ca_info = item.data(0, self.DataRoles.cash_account)  # may be None
+                    token_text = addr.to_tokenized().to_full_string(Address.FMT_CASHADDR)
+                    if token_text in (copy_text, alt_copy_text):
+                        token_text = None
                     del addr
                 else:
                     copy_text = item.text(col)
@@ -270,6 +274,8 @@ class UTXOList(MyTreeWidget):
                 menu.addAction(_("Copy {}").format(column_title), lambda: QApplication.instance().clipboard().setText(copy_text))
                 if alt_copy_text and alt_column_title:
                     menu.addAction(_("Copy {}").format(alt_column_title), lambda: QApplication.instance().clipboard().setText(alt_copy_text))
+                if token_text:
+                    menu.addAction(_("Copy {}").format(_("Token Address")), lambda: QApplication.instance().clipboard().setText(token_text))
                 if ca_info:
                     self.wallet.cashacct.fmt_info(ca_info)  # paranoia: pre-cache minimal chash (may go out to network)
                     menu.addAction(_("Copy Cash Account"), lambda: self.wallet and QApplication.instance().clipboard().setText(self.wallet.cashacct.fmt_info(ca_info, emoji=True)))
