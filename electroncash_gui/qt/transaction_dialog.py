@@ -630,7 +630,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         tok.setFontItalic(True)
         tok.setToolTip(_("This output contains a CashToken"))
         tok_inp = QTextCharFormat(tok)
-        tok_inp.setToolTip(_("This inpput contains a CashToken"))
+        tok_inp.setToolTip(_("This input contains a CashToken"))
 
         rec_ct, chg_ct = 0, 0
 
