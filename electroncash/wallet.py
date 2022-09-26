@@ -1275,7 +1275,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                               exclude_tokens=True)
 
     def get_utxos(self, domain=None, exclude_frozen=False, mature=False, confirmed_only=False,
-                  *, addr_set_out=None, exclude_slp=True, exclude_tokens=True):
+                  *, addr_set_out=None, exclude_slp=True, exclude_tokens=True, tokens_only=False):
         """Note that exclude_frozen = True checks for BOTH address-level and
         coin-level frozen status.
 
@@ -1284,6 +1284,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
         Optional kw-only arg `addr_set_out` specifies a set in which to add all
         addresses encountered in the utxos returned. """
+        if tokens_only:
+            exclude_tokens = False
         with self.lock:
             mempoolHeight = self.get_local_height() + 1
             coins = []
@@ -1296,6 +1298,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 len_before = len(coins)
                 for x in utxos.values():
                     if exclude_tokens and x['token_data']:
+                        continue
+                    if tokens_only and not x['token_data']:
                         continue
                     if exclude_slp and x['slp_token']:
                         continue

@@ -102,7 +102,7 @@ class UTXOList(MyTreeWidget):
     def get_name_short(self, x):
         return x.get('prevout_hash')[:10] + '...' + ":%d"%x.get('prevout_n')
 
-    @rate_limited(1.0, ts_after=True) # performance tweak -- limit updates to no more than oncer per second
+    @rate_limited(1.0, ts_after=True)  # performance tweak -- limit updates to no more than once per second
     def update(self):
         if self.cleaned_up:
             # short-cut return if window was closed and wallet is stopped
