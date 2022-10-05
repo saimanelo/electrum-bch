@@ -27,6 +27,7 @@ import pkgutil
 
 from .asert_daa import ASERTDaa, Anchor
 
+
 def _read_json_dict(filename):
     try:
         data = pkgutil.get_data(__name__, filename)
@@ -34,6 +35,7 @@ def _read_json_dict(filename):
     except:
         r = {}
     return r
+
 
 class AbstractNet:
     TESTNET = False
@@ -150,6 +152,15 @@ class TestNet4(TestNet):
     asert_daa.anchor = Anchor(height=16844, bits=486604799, prev_time=1605451779)
 
 
+class ChipNet(TestNet4):
+    TITLE = 'Electron Cash Chipnet'
+    HEADERS_URL = "http://bitcoincash.com/files/chipnet_headers"  # Unused
+    DEFAULT_SERVERS = _read_json_dict('servers_chipnet.json')  # DO NOT MODIFY IN CLIENT CODE
+    DEFAULT_PORTS = {'t': '64001', 's': '64002'}
+    VERIFICATION_BLOCK_MERKLE_ROOT = "ae52e00e6642b1a6dfb315ceb2752140bbf0e14bb0f438992811cef02859a13c"
+    VERIFICATION_BLOCK_HEIGHT = 115510
+
+
 class ScaleNet(TestNet):
     GENESIS = "00000000e6453dc2dfe1ffa19023f86002eb11dbb8e87d0291a4599f0430be52"
     TITLE = 'Electron Cash Scalenet'
@@ -209,6 +220,12 @@ def set_scalenet():
     _set_units()
 
 
+def set_chipnet():
+    global net
+    net = ChipNet
+    _set_units()
+
+
 # Compatibility
 def _instancer(cls):
     return cls()
@@ -216,16 +233,15 @@ def _instancer(cls):
 
 @_instancer
 class NetworkConstants:
-    ''' Compatibility class for old code such as extant plugins.
+    """ Compatibility class for old code such as extant plugins.
 
     Client code can just do things like:
     NetworkConstants.ADDRTYPE_P2PKH, NetworkConstants.DEFAULT_PORTS, etc.
 
     We have transitioned away from this class. All new code should use the
-    'net' global variable above instead. '''
+    'net' global variable above instead. """
     def __getattribute__(self, name):
         return getattr(net, name)
 
     def __setattr__(self, name, value):
         raise RuntimeError('NetworkConstants does not support setting attributes! ({}={})'.format(name,value))
-        #setattr(net, name, value)

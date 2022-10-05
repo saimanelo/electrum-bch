@@ -104,6 +104,9 @@ class SimpleConfig(PrintError):
         elif self.get('scalenet'):
             path = os.path.join(path, 'scalenet')
             make_dir(path)
+        elif self.get('chipnet'):
+            path = os.path.join(path, 'chipnet')
+            make_dir(path)
 
         obsolete_file = os.path.join(path, 'recent_servers')
         if os.path.exists(obsolete_file):
