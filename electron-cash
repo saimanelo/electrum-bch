@@ -403,6 +403,8 @@ def run_start(config, config_options, subcommand):
 def run_daemon(config, config_options):
     """Run the daemon"""
     subcommand = config.get("subcommand")
+    if subcommand in ["load_wallet"]:
+        init_daemon(config_options)
     if subcommand in [None, "start"]:
         return run_start(config, config_options, subcommand)
     server = daemon.get_server(config)
