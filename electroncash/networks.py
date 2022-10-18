@@ -1,6 +1,7 @@
 # Electron Cash - lightweight Bitcoin Cash client
 # Copyright (C) 2011 thomasv@gitorious
 # Copyright (C) 2017 Neil Booth
+# Copyright (C) 2022 The Electron Cash Developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
@@ -166,8 +167,7 @@ class ScaleNet(TestNet):
     GENESIS = "00000000e6453dc2dfe1ffa19023f86002eb11dbb8e87d0291a4599f0430be52"
     TITLE = 'Electron Cash Scalenet'
     BASE_UNITS = {'sBCH': 8, 'msBCH': 5, 'sbits': 2}
-    DEFAULT_UNIT = "tBCH"
-
+    DEFAULT_UNIT = "sBCH"
 
     HEADERS_URL = "http://bitcoincash.com/files/scalenet_headers"  # Unused
 
@@ -185,9 +185,12 @@ class ScaleNet(TestNet):
     asert_daa = ASERTDaa(is_testnet=False)  # Despite being a "testnet", ScaleNet uses 2d half-life
     asert_daa.anchor = None  # Intentionally not specified because it's after checkpoint; blockchain.py will calculate
 
+
 class RegtestNet(TestNet):
     GENESIS = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"
     TITLE = 'Electron Cash Regtest'
+    BASE_UNITS = {'rBCH': 8, 'rsBCH': 5, 'rbits': 2}
+    DEFAULT_UNIT = "rBCH"
     CASHADDR_PREFIX = "bchreg"
     REGTEST = True
 
