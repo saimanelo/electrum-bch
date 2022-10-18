@@ -470,9 +470,10 @@ def process_config_options(args):
     have_testnet4 = config_options.get("testnet4", False)
     have_scalenet = config_options.get("scalenet", False)
     have_chipnet = config_options.get("chipnet", False)
-    if have_testnet + have_testnet4 + have_scalenet + have_chipnet > 1:
+    have_regtest = config_options.get("regtest", False)
+    if have_testnet + have_testnet4 + have_scalenet + have_chipnet + have_regtest > 1:
         sys.exit(
-            "Invalid combination of --testnet, --testnet4, --scalenet, and/or --chipnet"
+            "Invalid combination of --testnet, --testnet4, --scalenet, --chipnet and/or --regtest"
         )
     elif have_testnet:
         networks.set_testnet()
@@ -481,7 +482,9 @@ def process_config_options(args):
     elif have_scalenet:
         networks.set_scalenet()
     elif have_chipnet:
-        networks.set_chipnet();
+        networks.set_chipnet()
+    elif have_regtest:
+        networks.set_regtest()
 
     # check uri
     uri = config_options.get("url")
