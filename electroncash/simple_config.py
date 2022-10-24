@@ -106,6 +106,7 @@ class SimpleConfig(PrintError):
             make_dir(path)
         elif self.get('chipnet'):
             path = os.path.join(path, 'chipnet')
+            make_dir(path)
         elif self.get('regtest'):
             path = os.path.join(path, 'regtest')
             make_dir(path)
