@@ -797,8 +797,7 @@ class Plugin(BasePlugin):
     def history_list_context_menu_setup(self, history_list, menu, item, tx_hash):
         # NB: We unconditionally create this menu if the plugin is loaded because
         # it's possible for any wallet, even a watching-only wallet to have
-        # shuffle tx's with the correct labels (if the user uses labelsync or
-        # has imported labels).
+        # shuffle tx's with the correct labels (if the user has imported labels).
         menu.addSeparator()
         def action_callback():
             self._hide_history_txs = not self._hide_history_txs
