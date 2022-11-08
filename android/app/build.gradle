@@ -20,7 +20,7 @@ android {
 
     defaultConfig {
         applicationId "org.electroncash.wallet"
-        minSdkVersion 18  // Older versions give a "too many libraries" error.
+        minSdkVersion 21
         targetSdkVersion 29
 
         def ecVersion = null
