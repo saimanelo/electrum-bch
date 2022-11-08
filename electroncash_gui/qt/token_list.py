@@ -26,7 +26,7 @@
 from collections import defaultdict
 from enum import IntEnum
 from functools import wraps
-from typing import Optional, List, DefaultDict
+from typing import DefaultDict, List, Optional, Set
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QAbstractItemView, QMenu
@@ -97,10 +97,46 @@ class TokenList(MyTreeWidget, util.PrintError):
 
     @if_not_dead
     def on_update(self):
+        def item_path(item: SortableTreeWidgetItem) -> str:
+            """Recursively builds the path for an item eg 'parent_name/item_name'"""
+            label_key = item.data(0, self.DataRoles.wallet_label_key)
+            return label_key if not item.parent() else item_path(item.parent()) + "/" + label_key
+
+        def remember_expanded_items(root: QtWidgets.QTreeWidgetItem) -> Set[str]:
+            # Save the set of expanded items... so that token list updates don't annoyingly collapse
+            # our tree list widget due to the update. This function recurses. Pass self.invisibleRootItem().
+            ret: Set[str] = set()
+            for i in range(0, root.childCount()):
+                it = root.child(i)
+                if it and it.childCount():
+                    if it.isExpanded():
+                        ret.add(item_path(it))
+                    ret |= remember_expanded_items(it)  # recurse
+            return ret
+
+        def restore_expanded_items(root, item_names: Set[str]):
+            # Recursively restore the expanded state saved previously. Pass self.invisibleRootItem().
+            for i in range(0, root.childCount()):
+                it = root.child(i)
+                if it and it.childCount():
+                    restore_expanded_items(it, item_names)  # recurse, do leaves first
+                    old = bool(it.isExpanded())
+                    new = bool(item_path(it) in item_names)
+                    if old != new:
+                        it.setExpanded(new)
+
+        # Remember selections and previously-expanded items, if any (keeps UI state consistent across refreshes)
+        sels = self.selectedItems()
+        label_keys_to_re_select = {item.data(0, self.DataRoles.wallet_label_key) for item in sels}
+        expanded_item_names = remember_expanded_items(self.invisibleRootItem())
+        del sels  # avoid keeping reference to about-to-be deleted C++ objects
+
         self.clear()
+
         tok_utxos = self.wallet.get_utxos(tokens_only=True)
 
         tokens: DefaultDict[List[token.OutputData]] = defaultdict(list)  # key: token_id
+        items_to_re_select: List[SortableTreeWidgetItem] = []
 
         for utxo in tok_utxos:
             td = utxo['token_data']
@@ -137,6 +173,9 @@ class TokenList(MyTreeWidget, util.PrintError):
             item.setFont(self.Col.nft_flags, self.smaller_font)
             item.setData(0, self.DataRoles.wallet_label_key, token_label_key)
 
+            if token_label_key in label_keys_to_re_select:
+                items_to_re_select.append(item)
+
             for commitment, tlist in nft_dict.items():
                 for t in sorted(tlist, key=lambda x: get_nft_flag(x) or ''):
                     if commitment:
@@ -154,7 +193,18 @@ class TokenList(MyTreeWidget, util.PrintError):
                     nft_item.setData(0, self.DataRoles.wallet_label_key, nft_label_key)
                     item.addChild(nft_item)
 
+                    if nft_label_key in label_keys_to_re_select:
+                        items_to_re_select.append(nft_item)
+
             self.addChild(item)
+
+            # restore selections
+            for item in items_to_re_select:
+                # NB: Need to select the item at the end because otherwise weird bugs. See #1042.
+                item.setSelected(True)
+
+            # Now, at the very end, enforce previous UI state with respect to what was expanded or not. See #1042
+            restore_expanded_items(self.invisibleRootItem(), expanded_item_names)
 
     @if_not_dead
     def create_menu(self, position):
