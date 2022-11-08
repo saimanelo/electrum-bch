@@ -26,13 +26,13 @@
 from collections import defaultdict
 from enum import IntEnum
 from functools import wraps
-from typing import DefaultDict, List, Optional, Set
+from typing import DefaultDict, Dict, List, Optional, Set
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QAbstractItemView, QMenu
 from PyQt5.QtGui import QFont
 
-from electroncash.i18n import _
+from electroncash.i18n import _, ngettext
 from electroncash import token, util
 
 from .main_window import ElectrumWindow
@@ -55,6 +55,10 @@ class TokenList(MyTreeWidget, util.PrintError):
     class DataRoles(IntEnum):
         """Data roles. Again, to make code in on_update easier to read."""
         wallet_label_key = QtCore.Qt.UserRole
+        item_key = QtCore.Qt.UserRole + 1
+        token_id = QtCore.Qt.UserRole + 2
+        utxos = QtCore.Qt.UserRole + 3
+        nft_utxo = QtCore.Qt.UserRole + 4
 
     filter_columns = [Col.token_id, Col.label]
     default_sort = MyTreeWidget.SortSpec(Col.token_id, QtCore.Qt.DescendingOrder)  # sort by token_id, descending
@@ -98,13 +102,13 @@ class TokenList(MyTreeWidget, util.PrintError):
     @if_not_dead
     def on_update(self):
         def item_path(item: SortableTreeWidgetItem) -> str:
-            """Recursively builds the path for an item eg 'parent_name/item_name'"""
-            label_key = item.data(0, self.DataRoles.wallet_label_key)
-            return label_key if not item.parent() else item_path(item.parent()) + "/" + label_key
+            """ Recursively builds the path for an item eg 'parent_name/item_name' """
+            item_key = item.data(0, self.DataRoles.item_key)
+            return item_key if not item.parent() else item_path(item.parent()) + "/" + item_key
 
         def remember_expanded_items(root: QtWidgets.QTreeWidgetItem) -> Set[str]:
-            # Save the set of expanded items... so that token list updates don't annoyingly collapse
-            # our tree list widget due to the update. This function recurses. Pass self.invisibleRootItem().
+            """ Save the set of expanded items... so that token list updates don't annoyingly collapse our tree list
+                widget due to the update. This function recurses. Pass self.invisibleRootItem(). """
             ret: Set[str] = set()
             for i in range(0, root.childCount()):
                 it = root.child(i)
@@ -115,7 +119,7 @@ class TokenList(MyTreeWidget, util.PrintError):
             return ret
 
         def restore_expanded_items(root, item_names: Set[str]):
-            # Recursively restore the expanded state saved previously. Pass self.invisibleRootItem().
+            """ Recursively restore the expanded state saved previously. Pass self.invisibleRootItem(). """
             for i in range(0, root.childCount()):
                 it = root.child(i)
                 if it and it.childCount():
@@ -127,7 +131,7 @@ class TokenList(MyTreeWidget, util.PrintError):
 
         # Remember selections and previously-expanded items, if any (keeps UI state consistent across refreshes)
         sels = self.selectedItems()
-        label_keys_to_re_select = {item.data(0, self.DataRoles.wallet_label_key) for item in sels}
+        item_keys_to_re_select = {item.data(0, self.DataRoles.item_key) for item in sels}
         expanded_item_names = remember_expanded_items(self.invisibleRootItem())
         del sels  # avoid keeping reference to about-to-be deleted C++ objects
 
@@ -135,65 +139,77 @@ class TokenList(MyTreeWidget, util.PrintError):
 
         tok_utxos = self.wallet.get_utxos(tokens_only=True)
 
-        tokens: DefaultDict[List[token.OutputData]] = defaultdict(list)  # key: token_id
+        tokens: DefaultDict[List[Dict]] = defaultdict(list)  # key: token_id, value: List of utxo dicts
         items_to_re_select: List[SortableTreeWidgetItem] = []
 
         for utxo in tok_utxos:
             td = utxo['token_data']
             assert isinstance(td, token.OutputData)
-            tokens[td.id_hex].append(td)
+            tokens[td.id_hex].append(utxo)
 
-        for token_id, tlist in tokens.items():
+        for token_id, utxo_list in tokens.items():
             token_label_key = f'token_{token_id}'
+            item_key = token_label_key
             label = self.wallet.get_label(token_label_key)
-            quantity = str(sum(t.amount for t in tlist))
-            nfts = str(len([t for t in tlist if t.has_nft()]))
+            quantity = str(sum(u['token_data'].amount for u in utxo_list))
+            nfts = str(len([u for u in utxo_list if u['token_data'].has_nft()]))
             flags = set()
-            nft_dict: DefaultDict[List[token.OutputData]] = defaultdict(list)  # key: nft commitment hex
+            nft_dict: DefaultDict[List[Dict]] = defaultdict(list)  # key: nft commitment hex, value: list of utxo dicts
 
-            def get_nft_flag(t: token.OutputData) -> Optional[str]:
-                if t.is_minting_nft():
+            def get_nft_flag(td: token.OutputData) -> Optional[str]:
+                if td.is_minting_nft():
                     return _('Minting')
-                elif t.is_mutable_nft():
+                elif td.is_mutable_nft():
                     return _('Mutable')
-                elif t.is_immutable_nft():
+                elif td.is_immutable_nft():
                     return _('Immutable')
 
-            for t in tlist:
-                if t.has_nft():
-                    nft_dict[t.commitment.hex()].append(t)
-                f = get_nft_flag(t)
-                if f is not None:
-                    flags.add(f)
+            for utxo in utxo_list:
+                td: token.OutputData = utxo['token_data']
+                if td.has_nft():
+                    nft_dict[td.commitment.hex()].append(utxo)
+                fl = get_nft_flag(td)
+                if fl is not None:
+                    flags.add(fl)
             nft_flags = ', '.join(sorted(flags))
-            num_utxos = str(len(tlist))
+            num_utxos = str(len(utxo_list))
 
             item = SortableTreeWidgetItem([token_id, label, quantity, nfts, nft_flags, num_utxos])
             item.setFont(self.Col.token_id, self.fixed_width)
             item.setFont(self.Col.nft_flags, self.smaller_font)
             item.setData(0, self.DataRoles.wallet_label_key, token_label_key)
+            item.setData(0, self.DataRoles.item_key, item_key)
+            item.setData(0, self.DataRoles.token_id, token_id)
+            item.setData(0, self.DataRoles.utxos, utxo_list)
+            item.setData(0, self.DataRoles.nft_utxo, None)
 
-            if token_label_key in label_keys_to_re_select:
+            if item_key in item_keys_to_re_select:
                 items_to_re_select.append(item)
 
-            for commitment, tlist in nft_dict.items():
-                for t in sorted(tlist, key=lambda x: get_nft_flag(x) or ''):
+            for commitment, nft_utxo_list in nft_dict.items():
+                for nft_utxo in sorted(nft_utxo_list, key=lambda x: get_nft_flag(x['token_data']) or ''):
+                    td: token.OutputData = nft_utxo['token_data']
                     if commitment:
                         name = f"NFT: {commitment}"
                     else:
                         name = "NFT: " + _("zero-length commitment")
                     nft_label_key = f'token_nft_{token_id}_{commitment}'
+                    nft_item_key = f'{nft_utxo["prevout_hash"]}:{nft_utxo["prevout_n"]}'
                     label = self.wallet.get_label(nft_label_key)
                     quantity = '-'
                     nfts = '-'
-                    nft_flags = get_nft_flag(t) or ''
+                    nft_flags = get_nft_flag(td) or ''
                     num_utxos = '-'
                     nft_item = SortableTreeWidgetItem([name, label, quantity, nfts, nft_flags, num_utxos])
                     nft_item.setFont(self.Col.token_id, self.fixed_width)
                     nft_item.setData(0, self.DataRoles.wallet_label_key, nft_label_key)
+                    nft_item.setData(0, self.DataRoles.item_key, nft_item_key)
+                    nft_item.setData(0, self.DataRoles.token_id, token_id)
+                    nft_item.setData(0, self.DataRoles.utxos, None)
+                    nft_item.setData(0, self.DataRoles.nft_utxo, nft_utxo)
                     item.addChild(nft_item)
 
-                    if nft_label_key in label_keys_to_re_select:
+                    if nft_item_key in item_keys_to_re_select:
                         items_to_re_select.append(nft_item)
 
             self.addChild(item)
@@ -209,4 +225,101 @@ class TokenList(MyTreeWidget, util.PrintError):
     @if_not_dead
     def create_menu(self, position):
         menu = QMenu()
+
+        selected = self.selectedItems()
+        num_selected = len(selected)
+
+        nested_utxos = [item.data(0, self.DataRoles.utxos) for item in selected if
+                        item.data(0, self.DataRoles.utxos)]
+        nft_utxos = [item.data(0, self.DataRoles.nft_utxo) for item in selected
+                     if item.data(0, self.DataRoles.nft_utxo)]
+        utxos = []
+        for ulist in nested_utxos:
+            for u in ulist:
+                utxos.append(u)
+        del nested_utxos
+
+        def doCopy(txt):
+            txt = txt.strip()
+            self.parent.copy_to_clipboard(txt)
+
+        col = self.currentColumn()
+        column_title = self.headerItem().text(col)
+
+        if num_selected > 0:
+            if num_selected == 1:
+                # Single selection
+                item = self.itemAt(position)
+                if item:
+                    nft_utxo = item.data(0, self.DataRoles.nft_utxo)
+                    alt_column_title, alt_copy_text = None, None
+                    copy_text = item.text(col).strip()
+                    if nft_utxo:
+                        # NFT child item
+                        if col == self.Col.token_id:
+                            alt_column_title = _("NFT Hex")
+                            alt_copy_text = nft_utxo['token_data'].commitment.hex()
+                            copy_text = nft_utxo['token_data'].id_hex
+                        if copy_text == '-':
+                            copy_text = None
+                    else:
+                        # Top-level item
+                        pass
+                    if copy_text:
+                        menu.addAction(_("Copy {}").format(column_title), lambda: doCopy(copy_text))
+                    if alt_column_title and alt_copy_text:
+                        menu.addAction(_("Copy {}").format(alt_column_title), lambda: doCopy(alt_copy_text))
+            else:
+                # Multi-selection
+                if col > -1:
+                    texts, alt_copy, alt_copy_text = None, None, None
+                    if col == self.Col.token_id:  # token-id column
+                        texts, seen_token_ids = list(), set()
+                        # We do it this way to preserve order, but also to de-duplicate
+                        for item in selected:
+                            tid = item.data(0, self.DataRoles.token_id)
+                            if tid not in seen_token_ids:
+                                seen_token_ids.add(tid)
+                                texts.append(tid)
+                        if nft_utxos:
+                            alt_copy = _("Copy {}").format(_("NFT Hex")) + f" ({len(nft_utxos)})"
+                            alt_copy_text = '\n'.join([u['token_data'].commitment.hex() for u in nft_utxos])
+                    else:
+                        texts = [i.text(col).strip() for i in selected
+                                 if i.text(col).strip() and i.text(col).strip() != '-']
+                        alt_copy_texts = [i.data(0, self.DataRoles.token_id) + ", " + i.text(col).strip()
+                                          for i in selected if i.text(col).strip() and i.text(col).strip() != '-']
+                        alt_copy_text = "\n".join(alt_copy_texts)
+                        alt_copy = _("Copy {}").format(_('TokenID')) + ", " + column_title + f" ({len(alt_copy_texts)})"
+                    if texts:
+                        copy_text = '\n'.join(texts)
+                        menu.addAction(_("Copy {}").format(column_title) + f" ({len(texts)})",
+                                       lambda: doCopy(copy_text))
+                    if alt_copy and alt_copy_text:
+                        menu.addAction(alt_copy, lambda: doCopy(alt_copy_text))
+
+            menu.addSeparator()
+            menu.addAction(QtGui.QIcon(":icons/tab_send.png"),
+                           ngettext("Send Token...", "Send Tokens...", num_selected),
+                           lambda: self.send_tokens(utxos + nft_utxos))
+
+        menu.addAction(QtGui.QIcon(":icons/tab_token.svg"), _("Create Token..."), self.create_new_token)
+
         menu.exec_(self.viewport().mapToGlobal(position))
+
+    @if_not_dead
+    def create_new_token(self):
+        self.parent.show_message("Create token is unimplemented!", parent=self.parent)
+
+    @if_not_dead
+    def send_tokens(self, utxos: List[Dict]):
+        deduped_utxos = []
+        seen = set()
+        for utxo in utxos:
+            key = f"{utxo['prevout_hash']}:{utxo['prevout_n']}"
+            if key not in seen:
+                seen.add(key)
+                deduped_utxos.append(utxo)
+        assert all(isinstance(u['token_data'], token.OutputData) for u in deduped_utxos)
+        self.parent.show_message("Send {} token UTXO(s)... unimplemented!"
+                                 .format(len(deduped_utxos)), parent=self.parent)
