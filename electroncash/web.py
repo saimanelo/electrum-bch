@@ -187,7 +187,10 @@ def urldecode(url):
 def parseable_schemes(net = None) -> tuple:
     if net is None:
         net = networks.net
-    return (net.CASHADDR_PREFIX, cashacct.URI_SCHEME, net.RPA_PREFIX)
+       
+    # Turn off RPA for now until RPA server issues are fixed.
+    #return (net.CASHADDR_PREFIX, cashacct.URI_SCHEME, net.RPA_PREFIX)
+    return (net.CASHADDR_PREFIX, cashacct.URI_SCHEME)
 
 class ExtraParametersInURIWarning(RuntimeWarning):
     ''' Raised by parse_URI to indicate the parsing succeeded but that
