@@ -238,6 +238,7 @@ class TokenList(MyTreeWidget, util.PrintError):
             for u in ulist:
                 utxos.append(u)
         del nested_utxos
+        utxos = self.dedupe_utxos(utxos + nft_utxos)
 
         def doCopy(txt):
             txt = txt.strip()
@@ -301,7 +302,7 @@ class TokenList(MyTreeWidget, util.PrintError):
             menu.addSeparator()
             menu.addAction(QtGui.QIcon(":icons/tab_send.png"),
                            ngettext("Send Token...", "Send Tokens...", num_selected),
-                           lambda: self.send_tokens(utxos + nft_utxos))
+                           lambda: self.send_tokens(utxos))
 
         menu.addAction(QtGui.QIcon(":icons/tab_token.svg"), _("Create Token..."), self.create_new_token)
 
@@ -311,8 +312,8 @@ class TokenList(MyTreeWidget, util.PrintError):
     def create_new_token(self):
         self.parent.show_message("Create token is unimplemented!", parent=self.parent)
 
-    @if_not_dead
-    def send_tokens(self, utxos: List[Dict]):
+    @staticmethod
+    def dedupe_utxos(utxos: List[Dict]) -> List[Dict]:
         deduped_utxos = []
         seen = set()
         for utxo in utxos:
@@ -320,6 +321,11 @@ class TokenList(MyTreeWidget, util.PrintError):
             if key not in seen:
                 seen.add(key)
                 deduped_utxos.append(utxo)
-        assert all(isinstance(u['token_data'], token.OutputData) for u in deduped_utxos)
+        return deduped_utxos
+
+    @if_not_dead
+    def send_tokens(self, utxos: List[Dict]):
+        utxos = self.dedupe_utxos(utxos)
+        assert all(isinstance(u['token_data'], token.OutputData) for u in utxos)
         self.parent.show_message("Send {} token UTXO(s)... unimplemented!"
-                                 .format(len(deduped_utxos)), parent=self.parent)
+                                 .format(len(utxos)), parent=self.parent)
