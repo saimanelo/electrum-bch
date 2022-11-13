@@ -1316,3 +1316,23 @@ and there is no warning message.
   (Axel Gembe)
 - Updated checkpoints (cculianu)
 
+# RELEASE NOTES 4.2.12
+
+- Fixed text alignment in addresses tab #2477 (scinklja)
+- Removal of some dead code (cculianu)
+- Android: Add optional Dark Mode #2483 (Jonas Lundqvist)
+- Added BCH "chipnet" network; --chipnet (cculianu)
+- Remove some defunct mainnet servers #2488 (jkister)
+- commands: add freeze_utxo and unfreeze_utxo RPCs #2490 (chappjc)
+- commands: get_info and list_wallets daemon cmds to RPCs #2491
+  (chappjc, Jonas Lundqvist)
+- Added regtest support; --regtest #2319 (MrNaif)
+- Fixed units for regtest and scalenet (cculianu)
+- Add server-chipnet.json to setup.py #2494 (0e4ef622)
+- Removal of the LabelSync plugin due to unreliability
+  #2498 (georgengelmann)
+- Add instructions to compile the icons for Qt #2499
+  (georgengelmann)
+- Android: Bump chaquopy to 13.0.0 #2500 (Jonas Lundqvist)
+- Removal of RPA from the GUI and from payment request handling
+  #2503 (Jonald Fyookball)
