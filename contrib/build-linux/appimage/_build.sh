@@ -13,6 +13,9 @@ PYDIR="$APPDIR"/usr/lib/python3.8
 export GCC_STRIP_BINARIES="1"
 export GIT_SUBMODULE_FLAGS="--recommend-shallow --depth 1"
 
+# Newer git errors-out about permissions here sometimes, so do this
+git config --global --add safe.directory $(readlink -f "$PROJECT_ROOT")
+
 . "$CONTRIB"/base.sh
 
 # pinned versions
