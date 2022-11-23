@@ -23,7 +23,7 @@ EC_DAEMON_RPC_URL = "http://user:pass@localhost:12342"
 FULCRUM_STATS_URL = "http://localhost:8081/stats"
 BITCOIND_RPC_URL = "http://user:pass@0.0.0.0:18333"
 
-def poll_for_answer(url: Any, json_req: Any | None = None, poll_interval: int = 1, poll_timeout: int = 10, expected_answer: Any | None = None) -> Any:
+def poll_for_answer(url: Any, json_req: Any = None, expected_answer: Any = None, poll_interval: int = 1, poll_timeout: int = 10) -> Any:
     """ Poll an RPC method until timeout or an expected answer has been received """
     start = current = time.time()
 
@@ -77,7 +77,9 @@ def start_ec_daemon() -> None:
         assert False
     os.mkdir(datadir + "/regtest")
     shutil.copyfile("electroncash/tests/regtest/configs/electron-cash-config", datadir + "/regtest/config")
-    subprocess.run(["./electron-cash", "--regtest", "-D", datadir, "-w", datadir+"/default_wallet", "daemon", "start"], check=True)
+    environ = os.environ.copy()
+    environ["COVERAGE_FILE"] = ".coverage-regtest"
+    subprocess.run(["python3", "-m", "coverage", "run", "electron-cash", "--regtest", "-D", datadir, "-w", datadir+"/default_wallet", "daemon", "start"], check=True, env=environ)
     result = poll_for_answer(EC_DAEMON_RPC_URL, request('version'))
 
     from ...version import PACKAGE_VERSION
