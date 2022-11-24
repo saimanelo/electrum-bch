@@ -857,7 +857,7 @@ class PaymentRequest_BitPay20(PaymentRequest, PrintError):
                 else:
                     # TODO: Fixme -- for now this branch will always be taken because we turned off key download in _get_signing_keys() above
                     self.print_error('Warning: Could not verify whether signing public key is valid:', pubkey.hex(), "(PGP verification is currently disabled)")
-                self.requestor = sig_addr.to_ui_string()
+                self.requestor = owner
                 break
         else:
             self.error = 'failed to verify signature against retrieved keys'
