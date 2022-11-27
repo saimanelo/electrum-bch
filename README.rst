@@ -8,22 +8,21 @@ Electron Cash - Lightweight Bitcoin Cash client
   Language: Python
   Homepage: https://electroncash.org/
 
-
 .. image:: https://d322cqt584bo4o.cloudfront.net/electron-cash/localized.svg
     :target: https://crowdin.com/project/electron-cash
     :alt: Help translate Electron Cash online
-
 
 .. image:: https://img.shields.io/travis/Electron-Cash/Electron-Cash
     :target: https://travis-ci.org/github/Electron-Cash/Electron-Cash
     :alt: Travis CI
 
+.. image:: https://github.com/Electron-Cash/Electron-Cash/actions/workflows/run-tox.yml/badge.svg?branch=master
+    :target: https://github.com/Electron-Cash/Electron-Cash/actions/workflows/run-tox.yml?query=branch%3Amaster
+    :alt: GitHub Actions Tests
 
 .. image:: https://img.shields.io/coveralls/github/Electron-Cash/Electron-Cash
     :target: https://coveralls.io/github/Electron-Cash/Electron-Cash
     :alt: Coveralls code coverage
-
-
 
 Getting started
 ===============
