@@ -244,7 +244,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         if self.network:
             self.network_signal.connect(self.on_network_qt)
-            interests = ['blockchain_updated', 'wallet_updated',  
+            interests = ['blockchain_updated', 'wallet_updated',
                          'new_transaction', 'status', 'banner', 'verified2',
                          'fee', 'ca_verified_tx', 'ca_verification_failed', 'features']
             # To avoid leaking references to "self" that prevent the
@@ -258,7 +258,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.network.register_callback(self.on_history, ['on_history'])
             self.new_fx_quotes_signal.connect(self.on_fx_quotes)
             self.new_fx_history_signal.connect(self.on_fx_history)
-            
+
             if self.network.is_connected():
                 self.check_necessary_server_features()
 
@@ -743,7 +743,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             tools_menu.addAction(
                 _("&Refresh RPA Transactions"),
                 self.wallet.fetch_rpa_mempool_txs_from_server)
-        
+
         raw_transaction_menu = tools_menu.addMenu(_("&Load Transaction"))
         raw_transaction_menu.addAction(_("From &File") + "...", self.do_process_from_file)
         raw_transaction_menu.addAction(_("From &Text") + "...", self.do_process_from_text, QKeySequence("Ctrl+T"))
@@ -1142,7 +1142,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         label.setBuddy(self.receive_address_e)
         self.receive_address_e.textChanged.connect(self.update_receive_qr)
         self.gui_object.cashaddr_toggled_signal.connect(self.update_receive_address_widget)
-        
+
         if self.wallet.wallet_type == 'rpa':
             self.receive_paycode_e = ButtonsLineEdit()
             self.receive_paycode_e.addCopyButton()
@@ -2092,8 +2092,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.show_error(_('Invalid Amount'))
                 return
             full_unit_amount = self.amount_e.get_amount() / 100000000
-            
-            
+
+
             rpa_pwd = None
             if self.wallet.wallet_type == 'rpa':
                 rpa_pwd = self.wallet.rpa_pwd
@@ -2106,14 +2106,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     if not password:
                         return
                     rpa_pwd = password
-                
-            self.raw_tx = None    
+
+            self.raw_tx = None
             dlg = WaitingDialog(self, _('Please allow a few moments while Electron Cash creates your RPA transaction.  It needs to grind through many transaction signatures.'), rpa_grind, None, self.on_error, progress_bar=True, progress_min=0, progress_max=100)
             val=dlg.exec_()
             # If the user closes the waiting dialog, we should just exit.
             if self.raw_tx == None:
                 return
-                
+
             raw_tx = self.raw_tx
             if raw_tx == 0:
                 self.show_error("Problem creating paycode tx.")
@@ -2175,7 +2175,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         freeze_fee = self.fee_e.isVisible() and self.fee_e.isModified() and (self.fee_e.text() or self.fee_e.hasFocus())
         fee = self.fee_e.get_amount() if freeze_fee else None
         coins = self.get_coins(isInvoice)
-        
+
         # Return data.  Include the raw_tx if specified.
         # raw_tx used for RPA functionality so we can avoid grinding the transaction twice.
         # In that case, do_send() calls read_send_tab and doesn't need to
@@ -2645,15 +2645,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             # this is important so that cashacct: URIs get insta-resolved
             # (they only get resolved when payto_e loses focus)
             self.message_e.setFocus()
-            
-        # Ensure the checksum for the RPA address is correct.            
+
+        # Ensure the checksum for the RPA address is correct.
         paycode_checksum_ok = True
         if scheme == networks.net.RPA_PREFIX and not self.wallet.is_multisig():
             try:
                 rpa.addr.decode(networks.net.RPA_PREFIX + ":" + address)
             except:
                 paycode_checksum_ok = False
-     
+
         if scheme == "paycode" and paycode_checksum_ok and not self.wallet.is_multisig():
             self.payto_e.setIsPaycode(True)
             self.payto_e.setText("<" + networks.net.RPA_PREFIX + ":" + address + ">")
@@ -4773,7 +4773,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         limit_change_w = QWidget()
         vb = QVBoxLayout(limit_change_w)
         vb.setContentsMargins(0, 0, 0, 0)
-        limit_change_chk = QCheckBox(_("Retire unnused change addresses"))
+        limit_change_chk = QCheckBox(_("Retire unused change addresses"))
         limit_change_chk.setChecked(self.wallet.limit_change_addr_subs > 0)
         vb.addWidget(limit_change_chk)
         limit_change_inner_w = QWidget()
