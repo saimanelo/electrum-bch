@@ -65,6 +65,9 @@ mainnet_block_explorers = {
     'Loping.net': ('https://bch.loping.net',
                    Address.FMT_CASHADDR,
                    {'tx': 'tx', 'addr': 'address', 'block': 'block-height'}),
+    "Melroy's BCH Explorer": ('https://explorer.melroy.org',
+                              Address.FMT_CASHADDR,
+                              {'tx': 'tx', 'addr': 'address', 'block': 'block'})
 }
 
 DEFAULT_EXPLORER_TESTNET = 'Blockchain.com'
@@ -187,7 +190,7 @@ def urldecode(url):
 def parseable_schemes(net = None) -> tuple:
     if net is None:
         net = networks.net
-       
+
     # Turn off RPA for now until RPA server issues are fixed.
     #return (net.CASHADDR_PREFIX, cashacct.URI_SCHEME, net.RPA_PREFIX)
     return (net.CASHADDR_PREFIX, cashacct.URI_SCHEME)
@@ -253,7 +256,7 @@ def parse_URI(uri, on_pr=None, *, net=None, strict=False, on_exc=None):
 
     is_cashacct = u.scheme == cashacct.URI_SCHEME
     is_paycode = u.scheme == net.RPA_PREFIX
-    
+
     if is_paycode:
         rprefix, addr_hash = rpa_addr.decode(net.RPA_PREFIX + ":" + address)
 
@@ -366,10 +369,10 @@ def parse_URI(uri, on_pr=None, *, net=None, strict=False, on_exc=None):
         extra_keys = set(out.keys()) - accept_keys
         if extra_keys:
             raise ExtraParametersInURIWarning(out, *tuple(extra_keys))
-            
+
     if is_paycode:
         out['scheme'] = "paycode"
-            
+
     return out
 
 def check_www_dir(rdir):
