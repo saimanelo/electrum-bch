@@ -1336,3 +1336,21 @@ and there is no warning message.
 - Android: Bump chaquopy to 13.0.0 #2500 (Jonas Lundqvist)
 - Removal of RPA from the GUI and from payment request handling
   #2503 (Jonald Fyookball)
+
+# RELEASE NOTES 4.2.13
+
+- Regtest via pytest #2403 (Jonas Lundqvist)
+- Add tx_hashes to exported payment request #2504 (MrNaif)
+- Change bch.ninja to cashnode.bch.ninja #2506 (kzKallisti)
+- Run tox in github action #2508 (Jonas Lundqvist)
+- Set BitPay as requestor on jsonPayPro invoices #2510 (Jonas Lundqvist)
+- Add basic test for jsonPaymentProtocol #2511 (Jonas Lundqvist)
+- Trigger on Master branch + Add GitHub Action badge to README #2513 (Jonas Lundqvist)
+- Fixed typo in main_window.py "unnused" -> "unused", plus whitespace nits (cculianu)
+- Update electroncash.de servers #2516 (Georg Engelmann)
+- Remove python 3.6 from github workflow and/or tox.ini (cculianu)
+- Added Melory's BCH Explorer to the list of block explorers (cculianu)
+- Add chipnet.bch.ninja to servers_chipnet.json #2520 (kzKallisti)
+- Fix for contrib/make_all: Use a non-zero nr of jobs #2522 (Melroy van den Berg)
+- Allow zero-amount and partial payments in invoices #2523 (MrNaif)
+- Tor: Update to version 0.4.7.12 with a patch for static linking #2529 (Axel Gembe)
