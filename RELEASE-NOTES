@@ -1354,3 +1354,5 @@ and there is no warning message.
 - Fix for contrib/make_all: Use a non-zero nr of jobs #2522 (Melroy van den Berg)
 - Allow zero-amount and partial payments in invoices #2523 (MrNaif)
 - Tor: Update to version 0.4.7.12 with a patch for static linking #2529 (Axel Gembe)
+- Updated checkpoints for mainnet, testnet3, testnet4, and chipnet (cculianu)
+
