@@ -1,0 +1,70 @@
+name: Building
+
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: '0 0 * * 1'
+
+jobs:
+  build_appimage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - name: Check out source
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Build AppImage
+      run: contrib/build-linux/appimage/build.sh master
+    - name: Archive build
+      uses: actions/upload-artifact@v3
+      with:
+        path: dist/Electron-Cash*.AppImage
+  build_sdist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - name: Check out source
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Build srcdist
+      run: contrib/build-linux/srcdist_docker/build.sh master
+    - name: Archive build
+      uses: actions/upload-artifact@v3
+      with:
+        path: |
+          dist/Electron-Cash*.zip
+          dist/Electron-Cash*.tar.gz
+  build_wine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+    - name: Check out source
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Build wine
+      run: contrib/build-wine/build.sh master
+    - name: Archive build
+      uses: actions/upload-artifact@v3
+      with:
+        path: dist/Electron-Cash*.exe
+  build_macos:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+    - name: Check out source
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Build macOS
+      working-directory: contrib/osx
+      run: |
+        brew install coreutils
+        brew install pyenv
+        ./make_osx
+    - name: Archive build
+      uses: actions/upload-artifact@v3
+      with:
+        path: dist/Electron-Cash*.dmg
