@@ -77,9 +77,7 @@ def start_ec_daemon() -> None:
         assert False
     os.mkdir(datadir + "/regtest")
     shutil.copyfile("electroncash/tests/regtest/configs/electron-cash-config", datadir + "/regtest/config")
-    environ = os.environ.copy()
-    environ["COVERAGE_FILE"] = ".coverage-regtest"
-    subprocess.run(["python3", "-m", "coverage", "run", "electron-cash", "--regtest", "-D", datadir, "-w", datadir+"/default_wallet", "daemon", "start"], check=True, env=environ)
+    subprocess.run(["python3", "-m", "coverage", "run", "--data-file=.coverage-regtest", "electron-cash", "--regtest", "-D", datadir, "-w", datadir+"/default_wallet", "daemon", "start"], check=True)
     result = poll_for_answer(EC_DAEMON_RPC_URL, request('version'))
 
     from ...version import PACKAGE_VERSION
