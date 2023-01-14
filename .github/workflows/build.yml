@@ -50,21 +50,25 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         path: dist/Electron-Cash*.exe
-  build_macos:
-    runs-on: macos-latest
-    timeout-minutes: 60
-    steps:
-    - name: Check out source
-      uses: actions/checkout@v3
-      with:
-        submodules: true
-    - name: Build macOS
-      working-directory: contrib/osx
-      run: |
-        brew install coreutils
-        brew install pyenv
-        ./make_osx
-    - name: Archive build
-      uses: actions/upload-artifact@v3
-      with:
-        path: dist/Electron-Cash*.dmg
+#
+# MacOS Building is expensive (in terms of minutes charged) but also unnecessary since this rarely breaks for us
+# in practice. So, commented-out by Calin on 1/13/2023.
+#
+#  build_macos:
+#    runs-on: macos-latest
+#    timeout-minutes: 60
+#    steps:
+#    - name: Check out source
+#      uses: actions/checkout@v3
+#      with:
+#        submodules: true
+#    - name: Build macOS
+#      working-directory: contrib/osx
+#      run: |
+#        brew install coreutils
+#        brew install pyenv
+#        ./make_osx
+#    - name: Archive build
+#      uses: actions/upload-artifact@v3
+#      with:
+#        path: dist/Electron-Cash*.dmg
