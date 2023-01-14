@@ -12,22 +12,18 @@ Electron Cash - Lightweight Bitcoin Cash client
     :target: https://crowdin.com/project/electron-cash
     :alt: Help translate Electron Cash online
 
-.. image:: https://img.shields.io/travis/Electron-Cash/Electron-Cash
-    :target: https://travis-ci.org/github/Electron-Cash/Electron-Cash
-    :alt: Travis CI
-
 .. image:: https://github.com/Electron-Cash/Electron-Cash/actions/workflows/run-tox.yml/badge.svg?branch=master
     :target: https://github.com/Electron-Cash/Electron-Cash/actions/workflows/run-tox.yml?query=branch%3Amaster
     :alt: GitHub Actions Tests
 
-.. image:: https://img.shields.io/coveralls/github/Electron-Cash/Electron-Cash
-    :target: https://coveralls.io/github/Electron-Cash/Electron-Cash
-    :alt: Coveralls code coverage
+.. image:: https://github.com/Electron-Cash/Electron-Cash/actions/workflows/build.yml/badge.svg
+    :target: https://github.com/Electron-Cash/Electron-Cash/actions/workflows/build.yml
+    :alt: GitHub Actions Build
 
 Getting started
 ===============
 
-**Note: If running from source, Python 3.6 or above is required to run Electron Cash.** If your system lacks Python 3.6,
+**Note: If running from source, Python 3.7 or above is required to run Electron Cash.** If your system lacks Python 3.7,
 you have other options, such as the `AppImage / binary releases <https://github.com/Electron-Cash/Electron-Cash/releases/>`_
 or running from source using `pyenv` (see section `Running from source on old Linux`_ below).
 
@@ -76,7 +72,7 @@ If you still have problems connecting to your Nano S please have a look at this
 Development version
 ===================
 
-Check your python version >= 3.6, and install pyqt5, as instructed above in the
+Check your python version >= 3.7, and install pyqt5, as instructed above in the
 `Getting started`_ section above or `Running from source on old Linux`_ section below.
 
 If you are on macOS, see the `Running from source on macOS`_ section below.
@@ -122,9 +118,9 @@ Cash to run completely independently of your system configuration.
    account. Follow the printed instructions about updating your environment
    variables and ``.bashrc``, and restart your shell to ensure that they are
    loaded.
-2. Run ``pyenv install 3.6.9``. This will download and compile that version of
+2. Run ``pyenv install 3.11.1``. This will download and compile that version of
    python, storing it under ``.pyenv`` in your home directory.
-3. ``cd`` into the Electron Cash directory. Run ``pyenv local 3.6.9`` which inserts
+3. ``cd`` into the Electron Cash directory. Run ``pyenv local 3.11.1`` which inserts
    a file ``.python-version`` into the current directory.
 4. While still in this directory, run ``pip install pyqt5``.
 5. If you are installing from the source file (.tar.gz or .zip) then you are
@@ -137,7 +133,7 @@ Running from source on macOS
 You need to install **either** `MacPorts <https://www.macports.org>`_  **or** `HomeBrew <https://www.brew.sh>`_.  Follow the instructions on either site for installing (Xcode from `Apple's developer site <https://developer.apple.com>`_ is required for either).
 
 1. After installing either HomeBrew or MacPorts, clone this repository and switch to the directory: ``git clone https://github.com/Electron-Cash/Electron-Cash && cd Electron-Cash``
-2. Install python 3.6 or 3.7. For brew: ``brew install python3`` or if using MacPorts: ``sudo port install python36``
+2. Install python 3.7 or later. For brew: ``brew install python3`` or if using MacPorts: ``sudo port install python311``
 3. Install PyQt5: ``python3 -m pip install --user pyqt5``
 4. Install Electron Cash requirements: ``python3 -m pip install --user -r contrib/requirements/requirements.txt``
 5. Compile libsecp256k1 (optional, yet highly recommended): ``./contrib/make_secp``.
