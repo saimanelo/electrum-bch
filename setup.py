@@ -24,8 +24,8 @@ with open('contrib/requirements/requirements-web3.txt') as f:
 
 version = imp.load_source('version', 'electroncash/version.py')
 
-if sys.version_info[:3] < (3, 6):
-    sys.exit("Error: Electron Cash requires Python version >= 3.6...")
+if sys.version_info[:3] < (3, 7):
+    sys.exit("Error: Electron Cash requires Python version >= 3.7...")
 
 data_files = []
 
