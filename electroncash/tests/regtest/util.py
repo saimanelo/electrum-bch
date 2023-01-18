@@ -14,8 +14,8 @@ from bitcoinrpc.authproxy import AuthServiceProxy
 from jsonrpcclient import parse as rpc_parse, request
 from jsonpath_ng import parse as path_parse
 
-datadir = ""
-bitcoind = None
+_datadir = None
+_bitcoind = None
 
 SUPPORTED_PLATFORM = platform.machine() in ("AMD64", "x86_64") and platform.system() in "Linux"
 
@@ -57,14 +57,17 @@ def poll_for_answer(url: Any, json_req: Any = None, expected_answer: Any = None,
 
 def bitcoind_rpc_connection() -> AuthServiceProxy:
     """ Connects to bitcoind, generates 100 blocks and returns the connection """
-    bitcoind = AuthServiceProxy(BITCOIND_RPC_URL)
+    global _bitcoind
+    if _bitcoind is not None:
+        return _bitcoind
+    _bitcoind = AuthServiceProxy(BITCOIND_RPC_URL)
 
     poll_for_answer(BITCOIND_RPC_URL, request('uptime'))
-    block_count = bitcoind.getblockcount()
+    block_count = _bitcoind.getblockcount()
     if block_count < 101:
-        bitcoind.generate(101)
+        _bitcoind.generate(101)
 
-    return bitcoind
+    return _bitcoind
 
 # Creates a temp directory on disk for wallet storage
 # Starts a deamon, creates and loads a wallet
@@ -73,17 +76,17 @@ def start_ec_daemon() -> None:
     Creates a temp directory on disk for wallet storage
     Starts a deamon, creates and loads a wallet
     """
-    if datadir is None:
+    if _datadir is None:
         assert False
-    os.mkdir(datadir + "/regtest")
-    shutil.copyfile("electroncash/tests/regtest/configs/electron-cash-config", datadir + "/regtest/config")
-    subprocess.run(["python3", "-m", "coverage", "run", "--data-file=.coverage-regtest", "electron-cash", "--regtest", "-D", datadir, "-w", datadir+"/default_wallet", "daemon", "start"], check=True)
+    os.mkdir(_datadir + "/regtest")
+    shutil.copyfile("electroncash/tests/regtest/configs/electron-cash-config", _datadir + "/regtest/config")
+    subprocess.run(["python3", "-m", "coverage", "run", "--data-file=.coverage-regtest", "electron-cash", "--regtest", "-D", _datadir, "-w", _datadir+"/default_wallet", "daemon", "start"], check=True)
     result = poll_for_answer(EC_DAEMON_RPC_URL, request('version'))
 
     from ...version import PACKAGE_VERSION
     assert result == PACKAGE_VERSION
 
-    r = request('create', params={"wallet_path": datadir+"/default_wallet"})
+    r = request('create', params={"wallet_path": _datadir+"/default_wallet"})
     result = poll_for_answer(EC_DAEMON_RPC_URL, r)
     assert "seed" in result
     assert len(result["seed"].split(" ")) == 12
@@ -92,14 +95,14 @@ def start_ec_daemon() -> None:
     assert result
 
     # Wait until the wallet is up to date
-    poll_for_answer(EC_DAEMON_RPC_URL, request('getinfo'), expected_answer=("wallets[\""+datadir+"/default_wallet\"]", True))
+    poll_for_answer(EC_DAEMON_RPC_URL, request('getinfo'), expected_answer=("wallets[\""+_datadir+"/default_wallet\"]", True))
 
 def stop_ec_daemon() -> None:
     """ Stops the daemon and removes the wallet storage from disk """
-    subprocess.run(["./electron-cash", "--regtest", "-D", datadir, "daemon", "stop"], check=True)
-    if datadir is None or datadir.startswith("/tmp") is False:  # Paranoia
+    subprocess.run(["./electron-cash", "--regtest", "-D", _datadir, "daemon", "stop"], check=True)
+    if _datadir is None or _datadir.startswith("/tmp") is False:  # Paranoia
         assert False
-    shutil.rmtree(datadir)
+    shutil.rmtree(_datadir)
 
 @pytest.fixture(scope="session")
 def docker_compose_file(pytestconfig) -> str:
@@ -109,59 +112,17 @@ def docker_compose_file(pytestconfig) -> str:
 @pytest.fixture(scope="session")
 def fulcrum_service(docker_services: Any) -> Generator[None, None, None]:
     """ Makes sure all services (bitcoind, fulcrum and the EC daemon) are up and running """
-    global datadir
-    global bitcoind
-    datadir = tempfile.mkdtemp()
-    bitcoind = bitcoind_rpc_connection()
-    poll_for_answer(FULCRUM_STATS_URL, expected_answer=('Controller.TxNum', 102))
+    global _datadir
+    global _bitcoind
+    if _datadir is not None:
+        yield
+    else:
+        _datadir = tempfile.mkdtemp()
+        _bitcoind = bitcoind_rpc_connection()
+        poll_for_answer(FULCRUM_STATS_URL, expected_answer=('Controller.TxNum', 102))
 
-    start_ec_daemon()
-    yield
-    stop_ec_daemon()
-
-@pytest.mark.skipif(not SUPPORTED_PLATFORM,
-                    reason="Unsupported platform")
-def test_getunusedaddress(fulcrum_service: Any) -> None:
-    """ Verify the `getunusedaddress` RPC """
-    result = poll_for_answer(EC_DAEMON_RPC_URL, request('getunusedaddress'))
-
-    # The daemon does not return a prefix.
-    # Check that the length is 42 and starts with 'q'
-    assert len(result) == 42
-    assert result[0] == 'q'
-
-@pytest.mark.skipif(not SUPPORTED_PLATFORM,
-                    reason="Unsupported platform")
-def test_getservers(fulcrum_service: Any) -> None:
-    """ Verify the `getservers` RPC """
-    result = poll_for_answer(EC_DAEMON_RPC_URL, request('getservers'))
-
-    # Only one server in this setup
-    assert len(result) == 1
-
-@pytest.mark.skipif(not SUPPORTED_PLATFORM,
-                    reason="Unsupported platform")
-def test_balance(fulcrum_service: Any) -> None:
-    """ Verify the `getbalance` RPC """
-    addr = poll_for_answer(EC_DAEMON_RPC_URL, request('getunusedaddress'))
-
-    bitcoind.generatetoaddress(1, addr)
-    result = poll_for_answer(EC_DAEMON_RPC_URL, request('getbalance'), expected_answer=('unmatured', '50'))
-    assert result['unmatured'] == '50'
-
-    bitcoind.sendtoaddress(addr, 10)
-    result = poll_for_answer(EC_DAEMON_RPC_URL, request('getbalance'), expected_answer=('unconfirmed', '10'))
-    assert result['unmatured'] == '50' and result['unconfirmed'] == '10'
-
-    bitcoind.generate(1)
-    result = poll_for_answer(EC_DAEMON_RPC_URL, request('getbalance'), expected_answer=('confirmed', '10'))
-    assert result['unmatured'] == '50' and result['confirmed'] == '10'
-
-    bitcoind.generate(97)
-    bitcoind.sendtoaddress(addr, 10)
-    result = poll_for_answer(EC_DAEMON_RPC_URL, request('getbalance'), expected_answer=('unconfirmed', '10'))
-    assert result['unmatured'] == '50' and result['confirmed'] == '10' and result['unconfirmed'] == '10'
-
-    bitcoind.generate(1)
-    result = poll_for_answer(EC_DAEMON_RPC_URL, request('getbalance'), expected_answer=('confirmed', '70'))
-    assert result['confirmed'] == '70'
+        try:
+            start_ec_daemon()
+            yield
+        finally:
+            stop_ec_daemon()
