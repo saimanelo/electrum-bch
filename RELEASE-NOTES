@@ -1356,3 +1356,15 @@ and there is no warning message.
 - Tor: Update to version 0.4.7.12 with a patch for static linking #2529 (Axel Gembe)
 - Updated checkpoints for mainnet, testnet3, testnet4, and chipnet (cculianu)
 
+# RELEASE NOTES 4.2.14
+
+- BUGFIX: Fix crashes in payment requests with amount of None #2535 (MrNaif)
+- Build: Update dnspython to version 2.2.0 #2530 (SomberNight, Axel Gembe)
+- Servers: Add loping.net chipnet server + explorer #2531 (Axel Gembe)
+- Add builds to GitHub actions + Bump test versions #2532, #2526 (Jonas Lundqvist)
+- Disable OSX build github action (cculianu)
+- Cleanup of top README #2534 (Jonas Lundqvist)
+- test: Flip last bit in negative test cases #2536 (Jonas Lundqvist)
+- Remove references to Travis CI + Enforce python >= 3.7 in setup.py #2537, #2538 (Jonas Lundqvist)
+- Only archive GH Actions artifacts once + Split regtest in separate files #2539, #2540 (Jonas Lundqvist)
+- Fixes to get auto-build to work (cculianu)
