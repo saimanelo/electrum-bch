@@ -67,7 +67,10 @@ mainnet_block_explorers = {
                    {'tx': 'tx', 'addr': 'address', 'block': 'block-height'}),
     "Melroy's BCH Explorer": ('https://explorer.melroy.org',
                               Address.FMT_CASHADDR,
-                              {'tx': 'tx', 'addr': 'address', 'block': 'block'})
+                              {'tx': 'tx', 'addr': 'address', 'block': 'block'}),
+    '3XPL': ('https://3xpl.com/bitcoin-cash',
+             Address.FMT_CASHADDR,
+             {'tx': 'transaction', 'addr': 'address', 'block': 'block'})
 }
 
 DEFAULT_EXPLORER_TESTNET = 'Blockchain.com'
