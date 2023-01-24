@@ -2,7 +2,7 @@
 # Copyright (C) 2015 Thomas Voegtlin
 #
 # Electron Cash - Bitcoin Cash thin client
-# Copyright (C) 2017-2022 The Electron Cash Developers
+# Copyright (C) 2017-2023 The Electron Cash Developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
@@ -29,7 +29,6 @@
 #   - ImportedPrivkeyWallet: imported private keys, keystore
 #   - Standard_Wallet: one keystore, P2PKH
 #   - Multisig_Wallet: several keystores, P2SH
-
 
 import copy
 import errno
@@ -64,7 +63,7 @@ from . import bitcoin
 from . import coinchooser
 from .synchronizer import Synchronizer
 from .verifier import SPV, SPVDelegate
-from .rpa.rpa_manager import Rpa_manager
+from .rpa.rpa_manager import RpaManager
 from . import schnorr
 from . import ecc_fast
 from .blockchain import NULL_HASH_HEX
@@ -78,7 +77,10 @@ from . import lns
 from . import slp
 from .rpa import paycode as rpa
 
-def _(message): return message
+
+def _(message):
+    return message
+
 
 TX_STATUS = [
     _('Unconfirmed parent'),
@@ -92,17 +94,19 @@ from .i18n import _
 
 DEFAULT_CONFIRMED_ONLY = False
 
+
 def relayfee(network):
     RELAY_FEE = 5000
     MAX_RELAY_FEE = 50000
     f = network.relay_fee if network and network.relay_fee else RELAY_FEE
     return min(f, MAX_RELAY_FEE)
 
+
 def dust_threshold(network):
     # Change < dust threshold is added to the tx fee
     #return 182 * 3 * relayfee(network) / 1000 # original Electrum logic
     #return 1 # <-- was this value until late Sept. 2018
-    return 546 # hard-coded Bitcoin Cash dust threshold. Was changed to this as of Sept. 2018
+    return 546  # hard-coded Bitcoin Cash dust threshold. Was changed to this as of Sept. 2018
 
 
 def sweep_preparations(privkeys, network, imax=100):
@@ -195,7 +199,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # verifier (SPV) and synchronizer are started in start_threads
         self.verifier: Optional[SPV] = None
         self.synchronizer: Optional[Synchronizer] = None
-        self.rpa_manager = None
+        self.rpa_manager: Optional[RpaManager] = None
         self.weak_window = None  # Some of the GUI classes, such as the Qt ElectrumWindow, use this to refer back to themselves.  This should always be a weakref.ref (Weak.ref), or None
         # CashAccounts subsystem. Its network-dependent layer is started in
         # start_threads. Note: object instantiation should be lightweight here.
@@ -1051,7 +1055,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     def get_spendable_coins(self, domain, config, isInvoice = False):
         confirmed_only = config.get('confirmed_only', DEFAULT_CONFIRMED_ONLY)
-        if (isInvoice):
+        if isInvoice:
             confirmed_only = True
         return self.get_utxos(domain, exclude_frozen=True, mature=True, confirmed_only=confirmed_only, exclude_slp=True)
 
@@ -2150,11 +2154,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.synchronizer = Synchronizer(self, network)
             finalization_print_error(self.verifier)
             finalization_print_error(self.synchronizer)
+            my_jobs = [self.verifier, self.synchronizer]
             if self.wallet_type == 'rpa':
-                self.rpa_manager = Rpa_manager(self,network)
-                network.add_jobs([self.verifier, self.synchronizer,self.rpa_manager])
-            else:
-                network.add_jobs([self.verifier, self.synchronizer])
+                self.rpa_manager = RpaManager(self, network)
+                my_jobs.append(self.rpa_manager)
+            network.add_jobs(my_jobs)
             self.cashacct.start(self.network)  # start cashacct network-dependent subsystem, nework.add_jobs, etc
         else:
             self.verifier = None
@@ -2171,11 +2175,15 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # thread-safe fashion from within the thread where they normally
             # operate on their data structures.
             self.cashacct.stop()
-            self.synchronizer.save()
-            self.synchronizer.release()
-            self.verifier.release()
+            if self.synchronizer:
+                self.synchronizer.save()
+                self.synchronizer.release()
+            if self.verifier:
+                self.verifier.release()
             self.synchronizer = None
             self.verifier = None
+            if self.rpa_manager:
+                self.network.remove_jobs([self.rpa_manager])
             self.rpa_manager = None
             self.stop_pruned_txo_cleaner_thread()
             # Now no references to the syncronizer or verifier
@@ -2772,7 +2780,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
 
 class Simple_Wallet(Abstract_Wallet):
-    # wallet with a single keystore
+    """ wallet with a single keystore """
 
     def get_keystore(self):
         return self.keystore
@@ -2886,9 +2894,8 @@ class ImportedWalletBase(Simple_Wallet):
         self.storage.write() # no-op if above already wrote
 
 
-
 class ImportedAddressWallet(ImportedWalletBase):
-    # Watch-only wallet of imported addresses
+    """ Watch-only wallet of imported addresses """
 
     wallet_type = 'imported_addr'
 
@@ -2947,7 +2954,7 @@ class ImportedAddressWallet(ImportedWalletBase):
         self.add_address(address)
         self.cashacct.save()
         self.save_addresses()
-        self.storage.write() # no-op if already wrote in previous call
+        self.storage.write()  # no-op if already wrote in previous call
         self._sorted = None
         return True
 
@@ -2962,7 +2969,7 @@ class ImportedAddressWallet(ImportedWalletBase):
 
 
 class ImportedPrivkeyWallet(ImportedWalletBase):
-    # wallet made of imported private keys
+    """ wallet made of imported private keys """
 
     wallet_type = 'imported_privkey'
 
@@ -3030,7 +3037,7 @@ class ImportedPrivkeyWallet(ImportedWalletBase):
         return pubkey.address.to_ui_string()
 
     def export_private_key(self, address, password):
-        '''Returned in WIF format.'''
+        """Returned in WIF format."""
         pubkey = self.keystore.address_to_pubkey(address)
         return self.keystore.export_private_key(pubkey, password)
 
@@ -3046,8 +3053,9 @@ class ImportedPrivkeyWallet(ImportedWalletBase):
         if pubkey in self.keystore.keypairs:
             return pubkey.address
 
+
 class RpaWallet(ImportedWalletBase):
-    # wallet made of imported private keys
+    """ RPA wallet made of imported private keys  """
 
     wallet_type = 'rpa'
     txin_type = 'p2pkh'
@@ -3078,7 +3086,7 @@ class RpaWallet(ImportedWalletBase):
 
     def can_import_privkey(self):
         return True
-        
+
     def has_seed(self):
         return self.keystore_rpa_aux.has_seed()
 
@@ -3115,7 +3123,7 @@ class RpaWallet(ImportedWalletBase):
     def update_password(self, old_pw, new_pw, encrypt=False):
         if old_pw is None and self.has_password():
             raise InvalidPassword()
-          
+
         if self.keystore is not None and len(self.keystore.keypairs) > 0 and self.keystore.can_change_password():
             self.keystore.update_password(old_pw,new_pw)
             self.save_keystore()
@@ -3183,28 +3191,26 @@ class RpaWallet(ImportedWalletBase):
             self.load_keystore_rpa_aux()
         k = self.get_keystore_rpa_aux()
         return k.derive_pubkey(c, i)
-        
+
     def dummy_address(self):
         pubkey = self.derive_pubkeys(0, 0)
         dummy_address = Address.from_pubkey(pubkey)
         return dummy_address
-        
+
     def get_grind_string(self):
         rpa_grind_string = rpa.get_grind_string(self)
         return rpa_grind_string
 
     def get_receiving_paycode(self):
         return rpa.generate_paycode(self, prefix_size="10")
-        
+
     def extract_private_keys_from_transaction(self,rawtx,password):
         return rpa.extract_private_keys_from_transaction(self, rawtx, password)
 
     def fetch_rpa_mempool_txs_from_server(self):
-        # This function is intended to be called when the clients wants
-        # to check for new incoming RPA transactions from the mempool. 
-        
+        """This function is intended to be called when the clients wants
+        to check for new incoming RPA transactions from the mempool. """
         self.rpa_manager.rpa_phase_1_mempool()
-        return
 
     def rebuild_history(self):
         self.storage.put('rpa_height', 743000)  # ask from the user in later iterations
@@ -3373,10 +3379,6 @@ class Simple_Deterministic_Wallet(Simple_Wallet, Deterministic_Wallet):
         return self.keystore.derive_pubkey(c, i)
 
 
-
-
-
-
 class Standard_Wallet(Simple_Deterministic_Wallet):
     wallet_type = 'standard'
 
@@ -3385,7 +3387,7 @@ class Standard_Wallet(Simple_Deterministic_Wallet):
 
 
 class Multisig_Wallet(Deterministic_Wallet):
-    # generic m of n
+    """ generic m of n """
     gap_limit = 20
 
     def __init__(self, storage):
@@ -3473,6 +3475,7 @@ wallet_types = ['standard', 'multisig', 'imported', 'rpa']
 def register_wallet_type(category):
     wallet_types.append(category)
 
+
 wallet_constructors = {
     'standard': Standard_Wallet,
     'old': Standard_Wallet,
@@ -3482,14 +3485,16 @@ wallet_constructors = {
     'rpa': RpaWallet,
 }
 
+
 def register_constructor(wallet_type, constructor):
     wallet_constructors[wallet_type] = constructor
 
+
 class UnknownWalletType(RuntimeError):
-    ''' Raised if encountering an unknown wallet type '''
+    """ Raised if encountering an unknown wallet type """
     pass
 
-# former WalletFactory
+
 class Wallet:
     """The main wallet "entry point".
     This class is actually a factory that will return a wallet of the correct
