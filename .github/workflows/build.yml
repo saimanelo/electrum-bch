@@ -50,6 +50,22 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         path: dist/Electron-Cash*.exe
+  build_android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - name: Check out source
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Build Android
+      run: |
+        cp android/dummykeystore.jks android/keystore.jks
+        android/build.sh
+    - name: Archive build
+      uses: actions/upload-artifact@v3
+      with:
+        path: android/release/*.apk
 #
 # MacOS Building is expensive (in terms of minutes charged) but also unnecessary since this rarely breaks for us
 # in practice. So, commented-out by Calin on 1/13/2023.

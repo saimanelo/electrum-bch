@@ -44,10 +44,8 @@ COPY electroncash_gui electroncash_gui
 COPY ios/ElectronCash/electroncash_gui/ios_native ios/ElectronCash/electroncash_gui/ios_native
 COPY electroncash_plugins electroncash_plugins
 
-# The app itself. Specifically check for the keystore, otherwise it'll build an APK with no
-# certificates.
+# The app itself.
 COPY android android
-COPY android/keystore.jks android/
 COPY contrib/deterministic-build contrib/deterministic-build
 COPY electroncash electroncash
 
