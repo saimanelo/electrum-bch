@@ -7,6 +7,8 @@ on:
 
 jobs:
   build_appimage:
+    env:
+      GIT_REPO: ${{ github.server_url }}/${{ github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -15,12 +17,14 @@ jobs:
       with:
         submodules: true
     - name: Build AppImage
-      run: contrib/build-linux/appimage/build.sh master
+      run: contrib/build-linux/appimage/build.sh ${{ github.ref_name }}
     - name: Archive build
       uses: actions/upload-artifact@v3
       with:
         path: dist/Electron-Cash*.AppImage
   build_sdist:
+    env:
+      GIT_REPO: ${{ github.server_url }}/${{ github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -29,7 +33,7 @@ jobs:
       with:
         submodules: true
     - name: Build srcdist
-      run: contrib/build-linux/srcdist_docker/build.sh master
+      run: contrib/build-linux/srcdist_docker/build.sh ${{ github.ref_name }}
     - name: Archive build
       uses: actions/upload-artifact@v3
       with:
@@ -37,6 +41,8 @@ jobs:
           dist/Electron-Cash*.zip
           dist/Electron-Cash*.tar.gz
   build_wine:
+    env:
+      GIT_REPO: ${{ github.server_url }}/${{ github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -45,7 +51,7 @@ jobs:
       with:
         submodules: true
     - name: Build wine
-      run: contrib/build-wine/build.sh master
+      run: contrib/build-wine/build.sh ${{ github.ref_name }}
     - name: Archive build
       uses: actions/upload-artifact@v3
       with:

@@ -12,12 +12,12 @@ Electron Cash - Lightweight Bitcoin Cash client
     :target: https://crowdin.com/project/electron-cash
     :alt: Help translate Electron Cash online
 
-.. image:: https://github.com/Electron-Cash/Electron-Cash/actions/workflows/run-tox.yml/badge.svg?branch=master
-    :target: https://github.com/Electron-Cash/Electron-Cash/actions/workflows/run-tox.yml?query=branch%3Amaster
+.. image:: ../../actions/workflows/run-tox.yml/badge.svg?branch=master
+    :target: ../../actions/workflows/run-tox.yml?query=branch%3Amaster
     :alt: GitHub Actions Tests
 
-.. image:: https://github.com/Electron-Cash/Electron-Cash/actions/workflows/build.yml/badge.svg
-    :target: https://github.com/Electron-Cash/Electron-Cash/actions/workflows/build.yml
+.. image:: ../../actions/workflows/build.yml/badge.svg
+    :target: ../../actions/workflows/build.yml
     :alt: GitHub Actions Build
 
 Getting started
