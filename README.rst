@@ -20,6 +20,10 @@ Electron Cash - Lightweight Bitcoin Cash client
     :target: ../../actions/workflows/build.yml
     :alt: GitHub Actions Build
 
+.. image:: ../../actions/workflows/audit.yml/badge.svg
+    :target: ../../actions/workflows/audit.yml
+    :alt: GitHub Actions Python Audit
+
 Getting started
 ===============
 
