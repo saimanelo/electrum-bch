@@ -2,11 +2,36 @@ name: Building
 
 on:
   workflow_dispatch:
+    inputs:
+      appimage:
+        type: boolean
+        description: Build AppImage
+        default: true
+      sdist:
+        type: boolean
+        description: Build Linux sdist
+        default: true
+      win32:
+        type: boolean
+        description: Build Win32
+        default: true
+      android:
+        type: boolean
+        description: Build Android
+        default: true
+      # MacOS Building is expensive (in terms of minutes charged)
+      # but also unnecessary since this rarely breaks for us in practice.
+      macos:
+        type: boolean
+        description: Build macOS
+        default: false
+
   schedule:
   - cron: '0 0 * * 1'
 
 jobs:
   build_appimage:
+    if: (github.event.inputs.appimage == 'true' || github.event_name == 'schedule')
     env:
       GIT_REPO: ${{ github.server_url }}/${{ github.repository }}
     runs-on: ubuntu-latest
@@ -23,6 +48,7 @@ jobs:
       with:
         path: dist/Electron-Cash*.AppImage
   build_sdist:
+    if: (github.event.inputs.sdist == 'true' || github.event_name == 'schedule')
     env:
       GIT_REPO: ${{ github.server_url }}/${{ github.repository }}
     runs-on: ubuntu-latest
@@ -40,7 +66,8 @@ jobs:
         path: |
           dist/Electron-Cash*.zip
           dist/Electron-Cash*.tar.gz
-  build_wine:
+  build_win32:
+    if: (github.event.inputs.win32 == 'true' || github.event_name == 'schedule')
     env:
       GIT_REPO: ${{ github.server_url }}/${{ github.repository }}
     runs-on: ubuntu-latest
@@ -57,6 +84,7 @@ jobs:
       with:
         path: dist/Electron-Cash*.exe
   build_android:
+    if: (github.event.inputs.android == 'true' || github.event_name == 'schedule')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -72,25 +100,22 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         path: android/release/*.apk
-#
-# MacOS Building is expensive (in terms of minutes charged) but also unnecessary since this rarely breaks for us
-# in practice. So, commented-out by Calin on 1/13/2023.
-#
-#  build_macos:
-#    runs-on: macos-latest
-#    timeout-minutes: 60
-#    steps:
-#    - name: Check out source
-#      uses: actions/checkout@v3
-#      with:
-#        submodules: true
-#    - name: Build macOS
-#      working-directory: contrib/osx
-#      run: |
-#        brew install coreutils
-#        brew install pyenv
-#        ./make_osx
-#    - name: Archive build
-#      uses: actions/upload-artifact@v3
-#      with:
-#        path: dist/Electron-Cash*.dmg
+  build_macos:
+    if: (github.event.inputs.macos == 'true')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+    - name: Check out source
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Build macOS
+      working-directory: contrib/osx
+      run: |
+        brew install coreutils
+        brew install pyenv
+        ./make_osx
+    - name: Archive build
+      uses: actions/upload-artifact@v3
+      with:
+        path: dist/Electron-Cash*.dmg
