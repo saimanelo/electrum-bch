@@ -140,9 +140,21 @@ class MainActivity : AppCompatActivity(R.layout.main) {
     }
 
     override fun onBackPressed() {
+        var fusionFragmentIsVisibile : Boolean = false
+        val fragments: List<Fragment> = supportFragmentManager.getFragments()
+        for (fragment in fragments) {
+            if (fragment != null && fragment.isVisible() && fragment is FusionFragment) {
+                fusionFragmentIsVisibile = true
+            }
+        }
+
         if (drawer.isDrawerOpen(navDrawer)) {
             closeDrawer()
-        } else if (daemonModel.wallet != null) {
+        }
+        else if (fusionFragmentIsVisibile) { // Back to the transactions fragment
+            showFragment(navBottom.selectedItemId)
+        }
+        else if (daemonModel.wallet != null) {
             // We allow the wallet to be closed using the Back button because the Close command
             // in the top right menu isn't very obvious. However, we require confirmation so
             // the user doesn't close it accidentally by pressing Back too many times.
