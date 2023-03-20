@@ -13,10 +13,16 @@ from electroncash.i18n import _
 from electroncash.storage import WalletStorage
 from electroncash.wallet import (ImportedAddressWallet, ImportedPrivkeyWallet, Standard_Wallet,
                                  Wallet, Multisig_Wallet)
+from electroncash.plugins import Plugins, run_hook
 
 
 CALLBACKS = ["banner", "blockchain_updated", "fee", "interfaces", "new_transaction",
              "on_history", "on_quotes", "servers", "status", "verified2", "wallet_updated"]
+
+
+class AndroidWindow:
+    def __init__(self):
+        self.wallet = None
 
 
 class AndroidConsole(InteractiveConsole):
@@ -81,9 +87,11 @@ class AndroidCommands(commands.Commands):
 
         # Create daemon here rather than in start() so the DaemonModel has a chance to register
         # its callback before the daemon threads start.
-        self.daemon = daemon.Daemon(self.config, fd, is_gui=False, plugins=None)
+        plugins = Plugins(config, "android")
+        self.daemon = daemon.Daemon(self.config, fd, is_gui=False, plugins=plugins)
         self.daemon_running = False
 
+        self.window = AndroidWindow()  # For android callbacks TODO: change it's place maybe
         self.gui_callback = None
         self.network = self.daemon.network
         self.network.register_callback(self._on_callback, CALLBACKS)
@@ -129,6 +137,9 @@ class AndroidCommands(commands.Commands):
             wallet = Wallet(storage)
             wallet.start_threads(self.network)
             self.daemon.add_wallet(wallet)
+            self.window.wallet = wallet
+            self.window.wallet_password = password
+            run_hook('on_new_window', self.window)
 
     def close_wallet(self, name=None):
         """Close a wallet"""

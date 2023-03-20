@@ -3,10 +3,11 @@ package org.electroncash.electroncash3
 import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.View
+import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.content.res.AppCompatResources
-import androidx.fragment.app.Fragment
 import com.chaquo.python.PyObject
+import kotlinx.android.synthetic.main.fusion.*
 import kotlinx.android.synthetic.main.transaction_detail.*
 import kotlinx.android.synthetic.main.transactions.*
 import kotlin.math.roundToInt
@@ -30,6 +31,14 @@ class TransactionsFragment : ListFragment(R.layout.transactions, R.id.rvTransact
             } catch (e: ToastException) { e.show() }
         }
         btnRequest.setOnClickListener { showDialog(this, NewRequestDialog()) }
+        btnFusion.setOnClickListener {
+            showFusionFragment()
+        }
+    }
+
+    private fun showFusionFragment() {
+        activity!!.supportFragmentManager.beginTransaction()
+            .replace(this.id, FusionFragment()).commitNow()
     }
 
     override fun onCreateAdapter() = TransactionsAdapter(this)

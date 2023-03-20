@@ -15,6 +15,7 @@ val WATCHDOG_INTERVAL = 1000L
 
 lateinit var daemonModel: DaemonModel
 val daemonUpdate = MutableLiveData<Unit>().apply { value = Unit }
+val fusionUpdate = MutableLiveData<Unit>().apply { value = Unit }
 
 
 fun initDaemon(config: PyObject) {
@@ -56,6 +57,7 @@ class DaemonModel(val config: PyObject) {
                 }
             }
             mainHandler.postDelayed(watchdog, WATCHDOG_INTERVAL)
+            fusionUpdate.postValue(Unit)
         }
         watchdog.run()
     }

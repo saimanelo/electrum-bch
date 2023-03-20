@@ -67,6 +67,7 @@ android {
                 exclude "**/*.po", "**/*.pot"  // The .mo files are used at runtime.
                 include "electroncash_gui/__init__.py"
                 include "electroncash_plugins/__init__.py"
+                include "electroncash_plugins/fusion/"
 
                 // From src/main/python
                 include "chaquopy/"

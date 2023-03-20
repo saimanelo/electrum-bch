@@ -265,9 +265,11 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                 outputs = py.builtins.callAttr("list", arrayOf(output))
             }
 
-            val inputs = this.inputs ?:
+            var inputs = this.inputs ?:
                          wallet.callAttr("get_spendable_coins", null,daemonModel.config,
                                          Kwarg("isInvoice", pr != null))
+            val fusion = daemonModel.daemon.get("plugins")!!.callAttr("find_plugin", "fusion")
+            fusion.callAttr("spendable_coin_filter", daemonModel.wallet, inputs)
             return try {
                 TxResult(wallet.callAttr("make_unsigned_transaction", inputs, outputs,
                                          daemonModel.config, Kwarg("sign_schnorr", signSchnorr())),
