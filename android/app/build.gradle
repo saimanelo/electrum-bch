@@ -21,7 +21,7 @@ android {
     defaultConfig {
         applicationId "org.electroncash.wallet"
         minSdkVersion 21
-        targetSdkVersion 29
+        targetSdkVersion 31
 
         def ecVersion = null
         file("$REPO_ROOT/electroncash/version.py").eachLine {
@@ -33,7 +33,7 @@ android {
         if (ecVersion == null) {
             throw new GradleException("Couldn't find version number")
         }
-        def BUILD_NUM = 5  // Distinguish multiple releases with the same version number.
+        def BUILD_NUM = 6  // Distinguish multiple releases with the same version number.
         versionName "$ecVersion-$BUILD_NUM"
         def verParsed = ecVersion.split(/\./).collect { Integer.parseInt(it) }
         versionCode((verParsed[0] * 1000000) + (verParsed[1] * 10000) + (verParsed[2] * 100) +

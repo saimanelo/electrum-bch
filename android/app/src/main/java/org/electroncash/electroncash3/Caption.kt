@@ -107,7 +107,7 @@ class CaptionService : Service() {
             .setContentTitle(intent.extras!!.getString(EXTRA_TITLE))
             .setContentText(intent.extras!!.getString(EXTRA_SUBTITLE))
             .setContentIntent(PendingIntent.getActivity(
-                this, 0, Intent(this, MainActivity::class.java), 0))
+                this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))
         startForeground(NOTIFICATION_ID, builder.build())
         return START_NOT_STICKY
     }
