@@ -1,5 +1,7 @@
 # Electron Cash Android app
 
+For users: You must run a TOR app first before starting Electron Cash android, in order to use Cash Fusion.
+
 To start developing the app, just open this directory in Android Studio.
 
 
