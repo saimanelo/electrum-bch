@@ -2176,7 +2176,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 result.extend(new_addrs)
             return result
 
-    def make_unsigned_transaction(self, inputs, outputs, config, fixed_fee=None, change_addr=None, sign_schnorr=None):
+    def make_unsigned_transaction(self, inputs, outputs, config, fixed_fee=None, change_addr=None, sign_schnorr=None,
+                                  *, token_datas=None, bip69_sort=True):
         ''' sign_schnorr flag controls whether to mark the tx as signing with
         schnorr or not. Specify either a bool, or set the flag to 'None' to use
         whatever the wallet is configured to use from the GUI '''
@@ -2268,11 +2269,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             sendable = sum(map(lambda x:x['value'], inputs))
             _type, data, value = outputs[i_max]
             outputs[i_max] = (_type, data, 0)
-            tx = Transaction.from_io(inputs, outputs, sign_schnorr=sign_schnorr)
+            tx = Transaction.from_io(inputs, outputs, sign_schnorr=sign_schnorr, token_datas=token_datas)
             fee = fee_estimator(tx.estimated_size())
             amount = max(0, sendable - tx.output_value() - fee)
             outputs[i_max] = (_type, data, amount)
-            tx = Transaction.from_io(inputs, outputs, sign_schnorr=sign_schnorr)
+            tx = Transaction.from_io(inputs, outputs, sign_schnorr=sign_schnorr, token_datas=token_datas)
 
         # If user tries to send too big of a fee (more than 50 sat/byte), stop them from shooting themselves in the foot
         tx_in_bytes=tx.estimated_size()
@@ -2281,8 +2282,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if (sats_per_byte > 50):
             raise ExcessiveFee()
 
-        # Sort the inputs and outputs deterministically
-        tx.BIP69_sort()
+        if bip69_sort:
+            # Sort the inputs and outputs deterministically
+            tx.BIP69_sort()
         # Timelock tx to current height.
         locktime = self.get_local_height()
         if locktime == -1: # We have no local height data (no headers synced).

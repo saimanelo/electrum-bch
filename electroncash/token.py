@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # -*- mode: python3 -*-
-# This file (c) 2022 Calin Culianu <calin.culianu@gmail.com>
+# This file (c) 2022-2023 Calin Culianu <calin.culianu@gmail.com>
 # Part of the Electron Cash SPV Wallet
 # License: MIT
 """Encapsulation of Cash Token data in a transaction output"""
@@ -12,6 +12,9 @@ from typing import Optional, Tuple, Union
 
 from .bitcoin import OpCodes
 from .serialize import BCDataStream, SerializationError
+
+# By consensus, NFT commitment byte blobs may not exceed this length
+MAX_CONSENSUS_COMMITMENT_LENGTH = 40
 
 
 class Structure(IntEnum):
@@ -186,4 +189,14 @@ def unwrap_spk(wrapped_spk: bytes) -> Tuple[Optional[OutputData], bytes]:
     # leftover bytes go to real spk
     spk = wrapped_spk[ds.read_cursor:]
     return token_data, spk  # Parsed ok
+
+
+def heuristic_dust_limit_for_token_bearing_output() -> int:
+    """Returns the dust limit in sats for a token-bearing output in a transaction (which is a heavier output than
+    normal).  This value is ideally calculated by serializing the token UTXO and then returning a number in the
+    600-700 sat range, depending on the token UTXO's serialized data size in bytes.
+
+    Rather than doing that, for simplicity, we just return a hard-coded value which is expected to be enough to allow
+    all conceivable token-bearing UTXOs to be beyond the dust limit."""
+    return 800  # Worst-case; hard-coded for now.
 

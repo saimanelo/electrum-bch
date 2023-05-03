@@ -310,7 +310,7 @@ class TokenList(MyTreeWidget, util.PrintError):
 
     @if_not_dead
     def create_new_token(self):
-        self.parent.show_message("Create token is unimplemented!", parent=self.parent)
+        self.parent.show_create_new_token_dialog()
 
     @staticmethod
     def dedupe_utxos(utxos: List[Dict]) -> List[Dict]:

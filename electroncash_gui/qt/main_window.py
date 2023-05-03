@@ -165,6 +165,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.is_schnorr_enabled = self.wallet.is_schnorr_enabled  # This is a function -- Support for plugins that may be using the 4.0.3 & 4.0.4 API -- this function used to live in this class, before being moved to Abstract_Wallet.
         self.send_tab_opreturn_widgets, self.receive_tab_opreturn_widgets = [], []  # defaults to empty list
         self._shortcuts = Weak.Set()  # keep track of shortcuts and disable them on close
+        self.create_new_token_dialog = None  # Gets lazy-initted by self.show_create_new_token_dialog()
 
         self.create_status_bar()
         self.need_update = threading.Event()
@@ -747,6 +748,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             icon = QIcon(":icons/cashacct-logo.png")
         tools_menu.addAction(icon, _("Lookup &Cash Account..."), self.lookup_cash_account_dialog, QKeySequence("Ctrl+L"))
         tools_menu.addAction(icon, _("&Register Cash Account..."), lambda: self.register_new_cash_account(addr='pick'), QKeySequence("Ctrl+G"))
+        tools_menu.addSeparator()
+        tools_menu.addAction(QIcon(":icons/tab_token.svg"), _("Create Cash&Token") + "...",
+                             self.show_create_new_token_dialog, QKeySequence("Ctrl+Shift+T"))
         run_hook('init_menubar_tools', self, tools_menu)
 
         help_menu = menubar.addMenu(_("&Help"))
@@ -5370,6 +5374,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 # never ask checked
                 self.config.set_key('cashaccounts_never_show_send_tab_hint', True)
 
+    def show_create_new_token_dialog(self):
+        from . import token_create
+        if not self.create_new_token_dialog:
+            self.create_new_token_dialog = token_create.CreateTokenForm(self)
+        self.create_new_token_dialog.show()
+        self.create_new_token_dialog.activateWindow()
+        self.create_new_token_dialog.raise_()
 
 
 

@@ -662,7 +662,7 @@ class Transaction:
         assert len(self._outputs) == len(self._token_datas)
 
     def serialize_output(self, output) -> str:
-        """DO NOT USE. Does not know about tokens. Only used by satoship plugin."""
+        """DO NOT USE. Does not know about tokens. Only used by satochip plugin."""
         warnings.warn("warning: deprecated Transaction.serialize_output", FutureWarning, stacklevel=2)
         output_type, addr, amount = output
         s = int_to_hex(amount, 8)
