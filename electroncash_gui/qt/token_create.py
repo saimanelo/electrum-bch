@@ -156,8 +156,8 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         grid3 = QtWidgets.QGridLayout()
         grid3.setHorizontalSpacing(max(grid3.horizontalSpacing(), 6))
         help_text = _("The NFT commitment is a 0-40 byte value that uniquely identifies this specific non-fungible"
-                      " token.  Enter up to 40 bytes worth of hexadecimal characters here to specify the commitment,"
-                      " or leave this field blank for an empty commitment.")
+                      " token.  Enter up to 40 bytes worth of an even number of hexadecimal characters here to"
+                      " specify the commitment, or leave this field blank for an empty commitment.")
         tt = _("Specify the NFT commitment data as hex")
         l = HelpLabel(_("NFT Commitment"), help_text)
         l.setToolTip(tt)
