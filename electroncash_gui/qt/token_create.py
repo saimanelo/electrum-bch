@@ -346,7 +346,7 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
             addr = address.Address.from_string(self.le_address.text().strip())
         else:
             # Send back to a new address
-            addr = self.wallet.get_unused_address(for_change=False, frozen_ok=False)
+            addr = self.wallet.get_unused_address(for_change=False, frozen_ok=False) or utxo["address"]
 
         fungible_amt = self.get_fungible_amount()
         if fungible_amt is None:
@@ -378,7 +378,7 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         utxo, addr, tok = tup
         # We intentionally order things so that the change goes to output 0, so that the wallet doesn't run out of
         # genesis-capable UTXOs.
-        change_addr = self.wallet.get_unused_address(for_change=True, frozen_ok=False)
+        change_addr = self.wallet.get_unused_address(for_change=True, frozen_ok=False) or utxo["address"]
         outputs = [(bitcoin.TYPE_ADDRESS, change_addr, '!'),
                    (bitcoin.TYPE_ADDRESS, addr, token.heuristic_dust_limit_for_token_bearing_output())]
         token_datas = [None, tok]
@@ -398,7 +398,7 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
             self.show_error(_("Not enough funds"))
             return
         utxo = utxos[0]
-        addr = utxo['address']
+        addr = self.wallet.get_unused_address(for_change=True, frozen_ok=False) or utxo['address']
         try:
             tx = self.wallet.make_unsigned_transaction(config=self.parent.config, inputs=[utxo],
                                                        outputs=[(bitcoin.TYPE_ADDRESS, addr, '!')])
@@ -409,8 +409,7 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
             self.show_error(_("Excessive fee"))
             return
         self.parent.show_transaction(tx, tx_desc=_("Create a new genesis-capable UTXO; spend {coin_name} back to"
-                                                   " {addr}").format(coin_name=self.utxo_short_name(utxo),
-                                                                     addr=addr.to_ui_string()))
+                                                   " wallet").format(coin_name=self.utxo_short_name(utxo)))
 
     def on_cb_utxo_index_change(self, ignored: int):
         data = self.cb_utxos.currentData()
