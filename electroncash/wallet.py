@@ -2264,7 +2264,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
             coin_chooser = coinchooser.CoinChooserPrivacy()
             tx = coin_chooser.make_tx(inputs, outputs, change_addrs,
-                                      fee_estimator, self.dust_threshold(), sign_schnorr=sign_schnorr)
+                                      fee_estimator, self.dust_threshold(), sign_schnorr=sign_schnorr,
+                                      token_datas=token_datas)
         else:
             sendable = sum(map(lambda x:x['value'], inputs))
             _type, data, value = outputs[i_max]
