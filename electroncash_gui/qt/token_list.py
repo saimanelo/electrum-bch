@@ -80,6 +80,9 @@ class TokenList(MyTreeWidget, util.PrintError):
         self.fixed_width = QFont(MONOSPACE_FONT, QFont().pointSize() - 1)
         self.fixed_width.setFixedPitch(True)
         self.fixed_width.setStretch(QFont.SemiCondensed)
+        self.fixed_width_smaller = QFont(MONOSPACE_FONT, QFont().pointSize() - 1)
+        self.fixed_width_smaller.setFixedPitch(True)
+        self.fixed_width_smaller.setStretch(QFont.Condensed)
         self.fixed_width_larger = QFont(MONOSPACE_FONT, QFont().pointSize())
         self.fixed_width_larger.setFixedPitch(True)
         self.smaller_font = QFont()
@@ -194,7 +197,9 @@ class TokenList(MyTreeWidget, util.PrintError):
                 txt = item.text(col)
                 if col == self.Col.token_id and txt.startswith(_("Fungible-Only")):
                     continue  # Don't set the font for the "Fungible-Only" entries
-                if len(txt) > 32:
+                if len(txt) > 64:
+                    item.setFont(col, self.fixed_width_smaller)
+                elif len(txt) > 32:
                     item.setFont(col, self.fixed_width)
                 else:
                     item.setFont(col, self.fixed_width_larger)
