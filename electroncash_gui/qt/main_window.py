@@ -1641,6 +1641,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
               _("You may enter:"
                 "<ul>"
                 "<li> Bitcoin Cash <b>Address</b> <b>★</b>"
+                "<li> Bitcoin Cash <b>Token Address</b> <b>★</b>"
                 "<li> Bitcoin Legacy <b>Address</b> <b>★</b>"
                 "<li> <b>Cash Account</b> <b>★</b> e.g. <i>satoshi#123</i>"
                 "<li> <b>Contact name</b> <b>★</b> from the Contacts tab"
