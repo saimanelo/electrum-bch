@@ -486,8 +486,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.but_preview_tx.setEnabled(self.check_sanity())
 
     def on_preview_tx(self):
-        # First, we must make sure that any amount line-edits have lost focus so we can be 100% sure
-        # "textEdited" signals propagate and what the user sees on-screen is what neds up in the txn
+        # First, we must make sure that any amount line-edits have lost focus, so we can be 100% sure
+        # "textEdited" signals propagate and what the user sees on-screen is what ends-up in the txn
         w = self.focusWidget()
         if w:
             w.clearFocus()
