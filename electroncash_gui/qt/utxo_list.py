@@ -23,7 +23,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 from .util import *
-from electroncash.i18n import _
+from electroncash.i18n import _, ngettext
 from electroncash.plugins import run_hook
 from electroncash.address import Address
 from electroncash.bitcoin import COINBASE_MATURITY
@@ -170,9 +170,6 @@ class UTXOList(MyTreeWidget):
             elif slp_token:
                 utxo_item.setBackground(0, self.slpBG)
                 toolTipMisc = _('Coin contains an SLP token')
-            elif cash_token:
-                utxo_item.setBackground(0, self.cashTokenBG)
-                toolTipMisc = _('Coin contains a CashToken')
             elif a_frozen and not c_frozen:
                 # address is frozen, coin is not frozen
                 # emulate the "Look" off the address_list .py's frozen entry
@@ -187,10 +184,13 @@ class UTXOList(MyTreeWidget):
                 utxo_item.setBackground(0, self.lightBlue)
                 utxo_item.setForeground(0, self.cyanBlue)
                 toolTipMisc = _("Coin & Address are frozen")
+            elif cash_token:
+                utxo_item.setBackground(0, self.cashTokenBG)
+                toolTipMisc = _('Coin contains a CashToken')
             # save the address-level-frozen and coin-level-frozen flags to the data item for retrieval later in create_menu() below.
             utxo_item.setData(0, self.DataRoles.frozen_flags, "{}{}{}{}{}".format(
                 ("a" if a_frozen else ""), ("c" if c_frozen else ""), ("s" if slp_token else ""),
-                ("i" if is_immature else ""), "t" if cash_token else ""))
+                ("i" if is_immature else ""), ("t" if cash_token else "")))
             # store the address
             utxo_item.setData(0, self.DataRoles.address, address)
             # store the ca_info for this address -- if any
@@ -231,14 +231,23 @@ class UTXOList(MyTreeWidget):
         def create_menu_inner():
             if not selected:
                 return
-            coins = filter(lambda x: self.get_name(x) in selected, self.utxos)
+            coins = list(filter(lambda x: self.get_name(x) in selected, self.utxos))
             if not coins:
                 return
             # Spendable coins are ones that have NO frozen_flags
             spendable_coins = list(filter(lambda x: not selected.get(self.get_name(x), ''), coins))
+            # Sendable cash tokens have only "frozen" flag 't'
+            sendable_cash_tokens = list(filter(lambda x: selected.get(self.get_name(x), '') == 't', coins))
             # Unconditionally add the "Spend" option but leave it disabled if there are no spendable_coins
             spend_action = menu.addAction(_("Spend"), lambda: self.parent.spend_coins(spendable_coins))
             spend_action.setEnabled(bool(spendable_coins))
+            if sendable_cash_tokens:
+                num_utxos = len(sendable_cash_tokens)
+                menu.addAction(QIcon(":icons/tab_send.png"),
+                               ngettext("Send Token", "Send Tokens", num_utxos)
+                               + (f" ({num_utxos})" if num_utxos > 1 else "") + "...",
+                               lambda: self.parent.send_tokens(sendable_cash_tokens))
+
             if len(selected) == 1:
                 # "Copy ..."
                 item = self.itemAt(position)
@@ -304,9 +313,7 @@ class UTXOList(MyTreeWidget):
                 else:
                     menu.addAction(_("Freeze Address"), lambda: self.set_frozen_addresses_for_coins(list(selected.keys()), True))
                 if not spend_action.isEnabled():
-                    if cash_token:
-                        spend_action.setText(_("Cash Token: Spend Locked"))
-                    elif slp_token:
+                    if slp_token:
                         spend_action.setText(_("SLP Token: Spend Locked"))
                     elif 'i' in frozen_flags:  # immature coinbase
                         spend_action.setText(_("Immature Coinbase: Spend Locked"))

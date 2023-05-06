@@ -36,7 +36,7 @@ import traceback
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 from collections import OrderedDict
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -2700,11 +2700,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.wallet.set_frozen_state(addrs, freeze)
         self.address_list.update()
         self.utxo_list.update()
+        self.token_list.update()
         self.update_fee()
 
     def set_frozen_coin_state(self, utxos, freeze):
         self.wallet.set_frozen_coin_state(utxos, freeze)
         self.utxo_list.update()
+        self.token_list.update()
         self.update_fee()
 
     def create_converter_tab(self):
@@ -5384,6 +5386,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.create_new_token_dialog.activateWindow()
         self.create_new_token_dialog.raise_()
 
+    def send_tokens(self, utxos: List[Dict[str, Any]]):
+        from .token_send import SendTokenForm
+        from electroncash import token
+        assert all(isinstance(u['token_data'], token.OutputData) for u in utxos)
+        self._send_token_form = w = SendTokenForm(self, utxos)
+        w.open()
 
 
 class TxUpdateMgr(QObject, PrintError):

@@ -26,17 +26,16 @@
 from collections import defaultdict
 from enum import IntEnum
 from functools import wraps
-from typing import DefaultDict, Dict, List, Optional, Set
+from typing import Any, DefaultDict, Dict, List, Optional, Set
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QAbstractItemView, QMenu
 from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QAbstractItemView, QMenu
 
-from electroncash.i18n import _, ngettext
 from electroncash import token, util
-
+from electroncash.i18n import _, ngettext
 from .main_window import ElectrumWindow
-from .util import MyTreeWidget, rate_limited, SortableTreeWidgetItem, MONOSPACE_FONT
+from .util import ColorScheme, MONOSPACE_FONT, MyTreeWidget, rate_limited, SortableTreeWidgetItem
 
 
 class TokenList(MyTreeWidget, util.PrintError):
@@ -60,6 +59,7 @@ class TokenList(MyTreeWidget, util.PrintError):
         token_id = QtCore.Qt.UserRole + 1
         utxos = QtCore.Qt.UserRole + 2
         nft_utxo = QtCore.Qt.UserRole + 3
+        frozen_flags = QtCore.Qt.UserRole + 4  # Flags address/coin-level freeze: None or "" or "a" or "c" or "ac"
 
     filter_columns = [Col.token_id, Col.label]
     default_sort = MyTreeWidget.SortSpec(Col.token_id, QtCore.Qt.AscendingOrder)  # sort by token_id, ascending
@@ -88,6 +88,9 @@ class TokenList(MyTreeWidget, util.PrintError):
         self.smaller_font = QFont()
         self.smaller_font.setPointSize(self.smaller_font.pointSize() - 1)
         self.smaller_font.setLetterSpacing(QFont.PercentageSpacing, 90)
+        self.light_blue = QtGui.QColor('lightblue') if not ColorScheme.dark_scheme else QtGui.QColor('blue')
+        self.blue = ColorScheme.BLUE.as_color(True)
+        self.cyan_blue = QtGui.QColor('#3399ff')
 
     def clean_up(self):
         self.cleaned_up = True
@@ -232,7 +235,29 @@ class TokenList(MyTreeWidget, util.PrintError):
             stwi.setData(0, self.DataRoles.token_id, tid)
             stwi.setData(0, self.DataRoles.utxos, [utxo])
             stwi.setData(0, self.DataRoles.nft_utxo, utxo if td.has_nft() else None)
+            a_frozen = 'a' if self.wallet.is_frozen(utxo['address']) else ''
+            c_frozen = 'c' if utxo.get('is_frozen_coin') else ''
+            stwi.setData(0, self.DataRoles.frozen_flags, a_frozen + c_frozen)
+            if a_frozen and not c_frozen:
+                # address is frozen, coin is not frozen
+                # emulate the "Look" off the address_list .py's frozen entry
+                stwi.setBackground(0, self.light_blue)
+                tool_tip_misc = _("Address is frozen")
+            elif c_frozen and not a_frozen:
+                # coin is frozen, address is not frozen
+                stwi.setBackground(0, self.blue)
+                tool_tip_misc = _("Coin is frozen")
+            elif c_frozen and a_frozen:
+                # both coin and address are frozen so color-code it to indicate that.
+                stwi.setBackground(0, self.light_blue)
+                stwi.setForeground(0, self.cyan_blue)
+                tool_tip_misc = _("Coin & Address are frozen")
+            else:
+                tool_tip_misc = ""
+
             stwi.setToolTip(self.Col.label, label)  # Just in case label got elided
+            if tool_tip_misc:
+                stwi.setToolTip(self.Col.token_id, tool_tip_misc)
             parent.addChild(stwi)
             if item_key in item_keys_to_re_select:
                 items_to_re_select.append(stwi)
@@ -357,16 +382,35 @@ class TokenList(MyTreeWidget, util.PrintError):
         selected = self.selectedItems()
         num_selected = len(selected)
 
-        nested_utxos = [item.data(0, self.DataRoles.utxos) for item in selected if
-                        item.data(0, self.DataRoles.utxos)]
-        nft_utxos = [item.data(0, self.DataRoles.nft_utxo) for item in selected
-                     if item.data(0, self.DataRoles.nft_utxo)]
-        utxos = []
-        for ulist in nested_utxos:
-            for u in ulist:
-                utxos.append(u)
-        del nested_utxos
-        utxos = self.dedupe_utxos(utxos + nft_utxos)
+        nft_utxos = [item.data(0, self.DataRoles.nft_utxo)
+                     for item in selected if item.data(0, self.DataRoles.nft_utxo)]
+        non_frozen_utxos = []
+        frozen_utxos = []
+        frozen_addresses = set()
+
+        def recurse_find_non_frozen_leaves(item):
+            if item.childCount() == 0:
+                uxs = item.data(0, self.DataRoles.utxos)
+                if len(uxs) == 1:
+                    flags = item.data(0, self.DataRoles.frozen_flags)
+                    if 'a' in flags:
+                        frozen_addresses.add(uxs[0]['address'])
+                    elif 'c' in flags:
+                        frozen_utxos.append(uxs[0])
+                    elif not flags:
+                        non_frozen_utxos.append(uxs[0])
+                else:
+                    self.print_error("WARNING: Unexpected state -- childCount is 0 but we have more than 1 utxo for a"
+                                     "QTreeWidgetItem in token_list.py")
+            else:
+                for i in range(item.childCount()):
+                    recurse_find_non_frozen_leaves(item.child(i))
+
+        for item in selected:
+            recurse_find_non_frozen_leaves(item)
+
+        non_frozen_utxos = self.dedupe_utxos(non_frozen_utxos)
+        frozen_utxos = self.dedupe_utxos(frozen_utxos)
 
         def do_copy(txt):
             txt = txt.strip()
@@ -447,13 +491,20 @@ class TokenList(MyTreeWidget, util.PrintError):
                                        lambda: do_copy(copy_text))
                     if alt_copy and alt_copy_text:
                         menu.addAction(alt_copy, lambda: do_copy(alt_copy_text))
+            if frozen_utxos:
+                menu.addAction(ngettext(_("Unfreeze Coin"), _("Unfreeze Coins"), len(frozen_utxos)),
+                               lambda: self.parent.set_frozen_coin_state(frozen_utxos, False))
+            if frozen_addresses:
+                menu.addAction(ngettext(_("Unfreeze Address"), _("Unfreeze Addresses"), len(frozen_addresses)),
+                               lambda: self.parent.set_frozen_state(frozen_addresses, False))
 
             menu.addSeparator()
-            num_utxos = len(utxos)
-            menu.addAction(QtGui.QIcon(":icons/tab_send.png"),
-                           ngettext("Send Token", "Send Tokens", num_utxos)
-                           + (f" ({num_utxos})" if num_utxos > 1 else "") + "...",
-                           lambda: self.send_tokens(utxos))
+            num_utxos = len(non_frozen_utxos)
+            if num_utxos:
+                menu.addAction(QtGui.QIcon(":icons/tab_send.png"),
+                               ngettext("Send Token", "Send Tokens", num_utxos)
+                               + (f" ({num_utxos})" if num_utxos > 1 else "") + "...",
+                               lambda: self.send_tokens(non_frozen_utxos))
 
         menu.addAction(QtGui.QIcon(":icons/tab_token.svg"), _("Create Token") + "...", self.create_new_token)
 
@@ -475,12 +526,9 @@ class TokenList(MyTreeWidget, util.PrintError):
         return deduped_utxos
 
     @if_not_dead
-    def send_tokens(self, utxos: List[Dict]):
+    def send_tokens(self, utxos: List[Dict[str, Any]]):
         utxos = self.dedupe_utxos(utxos)
-        assert all(isinstance(u['token_data'], token.OutputData) for u in utxos)
-        from .token_send import SendTokenForm
-        self._send_token_form = w = SendTokenForm(self.parent, utxos)
-        w.open()
+        self.parent.send_tokens(utxos)
 
     @if_not_dead
     def update_labels(self):

@@ -29,9 +29,8 @@ from typing import DefaultDict, Dict, List, Optional, Set
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from electroncash.i18n import _
 from electroncash import address, networks, token, util, wallet
-
+from electroncash.i18n import _
 from .amountedit import AmountEdit, BTCAmountEdit
 from .fee_slider import FeeSlider
 from .main_window import ElectrumWindow
