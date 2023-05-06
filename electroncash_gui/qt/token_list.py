@@ -367,6 +367,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                 utxos.append(u)
         del nested_utxos
         utxos = self.dedupe_utxos(utxos + nft_utxos)
+        num_unique_token_ids = len(set(u['token_data'].id_hex for u in utxos))
 
         def do_copy(txt):
             txt = txt.strip()
@@ -450,10 +451,11 @@ class TokenList(MyTreeWidget, util.PrintError):
 
             menu.addSeparator()
             menu.addAction(QtGui.QIcon(":icons/tab_send.png"),
-                           ngettext("Send Token...", "Send Tokens...", num_selected),
+                           ngettext("Send Token", "Send Tokens", num_unique_token_ids)
+                           + (f" ({num_unique_token_ids})" if num_unique_token_ids > 1 else "") + "...",
                            lambda: self.send_tokens(utxos))
 
-        menu.addAction(QtGui.QIcon(":icons/tab_token.svg"), _("Create Token..."), self.create_new_token)
+        menu.addAction(QtGui.QIcon(":icons/tab_token.svg"), _("Create Token") + "...", self.create_new_token)
 
         menu.exec_(self.viewport().mapToGlobal(position))
 
@@ -461,12 +463,12 @@ class TokenList(MyTreeWidget, util.PrintError):
     def create_new_token(self):
         self.parent.show_create_new_token_dialog()
 
-    @staticmethod
-    def dedupe_utxos(utxos: List[Dict]) -> List[Dict]:
+    @classmethod
+    def dedupe_utxos(cls, utxos: List[Dict]) -> List[Dict]:
         deduped_utxos = []
         seen = set()
         for utxo in utxos:
-            key = f"{utxo['prevout_hash']}:{utxo['prevout_n']}"
+            key = cls.get_outpoint_longname(utxo)
             if key not in seen:
                 seen.add(key)
                 deduped_utxos.append(utxo)
@@ -476,8 +478,9 @@ class TokenList(MyTreeWidget, util.PrintError):
     def send_tokens(self, utxos: List[Dict]):
         utxos = self.dedupe_utxos(utxos)
         assert all(isinstance(u['token_data'], token.OutputData) for u in utxos)
-        self.parent.show_message("Send {} token UTXO(s)... unimplemented!"
-                                 .format(len(utxos)), parent=self.parent)
+        from .token_send import SendTokenForm
+        self._send_token_form = w = SendTokenForm(self.parent, utxos)
+        w.open()
 
     @if_not_dead
     def update_labels(self):
