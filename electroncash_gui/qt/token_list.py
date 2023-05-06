@@ -367,7 +367,6 @@ class TokenList(MyTreeWidget, util.PrintError):
                 utxos.append(u)
         del nested_utxos
         utxos = self.dedupe_utxos(utxos + nft_utxos)
-        num_unique_token_ids = len(set(u['token_data'].id_hex for u in utxos))
 
         def do_copy(txt):
             txt = txt.strip()
@@ -450,9 +449,10 @@ class TokenList(MyTreeWidget, util.PrintError):
                         menu.addAction(alt_copy, lambda: do_copy(alt_copy_text))
 
             menu.addSeparator()
+            num_utxos = len(utxos)
             menu.addAction(QtGui.QIcon(":icons/tab_send.png"),
-                           ngettext("Send Token", "Send Tokens", num_unique_token_ids)
-                           + (f" ({num_unique_token_ids})" if num_unique_token_ids > 1 else "") + "...",
+                           ngettext("Send Token", "Send Tokens", num_utxos)
+                           + (f" ({num_utxos})" if num_utxos > 1 else "") + "...",
                            lambda: self.send_tokens(utxos))
 
         menu.addAction(QtGui.QIcon(":icons/tab_token.svg"), _("Create Token") + "...", self.create_new_token)
