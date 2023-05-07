@@ -2350,9 +2350,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         assert isinstance(spec.feerate, int) and spec.feerate >= 0
         assert all(utxoname in spec.token_utxos for utxoname in spec.send_nfts)
 
-        self.print_error("Fungibles:", spec.send_fungible_amounts)
-        self.print_error("NFTs:", spec.send_nfts)
-
         def get_utxo(name) -> Dict[str, Any]:
             ret = spec.get_utxo(name)
             assert ret
@@ -2390,9 +2387,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 for i, td in enumerate(self):
                     if td.id_hex == tid:
                         return i, td
-
-            def sum_amounts(self, tid: str) -> int:
-                return sum(td.amount for td in self if td.id_hex == tid)
 
             def clear_all_amts(self, tid: str) -> int:
                 ret = 0
@@ -2508,7 +2502,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         if change_amount > 0:
                             add_token_change_out(clone_and_set_amt(td, amt=change_amount, clear_nft=True))
             if not have_enough():
-                # Ideally the UI prevents this situation. But we raise in case the spec is wrong
+                # Ideally the UI prevents this situation. But we raise in case the TokenSendSpec is wrong
                 raise NotEnoughFunds()
 
         # Next, consolidate fungible amounts so that they all go to the same output
@@ -2544,8 +2538,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
         token_datas = tds_out + tds_satoshis + tds_change_out
 
+        # Add change output
         i_change = len(outputs)
-        outputs.append((TYPE_ADDRESS, spec.change_addr, '!'))  # Add change output
+        outputs.append((TYPE_ADDRESS, spec.change_addr, '!'))
+        token_datas.append(None)
+        assert len(outputs) == len(token_datas)
 
         sign_schnorr = self.is_schnorr_enabled() if sign_schnorr is None else sign_schnorr
         addrs_seen: Set[Address] = {spec.change_addr, spec.payto_addr}
@@ -2589,13 +2586,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # Corner case: delete the change output if it contains dust
             t, addr, value = tx._outputs[i_change]
             if addr == spec.change_addr and value < dust_threshold(self.network):
-                self.print_error("Deleting last change output with value:", value)
-                if tx._token_datas[-1] is None:
-                    del tx._outputs[-1]
-                    del tx._token_datas[-1]
-                else:
-                    # This should never happen
-                    raise NotEnoughFunds(_("Unable to create the transaction due to an internal error"))
+                self.print_error(f"Deleting change output at position {i_change} with value: {value}")
+                del tx._outputs[i_change]
+                assert tx._token_datas[i_change] is None
+                del tx._token_datas[i_change]
+                tx.invalidate_common_sighash_cache()
 
         if bip69_sort:
             # Sort the inputs and outputs deterministically
