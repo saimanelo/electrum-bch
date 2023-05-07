@@ -74,7 +74,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         self.cleaned_up = False
         self.monospaceFont = QFont(MONOSPACE_FONT)
         self.withdrawalBrush = QBrush(QColor("#BC1E1E"))
-        self.batonIcon = QIcon(":icons/seal")
+        self.batonIcon = QIcon(":icons/baton.png")
         self.setTextElideMode(QtCore.Qt.ElideMiddle)
         self.header().setSectionResizeMode(self.Col.category_id, QHeaderView.Interactive)
         self.header().resizeSection(self.Col.category_id, 120)

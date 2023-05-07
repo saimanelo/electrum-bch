@@ -1,5 +1,6 @@
 <RCC>
   <qresource prefix="/" >
+    <file>icons/baton.png</file>
     <file>icons/cashacct-logo.png</file>
     <file>icons/cashacct-button-darkmode.png</file>
     <file>icons/electron-cash.svg</file>
