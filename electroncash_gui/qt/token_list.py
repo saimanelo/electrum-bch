@@ -214,7 +214,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                                (self.Col.num_utxos, QtCore.Qt.AlignCenter)):
                 item.setTextAlignment(col, align)
 
-        def add_utxo_item(parent, utxo, name, label, item_key):
+        def add_utxo_item(parent: Optional[SortableTreeWidgetItem], utxo, name, label, item_key):
             td = utxo['token_data']
             tid = td.id_hex
             amt = str(td.amount)
@@ -258,9 +258,11 @@ class TokenList(MyTreeWidget, util.PrintError):
             stwi.setToolTip(self.Col.label, label)  # Just in case label got elided
             if tool_tip_misc:
                 stwi.setToolTip(self.Col.token_id, tool_tip_misc)
-            parent.addChild(stwi)
+            if parent is not None:
+                parent.addChild(stwi)
             if item_key in item_keys_to_re_select:
                 items_to_re_select.append(stwi)
+            return stwi
 
         for token_id, dd in tokens_grouped.items():
             utxo_list = tokens[token_id]
@@ -273,7 +275,8 @@ class TokenList(MyTreeWidget, util.PrintError):
             flags = {get_nft_flag(u['token_data']) for u in utxo_list}
             flags.discard(None)  # Non-nft's add "None" to this set. discard
             nft_flags = ', '.join(sorted(flags))
-            num_utxos = str(sum(len(ul) for ul in dd.values()))
+            n_utxos = sum(len(ul) for ul in dd.values())
+            num_utxos = str(n_utxos)
             bch_amt = self.parent.format_amount(sum(x['value'] for x in utxo_list), is_diff=False, whitespaces=True)
 
             item = SortableTreeWidgetItem([token_id, label, quantity, nfts, nft_flags, num_utxos, bch_amt, ""])
@@ -294,24 +297,42 @@ class TokenList(MyTreeWidget, util.PrintError):
             if len(ft_only_utxo_list) == 1:
                 utxo = ft_only_utxo_list[0]
                 item_key = key_prefix + "_" + self.get_outpoint_longname(utxo)
-                add_utxo_item(item, utxo, name,
-                              self.wallet.get_label(item_key) or label,
-                              item_key)
+                put_on_top_level = num_nfts == 0 and n_utxos == 1 and not dd
+                if put_on_top_level:
+                    # Special case -- have 1 fungible only and no NFTs for this token-id, just push this to top level
+                    parent_item = None
+                else:
+                    parent_item = item
+                sub_item = add_utxo_item(parent_item, utxo, name,
+                                         self.wallet.get_label(item_key) or label,
+                                         item_key)
+                if put_on_top_level:
+                    # Overwrite the "item" with this sub-item in the special case
+                    sub_item.setText(self.Col.token_id, item.text(self.Col.token_id))
+                    item = sub_item
+                    set_fonts(item)
             elif ft_only_utxo_list:
                 item_key = key_prefix + "_ft_only"
-                ft_parent_label = self.wallet.get_label(item_key) or label
-                ft_amt = str(sum(u['token_data'].amount for u in ft_only_utxo_list))
-                bch_amt = self.parent.format_amount(sum(x['value'] for x in ft_only_utxo_list), is_diff=False,
-                                                    whitespaces=True)
-                ft_parent = SortableTreeWidgetItem([name, ft_parent_label, ft_amt, "0", "",
-                                                    str(len(ft_only_utxo_list)), bch_amt, ""])
-                set_fonts(ft_parent)
-                ft_parent.setData(0, self.DataRoles.item_key, item_key)
-                ft_parent.setData(0, self.DataRoles.token_id, token_id)
-                ft_parent.setData(0, self.DataRoles.utxos, ft_only_utxo_list)
-                ft_parent.setData(0, self.DataRoles.nft_utxo, None)
-                if item_key in item_keys_to_re_select:
-                    items_to_re_select.append(ft_parent)
+                create_subgroup = num_nfts > 0 or dd
+                if create_subgroup:
+                    # Create a subgroup called "Fungible-Only" because we have NFTs
+                    ft_parent_label = self.wallet.get_label(item_key) or label
+                    ft_amt = str(sum(u['token_data'].amount for u in ft_only_utxo_list))
+                    bch_amt = self.parent.format_amount(sum(x['value'] for x in ft_only_utxo_list), is_diff=False,
+                                                        whitespaces=True)
+                    ft_parent = SortableTreeWidgetItem([name, ft_parent_label, ft_amt, "0", "",
+                                                        str(len(ft_only_utxo_list)), bch_amt, ""])
+                    set_fonts(ft_parent)
+                    ft_parent.setData(0, self.DataRoles.item_key, item_key)
+                    ft_parent.setData(0, self.DataRoles.token_id, token_id)
+                    ft_parent.setData(0, self.DataRoles.utxos, ft_only_utxo_list)
+                    ft_parent.setData(0, self.DataRoles.nft_utxo, None)
+                    if item_key in item_keys_to_re_select:
+                        items_to_re_select.append(ft_parent)
+                else:
+                    # Don't create a subgroup: put all fungible UTXOs up right under the item level
+                    ft_parent = item
+                    ft_parent_label = label
 
                 for utxo in ft_only_utxo_list:
                     item_key2 = key_prefix + "_" + self.get_outpoint_longname(utxo)
@@ -319,7 +340,8 @@ class TokenList(MyTreeWidget, util.PrintError):
                                   self.wallet.get_label(item_key2) or ft_parent_label,
                                   item_key2)
 
-                item.addChild(ft_parent)
+                if ft_parent is not item:
+                    item.addChild(ft_parent)
 
             # Do NFTs next; iterate sorted by commitment, asc
             for commitment_hex, utxo_list in sorted(dd.items(), key=lambda tup: tup[0]):
