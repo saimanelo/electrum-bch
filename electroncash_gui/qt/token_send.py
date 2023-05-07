@@ -24,6 +24,7 @@
 # SOFTWARE.
 
 import copy
+import math
 from collections import defaultdict
 from enum import IntEnum
 from typing import DefaultDict, Dict, List, Optional, Set
@@ -32,11 +33,11 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 from electroncash import address, networks, token, util, wallet
 from electroncash.i18n import _
-from .amountedit import AmountEdit, BTCAmountEdit
+from .amountedit import BTCAmountEdit
 from .fee_slider import FeeSlider
 from .main_window import ElectrumWindow
 from .qrtextedit import ScanQRTextEdit
-from .util import EnterButton, HelpLabel, OnDestroyedMixin, PrintError, WindowModalDialog
+from .util import ColorScheme, HelpLabel, OnDestroyedMixin, PrintError, WindowModalDialog
 
 
 class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
@@ -68,6 +69,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         super().__init__(parent=parent, title=title)
         PrintError.__init__(self)
         OnDestroyedMixin.__init__(self)
+        self.fully_constructed = False
         util.finalization_print_error(self)
         self.setWindowIcon(QtGui.QIcon(":icons/tab_send.png"))
         self.parent = parent
@@ -146,7 +148,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
 
         vbox_payto.addWidget(te)
         te.setPlaceholderText(networks.net.CASHADDR_PREFIX + ":" + "...")
-        te.textChanged.connect(self.enable_disable_preview_tx_button)
+        te.textChanged.connect(self.on_ui_state_changed)
 
         vbox.addWidget(gb)
         self._adjust_te_payto_size()
@@ -171,7 +173,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
 
         vbox.addLayout(hbox)
 
-        self.enable_disable_preview_tx_button()
+        self.fully_constructed = True
+        self.on_ui_state_changed()
 
         self.resize(640, 480)
 
@@ -201,27 +204,25 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         grid.addWidget(l, row, col)
         col += 1
         self.amount_e = BTCAmountEdit(self.parent.get_decimal_point)
-        self.amount_e.setFixedWidth(140)
+        self.amount_e.setFixedWidth(150)
         grid.addWidget(self.amount_e, row, col)
         l.setBuddy(self.amount_e)
         col += 1
 
-        self.fiat_send_e = AmountEdit(self.parent.fx.get_currency if self.parent.fx else '')
-        if not self.parent.fx or not self.parent.fx.is_enabled():
-            self.fiat_send_e.setVisible(False)
-        grid.addWidget(self.fiat_send_e, row, col)
-        grid.setAlignment(self.fiat_send_e, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
-        self.amount_e.frozen.connect(lambda: self.fiat_send_e.setFrozen(self.amount_e.isReadOnly()))
-        grid.setAlignment(self.amount_e, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        def spend_max(checked):
+            if checked:
+                self.on_ui_state_changed()
+        self.cb_max = QtWidgets.QCheckBox(_("&Max"))
+        grid.addWidget(self.cb_max, row, col)
+        self.cb_max.clicked.connect(spend_max)
         col += 1
 
-        def spend_max():
-            self.max_button.setChecked(True)
-            # self.do_update_fee()
-        self.max_button = EnterButton(_("&Max"), spend_max)
-        self.max_button.setCheckable(True)
-        grid.addWidget(self.max_button, row, col)
-        col += 1
+        def on_text_edited():
+            if self.cb_max.isChecked():
+                self.cb_max.setChecked(False)  # will call on_ui_state_changed
+            else:
+                self.on_ui_state_changed()
+        self.amount_e.textEdited.connect(on_text_edited)
 
         spacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         grid.addItem(spacer, row, col)
@@ -240,6 +241,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
 
         def fee_cb(dyn, pos, fee_rate):
             self.fee_rate = fee_rate
+            self.on_ui_state_changed()
 
         self.fee_slider = FeeSlider(self.parent, self.parent.config, fee_cb)
         self.fee_slider.setFixedWidth(140)
@@ -270,7 +272,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             self.update_tokens_to_send_nft_count(tid)
             # Note: disabled for now since I found this distracting to see in the UI
             # self.update_tokens_to_send_nft_flags(tid)
-            self.enable_disable_preview_tx_button()
+            self.on_ui_state_changed()
 
     def update_tokens_to_send_nft_flags(self, tid: str):
         """Intended to be a callback for a specific token id -- updates the NFTs x/y column"""
@@ -337,7 +339,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 except ValueError:
                     pass
                 le.setText(str(self.token_fungible_to_spend[tid]))
-                self.enable_disable_preview_tx_button()
+                self.on_ui_state_changed()
             le.editingFinished.connect(on_edit)
             hbox.addWidget(le)
 
@@ -438,23 +440,12 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         wn = ("/" + w.diagnostic_name()) if w else ""
         return f'{dn}{wn}'
 
-    @classmethod
-    def get_outpoint_shortname(cls, utxo) -> str:
-        return cls.elide(utxo['prevout_hash'], 12) + ':' + str(utxo['prevout_n'])
-
     @staticmethod
     def get_outpoint_longname(utxo) -> str:
         return f"{utxo['prevout_hash']}:{utxo['prevout_n']}"
 
     def get_utxo(self, name: str) -> Optional[dict]:
         return self.utxos_by_name.get(name)
-
-    @staticmethod
-    def elide(s: str, elide_threshold=32) -> str:
-        if len(s) > elide_threshold:
-            n = max(elide_threshold // 2, 0)
-            return s[:n] + '…' + s[-n:]
-        return s
 
     def clear_form(self):
         """Bring this form back to the initial state, clear text fields, etc"""
@@ -465,13 +456,12 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             self.token_nfts_selected[tid].clear()
         self.rebuild_nfts_to_send_treewidget()
         self.rebuild_tokens_to_send_treewidget()
-        self.max_button.setChecked(False)
-        self.fee_slider.setValue(self.fee_slider.minimum())
+        self.cb_max.setChecked(False)
+        self.fee_slider.setValue(0)
         self.amount_e.clear()
-        self.fiat_send_e.clear()
         self.te_payto.clear()
         self.tw_nft.itemChanged.connect(self.on_nft_item_changed)
-        self.enable_disable_preview_tx_button()
+        self.on_ui_state_changed()
 
     def check_sanity(self) -> bool:
         sane = True
@@ -485,15 +475,59 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             sane = False
         return sane
 
-    def enable_disable_preview_tx_button(self):
-        self.but_preview_tx.setEnabled(self.check_sanity())
+    def _estimate_max_amount(self):
+        spec = self.make_token_send_spec(dummy=True)
+        try:
+            tx = self.wallet.make_token_send_tx(self.parent.config, spec)
+        except Exception as e:
+            self.print_error("_estimate_max_amount:", repr(e))
+            return None
+        dust_regular = wallet.dust_threshold(self.wallet.network)
+        dust_token = token.heuristic_dust_limit_for_token_bearing_output()
+        # Consider all non-token non-dust utxos as potentially contributing to max_amount
+        max_in = sum(x['value'] for x in spec.non_token_utxos.values() if x['value'] >= dust_regular)
+        # Quirk: We don't choose token utxos for contributing to BCH amount unless the token was selected for
+        # sending by the user in the UI. So only consider BCH amounts > 800 sats for tokens chosen for this tx
+        # by the user's NFT/FT selections in the UI.
+        max_in += sum(x['value'] - dust_token for x in tx.inputs() if x['token_data'] and x['value'] > dust_token)
 
-    def make_token_send_spec(self) -> wallet.TokenSendSpec:
+        val_out_minus_change = 0
+        for (_, addr, val), td in tx.outputs(tokens=True):
+            if td or addr != spec.change_addr:
+                val_out_minus_change += val
+        bytes = tx.serialize_bytes(estimate_size=True)
+        max_amount = max(0, max_in - val_out_minus_change - int(math.ceil(len(bytes)/1000 * spec.feerate)))
+        return max_amount
+
+    def on_ui_state_changed(self):
+        if not self.fully_constructed:
+            return
+        sane = self.check_sanity()
+        self.but_preview_tx.setEnabled(sane)
+        amt_color = ColorScheme.DEFAULT
+        if self.cb_max.isChecked():
+            amt = self._estimate_max_amount()
+            self.amount_e.setAmount(amt or 0)
+        else:
+            amt = self.amount_e.get_amount()
+            if amt is not None:
+                max_amt = self._estimate_max_amount()
+                if max_amt is not None and amt > max_amt:
+                    amt_color = ColorScheme.RED
+        self.amount_e.setStyleSheet(amt_color.as_stylesheet())
+
+    def make_token_send_spec(self, dummy=False) -> wallet.TokenSendSpec:
         spec = wallet.TokenSendSpec()
-        spec.payto_addr = address.Address.from_string(self.te_payto.text().strip())
+        if dummy:
+            spec.payto_addr = self.wallet.dummy_address()
+        else:
+            spec.payto_addr = address.Address.from_string(self.te_payto.text().strip())
         spec.change_addr = self.wallet.get_unused_address(for_change=True, frozen_ok=False)
         spec.feerate = self.fee_rate
-        spec.send_satoshis = self.amount_e.get_amount() or 0
+        if dummy:
+            spec.send_satoshis = wallet.dust_threshold(self.wallet.network)
+        else:
+            spec.send_satoshis = self.amount_e.get_amount() or 0
         spec.token_utxos = copy.deepcopy(self.utxos_by_name)
         spec.non_token_utxos = {self.get_outpoint_longname(x): x
                                 for x in self.wallet.get_spendable_coins(None, self.parent.config)}
@@ -501,6 +535,18 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         spec.send_nfts = set()
         for tid, utxo_name_set in self.token_nfts_selected.items():
             spec.send_nfts |= utxo_name_set
+
+        # 'dummy' mode only: Try and fill in at least 1 nft or fungible amount
+        if dummy and sum(spec.send_fungible_amounts.values()) <= 0 and not spec.send_nfts:
+            for name, utxo in spec.token_utxos.items():
+                td = utxo['token_data']
+                if td.has_nft():
+                    spec.send_nfts.add(name)
+                    break
+                elif td.amount:
+                    spec.send_fungible_amounts[td.id_hex] = td.amount
+                    break
+
         return spec
 
     def on_preview_tx(self):
