@@ -41,10 +41,11 @@ import queue
 import random
 import threading
 import time
-from collections import defaultdict, namedtuple
+from collections import defaultdict, namedtuple, OrderedDict
 from enum import Enum, auto
 from functools import partial
 from typing import Any, DefaultDict, Dict, ItemsView, Iterable, List, Optional, Set, Tuple, Union, ValuesView
+from typing import OrderedDict as OrderedDictType
 
 from .i18n import ngettext
 from .util import (NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time,
@@ -271,7 +272,13 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # checks are O(logN) rather than O(N). This creates/resets that cache.
         self.invalidate_address_set_cache()
 
-        self.gap_limit_for_change = 20 # constant
+        # This cache is used by self.try_to_get_tx(), and saves us from having to
+        # do repeated network lookups in the case where we are looking up the
+        # same txn multiple times from the network, and also allows us to avoid
+        # returning in-wallet txns to callers of get_input_tx() and get_wallet_tx().
+        self._tx_cache: OrderedDictType[str, Transaction] = OrderedDict()
+
+        self.gap_limit_for_change = 20  # constant
         # saved fields
         self.use_change            = storage.get('use_change', True)
         self.multiple_change       = storage.get('multiple_change', False)
@@ -2901,18 +2908,62 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 return True
         return False
 
-    def get_input_tx(self, tx_hash):
-        # First look up an input transaction in the wallet where it
+    def _get_tx_from_cache(self, tx_hash: str) -> Optional[Transaction]:
+        ret = self._tx_cache.get(tx_hash)
+        if ret is not None:
+            # cache hit, rotate to end to indicate it was recently used and thus should not be evicted
+            # from cache soon (enforces LRU cache eviction strategy)
+            self._tx_cache.move_to_end(tx_hash, last=True)
+        return ret
+
+    _tx_cache_max = 250
+
+    def _put_tx_in_cache(self, tx_hash: str, tx: Transaction):
+        if not tx or not tx_hash:
+            return
+        if tx_hash in self._tx_cache:
+            self._tx_cache.move_to_end(tx_hash, last=True)
+        else:
+            self._tx_cache[tx_hash] = tx
+        # Limit cache size, evict oldest entries
+        while len(self._tx_cache) > self._tx_cache_max:
+            self._tx_cache.popitem(last=False)
+
+    def try_to_get_tx(self, tx_hash, *, allow_network_lookup=True) -> Optional[Transaction]:
+        # Try and find it in the wallet cache
+        tx = self._get_tx_from_cache(tx_hash)
+        if tx:
+            return tx
+        # Next look up an input transaction in the wallet where it
         # will likely be.  If co-signing a transaction it may not have
         # all the input txs, in which case we ask the network.
         tx = self.transactions.get(tx_hash)
-        if not tx and self.network:
-            request = ('blockchain.transaction.get', [tx_hash])
-            try:
-                tx = Transaction(self.network.synchronous_get(request))
-            except util.ServerError:
-                return None
+        if tx:
+            # Take a deep-copy of the txn if it came from the wallet to avoid in-wallet txs from being
+            # stored in deserialized form, to save memory. In-wallet txs are stored serialized, but
+            # they get deserialized if the caller calls tx.outputs(), tx.inputs(), etc, and this
+            # may waste memory... so give the caller a copy of this tx instead.
+            tx = Transaction(tx.raw) if tx.raw else copy.deepcopy(tx)
+        else:
+            # Next, try to get it from the Transaction "fetched input" cache (who knows, it might be there!)
+            tx = Transaction.tx_cache_get(tx_hash)
+            if not tx and self.network and allow_network_lookup:
+                # Not cached. Resort to network lookup.
+                request = ('blockchain.transaction.get', [tx_hash])
+                try:
+                    tx = Transaction(self.network.synchronous_get(request))
+                except util.ServerError:
+                    return None
+        if tx:
+            # It's ok to cache (this tx may be: a copy of an in-wallet tx or a network-derived tx)
+            self._put_tx_in_cache(tx_hash, tx)
         return tx
+
+    def get_wallet_tx(self, tx_hash):
+        return self.try_to_get_tx(tx_hash, allow_network_lookup=False)
+
+    def get_input_tx(self, tx_hash):
+        return self.try_to_get_tx(tx_hash, allow_network_lookup=True)
 
     def add_input_values_to_tx(self, tx):
         """ add input values to the tx, for signing"""

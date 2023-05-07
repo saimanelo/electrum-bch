@@ -98,7 +98,7 @@ class TokenHistoryList(MyTreeWidget):
             status, status_str = self.wallet.get_tx_status(tx_hash, height, conf, timestamp)
             icon = self.parent.history_list.get_icon_for_status(status)
 
-            tokens_delta = self.wallet.get_wallet_tokens_delta(self.wallet.transactions.get(tx_hash))
+            tokens_delta = self.wallet.get_wallet_tokens_delta(self.wallet.get_wallet_tx(tx_hash))
             for category_id, category_delta in tokens_delta.items():
                 fungible_amount = category_delta["fungibles"]
                 nft_amount = len(category_delta["nfts_in"]) - len(category_delta["nfts_out"])
