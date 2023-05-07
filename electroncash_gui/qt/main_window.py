@@ -1089,6 +1089,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.address_list.update_labels()
         self.utxo_list.update_labels()
         self.token_list.update_labels()
+        self.token_history_list.update_labels()
         self.update_completions()
         self.labels_updated_signal.emit()
         self.labels_need_update.clear() # clear flag

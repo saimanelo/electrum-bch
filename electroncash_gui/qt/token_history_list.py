@@ -32,12 +32,12 @@ from PyQt5.QtWidgets import QMenu, QHeaderView
 
 from electroncash import token
 from electroncash.i18n import _
-from electroncash.util import profiler
+from electroncash.util import profiler, PrintError
 
 from .util import MONOSPACE_FONT, MyTreeWidget, rate_limited, SortableTreeWidgetItem
 
 
-class TokenHistoryList(MyTreeWidget):
+class TokenHistoryList(MyTreeWidget, PrintError):
 
     class Col(IntEnum):
         """Column numbers. This is to make code in on_update easier to read.
@@ -52,16 +52,18 @@ class TokenHistoryList(MyTreeWidget):
 
     class DataRoles(IntEnum):
         """Data roles. Again, to make code in on_update easier to read."""
+        tx_hash = QtCore.Qt.UserRole  # This must be this value so that superclass on_edited() picks up the label change
         status = QtCore.Qt.UserRole + 1
-        tx_hash = QtCore.Qt.UserRole + 2
-        category = QtCore.Qt.UserRole + 3
-        commitment = QtCore.Qt.UserRole + 4
-        capability = QtCore.Qt.UserRole + 5
+        category = QtCore.Qt.UserRole + 2
+        commitment = QtCore.Qt.UserRole + 3
+        capability = QtCore.Qt.UserRole + 4
+        editable_label = QtCore.Qt.UserRole + 5
 
     statusIcons = {}
 
     def __init__(self, parent=None):
         MyTreeWidget.__init__(self, parent, self.create_menu, [], self.Col.description, deferred_updates=True)
+        PrintError.__init__(self)
 
         headers = ['', '', _('Date'), _('Description'), _('Category ID'), _('Fungible Amount'), _('NFT Amount')]
         self.update_headers(headers)
@@ -98,7 +100,11 @@ class TokenHistoryList(MyTreeWidget):
             status, status_str = self.wallet.get_tx_status(tx_hash, height, conf, timestamp)
             icon = self.parent.history_list.get_icon_for_status(status)
 
-            tokens_delta = self.wallet.get_wallet_tokens_delta(self.wallet.get_wallet_tx(tx_hash))
+            tx = self.wallet.get_wallet_tx(tx_hash)
+            # This should never happen
+            assert tx, f"Warning: Cannot find tx {tx_hash} in the wallet even though it is in history."
+
+            tokens_delta = self.wallet.get_wallet_tokens_delta(tx)
             for category_id, category_delta in tokens_delta.items():
                 fungible_amount = category_delta["fungibles"]
                 nft_amount = len(category_delta["nfts_in"]) - len(category_delta["nfts_out"])
@@ -107,6 +113,7 @@ class TokenHistoryList(MyTreeWidget):
                 item.setData(0, self.DataRoles.status, (status, conf))
                 item.setData(0, self.DataRoles.tx_hash, tx_hash)
                 item.setData(0, self.DataRoles.category, category_id)
+                item.setData(0, self.DataRoles.editable_label, True)
                 item.setToolTip(self.Col.category_id, category_id)
                 if icon:
                     item.setIcon(0, icon)
@@ -152,11 +159,17 @@ class TokenHistoryList(MyTreeWidget):
 
                 self.addChild(item)
 
+    def on_permit_edit(self, item: SortableTreeWidgetItem, column):
+        return bool(item.data(0, self.DataRoles.editable_label))
+
     def on_doubleclick(self, item, column):
-        tx_id = item.data(0, self.DataRoles.tx_hash)
-        tx = self.wallet.transactions.get(tx_id)
-        if tx:
-            self.parent.show_transaction(tx)
+        if self.permit_edit(item, column):
+            super(TokenHistoryList, self).on_doubleclick(item, column)
+        else:
+            tx_id = item.data(0, self.DataRoles.tx_hash)
+            tx = self.wallet.transactions.get(tx_id)
+            if tx:
+                self.parent.show_transaction(tx, self.wallet.get_label(tx_id))
 
     def create_menu(self, position):
         menu = QMenu()
@@ -195,3 +208,17 @@ class TokenHistoryList(MyTreeWidget):
         menu.addSeparator()
         menu.addAction(QIcon(":icons/tab_token.svg"), _("Create Token..."), self.parent.show_create_new_token_dialog)
         menu.exec_(self.viewport().mapToGlobal(position))
+
+    def update_labels(self):
+        if self.should_defer_update_incr():
+            return
+        root = self.invisibleRootItem()
+        child_count = root.childCount()
+        for i in range(child_count):
+            item = root.child(i)
+            if not item.data(0, self.DataRoles.editable_label):
+                # This item declares its "Description" is not a label, skip
+                continue
+            txid = item.data(0, self.DataRoles.tx_hash)
+            h_label = self.wallet.get_label(txid)
+            item.setText(self.Col.description, h_label)
