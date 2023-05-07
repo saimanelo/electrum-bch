@@ -35,6 +35,7 @@ import errno
 import json
 import hashlib
 import itertools
+import math
 import os
 import queue
 import random
@@ -43,7 +44,7 @@ import time
 from collections import defaultdict, namedtuple
 from enum import Enum, auto
 from functools import partial
-from typing import ItemsView, List, Optional, Set, Tuple, Union, ValuesView
+from typing import Any, DefaultDict, Dict, ItemsView, Iterable, List, Optional, Set, Tuple, Union, ValuesView
 
 from .i18n import ngettext
 from .util import (NotEnoughFunds, ExcessiveFee, PrintError, UserCancelled, profiler, format_satoshis, format_time,
@@ -183,6 +184,46 @@ def sweep(privkeys, network, config, recipient, fee=None, imax=100, sign_schnorr
     tx.BIP69_sort()
     tx.sign(keypairs)
     return tx
+
+
+class TokenSendSpec:
+    """Class used by Abstract_Wallet.make_token_send_tx to communicate to it what is required."""
+    __slots__ = ('payto_addr', 'change_addr', 'feerate', 'non_token_utxos', 'token_utxos',
+                 'send_satoshis', 'send_fungible_amounts', 'send_nfts')
+    # The payee
+    payto_addr: Address
+    # Where to send all change back to wallet (both tokens and BCH)
+    change_addr: Address
+
+    # In sats/KB
+    feerate: int
+
+    # Where we are spending from for BCH to cover the txn and fees, and also the satoshis we are sending along
+    # with the tokens. Can be populated from data coming in from make_token_utxos_dict(Abstract_Wallet.get_utxos())
+    # All utxos here must *not* have 'token_data'.
+    non_token_utxos: Dict[str, Dict[str, Any]]  # Dict of: utxo-name ("prevout_hash:prevout_n") -> utxo dict
+
+    # We spend send_fundible_amount and send_nfts from this set of utxos. All utxos here must have 'token_data'.
+    token_utxos: Dict[str, Dict[str, Any]]  # utxo-name ("prevout_hash:n") -> utxo
+
+    send_satoshis: int  # BCH to attach
+    send_fungible_amounts: Dict[str, int]  # token-id (hex) -> fungible amount to send
+    # Set of utxo-names (which must exist in token_utxos above) that contain NFTs which are marked for sending
+    send_nfts: Set[str]
+
+    def get_utxo(self, utxoname: str) -> Optional[Dict[str, Any]]:
+        return self.token_utxos.get(utxoname) or self.non_token_utxos.get(utxoname)
+
+    @staticmethod
+    def utxo_name(utxo: Dict[str, Any]) -> str:
+        return f"{utxo['prevout_hash']}:{utxo['prevout_n']}"
+
+    @classmethod
+    def make_token_utxos_dict(cls, utxo_list: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        ret: Dict[str, Dict[str, Any]] = dict()
+        for utxo in utxo_list:
+            ret[cls.utxo_name(utxo)] = utxo
+        return ret
 
 
 class Abstract_Wallet(PrintError, SPVDelegate):
@@ -1271,7 +1312,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if isInvoice:
             confirmed_only = True
         return self.get_utxos(domain, exclude_frozen=True, mature=True, confirmed_only=confirmed_only, exclude_slp=True,
-                              # For now, we will prohibit spending cash tokens TODO: Implement CashToken spending!
+                              # For now, we will prohibit spending cash tokens implicitly (must be explicit)
                               exclude_tokens=True)
 
     def get_utxos(self, domain=None, exclude_frozen=False, mature=False, confirmed_only=False,
@@ -2299,6 +2340,267 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         coins = self.get_spendable_coins(domain, config)
         tx = self.make_unsigned_transaction(coins, outputs, config, fee, change_addr, sign_schnorr=sign_schnorr)
         self.sign_transaction(tx, password)
+        return tx
+
+    def make_token_send_tx(self, config, spec: TokenSendSpec, *, sign_schnorr=None,
+                           bip69_sort=True) -> Transaction:
+        assert all(x['token_data'] for x in spec.token_utxos.values())
+        assert not any(x['token_data'] for x in spec.non_token_utxos.values())
+        assert isinstance(spec.payto_addr, Address) and isinstance(spec.change_addr, Address)
+        assert isinstance(spec.feerate, int) and spec.feerate >= 0
+        assert all(utxoname in spec.token_utxos for utxoname in spec.send_nfts)
+
+        self.print_error("Fungibles:", spec.send_fungible_amounts)
+        self.print_error("NFTs:", spec.send_nfts)
+
+        def get_utxo(name) -> Dict[str, Any]:
+            ret = spec.get_utxo(name)
+            assert ret
+            return ret
+
+        def clone_and_set_amt(td: token.OutputData, amt: int, clear_nft=False) -> token.OutputData:
+            """Returns a clone of td with amount force-set to amt"""
+            assert amt >= 0
+            bf = td.bitfield
+            if amt > 0:
+                bf |= token.Structure.HasAmount
+            else:  # amt == 0
+                bf &= (0xff & ~token.Structure.HasAmount)
+            commitment = td.commitment
+            if clear_nft and td.has_nft():
+                commitment = b''
+                bf &= (0xff & ~(token.Structure.HasNFT | token.Structure.HasCommitmentLength))
+                bf &= (0xff & ~(token.Capability.Minting | token.Capability.Mutable))  # clear capability nybble
+            ret = token.OutputData(id=td.id, amount=amt, commitment=commitment, bitfield=bf)
+            return ret
+
+        ft_in: DefaultDict[str, int] = defaultdict(int)  # token-id -> amount
+
+        class TDList(list):
+            """This always is a list of token.OutputData"""
+
+            seen_tids = set()
+
+            def find_first_fungible_only(self, tid: str) -> Optional[Tuple[int, token.OutputData]]:
+                for i, td in enumerate(self):
+                    if td.id_hex == tid and not td.has_nft():
+                        return i, td
+
+            def find_first_any(self, tid: str) -> Optional[Tuple[int, token.OutputData]]:
+                for i, td in enumerate(self):
+                    if td.id_hex == tid:
+                        return i, td
+
+            def sum_amounts(self, tid: str) -> int:
+                return sum(td.amount for td in self if td.id_hex == tid)
+
+            def clear_all_amts(self, tid: str) -> int:
+                ret = 0
+                for idx, td in enumerate(self.copy()):
+                    if td.id_hex == tid:
+                        ret += td.amount
+                        self[idx] = clone_and_set_amt(td, amt=0)
+                return ret
+
+            def copy(self):
+                ret = TDList(self)
+                ret.seen_tids = self.seen_tids.copy()
+                return ret
+
+            def append(self, item):
+                if isinstance(item, token.OutputData):
+                    self.seen_tids.add(item.id_hex)
+                return super().append(item)
+
+        tds_out = TDList()  # token outputs to payee
+        tds_change_out = TDList()  # for NFT or FT "change" (to wallet)
+
+        inputs: List[Dict[str, Any]] = []  # list of utxos as inputs
+        input_names: Set[str] = set()  # set of utxonames in inputs above
+
+        def add_token_change_out(td_change: token.OutputData):
+            id_hex = td_change.id_hex
+            assert td_change.has_nft() or td_change.amount > 0
+
+            if td_change.has_nft():
+                tup = tds_change_out.find_first_fungible_only(id_hex)
+            else:
+                tup = tds_change_out.find_first_any(id_hex)
+            if tup:
+                # Since we have an existing change output for this token-id, we can try to merge
+                idx, td_existing = tup
+                merged_amt = td_existing.amount + td_change.amount
+                if not td_change.has_nft():
+                    # Take this FT-only amount and merge with any existing
+                    tds_change_out[idx] = clone_and_set_amt(td_existing, amt=merged_amt)
+                    return
+                elif td_change.has_nft() and not td_existing.has_nft():
+                    # Take this NFT and merge with the fungible-only that already exists
+                    tds_change_out[idx] = clone_and_set_amt(td_change, amt=merged_amt)
+                    return
+            tds_change_out.append(td_change)
+
+        def add_token_input(utxo_name: str, utxo: dict, td_out: Optional[token.OutputData]):
+            assert utxo_name not in input_names
+            td_in = utxo['token_data']
+            id_hex = td_in.id_hex
+            assert td_out is None or id_hex == td_out.id_hex
+            if td_out is not None:
+                tds_out.append(td_out)
+            inputs.append(copy.deepcopy(utxo))  # add to inputs now
+            input_names.add(utxo_name)  # remember that it was consumed
+            ft_in[id_hex] += td_in.amount  # tally the ft amounts we are consuming
+
+        def have_ft(tid): return ft_in.get(tid, 0)
+
+        # First, figure out which inputs must exist because they are specified as nfts
+        for utxo_name in spec.send_nfts:
+            utxo = get_utxo(utxo_name)
+            td: token.OutputData = utxo['token_data']
+            assert td.has_nft()
+            ft_needed = max(0, spec.send_fungible_amounts.get(td.id_hex, 0) - have_ft(td.id_hex))
+            target_amt = min(td.amount, ft_needed)
+            # add to tds_out; strip excess fungibles out that aren't requested
+            td_out = clone_and_set_amt(td, amt=target_amt)
+            assert td_out.amount == target_amt
+            add_token_input(utxo_name, utxo, td_out)
+            change_amt = td.amount - target_amt
+            if change_amt > 0:
+                td_ft_change = clone_and_set_amt(td, amt=change_amt, clear_nft=True)
+                add_token_change_out(td_ft_change)
+
+        # Find fungibles to spend, prefer pure ft-only, but fall-back to nft
+        for tid, amt in spec.send_fungible_amounts.items():
+            def have(): return have_ft(tid)
+            def have_enough(): return amt <= 0 or have() >= amt
+            if have_enough():
+                continue
+            for allow_nft in range(2):  # loop twice, first time seeking-out fungibles-only
+                if have_enough():
+                    break
+                for utxo_name, utxo in spec.token_utxos.items():
+                    if have_enough():
+                        break
+                    if utxo_name in input_names:
+                        continue
+                    td = utxo['token_data']
+                    # is this token and has fungibles and prefer ft-only tokens first time thru
+                    if td.id_hex == tid and td.has_amount() and (allow_nft or not td.has_nft()):
+                        tup = tds_out.find_first_fungible_only(tid) or tds_out.find_first_any(tid)
+                        additional_amount = min(amt - have(), td.amount)
+                        change_amount = td.amount - additional_amount
+                        if tup is None:  # no existing token output for this tid, create a pure-ft output
+                            td_ft_only = clone_and_set_amt(td, amt=additional_amount, clear_nft=True)
+                            add_token_input(utxo_name, utxo, td_ft_only)
+                        else:
+                            add_token_input(utxo_name, utxo, None)   # consume input, no new outputs
+                            # have existing output for this token-id, update fungible amount
+                            idx, td_existing = tup
+                            td_updated = clone_and_set_amt(td_existing,
+                                                           amt=td_existing.amount + additional_amount)
+                            tds_out[idx] = td_updated
+                        # if input has nft (output doesn't), then preserve the NFT: tally this as a
+                        # "change" output
+                        if td.has_nft():
+                            # clones just the NFT (and optionally maybe FT change)
+                            add_token_change_out(clone_and_set_amt(td, amt=change_amount))
+                            change_amount = 0
+                        if change_amount > 0:
+                            add_token_change_out(clone_and_set_amt(td, amt=change_amount, clear_nft=True))
+            if not have_enough():
+                # Ideally the UI prevents this situation. But we raise in case the spec is wrong
+                raise NotEnoughFunds()
+
+        # Next, consolidate fungible amounts so that they all go to the same output
+        for which, l in enumerate((tds_out, tds_change_out)):
+            list_name = ('tds_out', 'tds_change_out')[which]
+            for tid in l.seen_tids:
+                tup = l.find_first_fungible_only(tid) or l.find_first_any(tid)
+                if tup:
+                    total = l.clear_all_amts(tid)
+                    idx, td = tup
+                    self.print_error(f"Consolidating {total} fungibles for tid={tid} to list={list_name} pos={idx}")
+                    l[idx] = clone_and_set_amt(td, amt=total)  # update 1 output to have the consolidated amt
+            # Finally, delete any fungible-only amount=0 outputs
+            ctr = 0
+            for i, td in enumerate(l):
+                if not td.has_nft() and not td.amount:
+                    self.print_error(f"Consolidation: WARNING - Deleting fungible-only token output with amount=0"
+                                     f" tid={td.id_hex} list={list_name} pos={i}")
+                    del l[i - ctr]
+                    ctr += 1
+            for td in l:
+                assert td.is_valid_bitfield(), list_name
+
+        # Setup outputs
+        token_dust = token.heuristic_dust_limit_for_token_bearing_output()  # 800 sats
+        outputs: List[Tuple[int, Address, Union[int, str]]]
+        outputs = [(TYPE_ADDRESS, spec.payto_addr, token_dust)] * len(tds_out)
+        tds_satoshis = []
+        if spec.send_satoshis > 0:
+            outputs += [(TYPE_ADDRESS, spec.payto_addr, spec.send_satoshis)]
+            tds_satoshis += [None]  # Non-token output for pure BCH
+        outputs += [(TYPE_ADDRESS, spec.change_addr, token_dust)] * len(tds_change_out)
+
+        token_datas = tds_out + tds_satoshis + tds_change_out
+
+        i_change = len(outputs)
+        outputs.append((TYPE_ADDRESS, spec.change_addr, '!'))  # Add change output
+
+        sign_schnorr = self.is_schnorr_enabled() if sign_schnorr is None else sign_schnorr
+        addrs_seen: Set[Address] = {spec.change_addr, spec.payto_addr}
+        # This is needed so that Transaction.from_io below works
+        for inp in inputs:
+            self.add_input_info(inp)
+            addrs_seen.add(inp['address'])
+
+        def value_out(): return sum(o[2] for o in outputs if isinstance(o[2], int))
+        def value_in(): return sum(ux['value'] for ux in inputs)
+        def get_fee(tx_size): return int(math.ceil((tx_size / 1000) * max(spec.feerate, config.fee_rates[0])))
+
+        def est_tx_size():
+            outs = outputs.copy()
+            # mogrify since Transaction.from_io doesn't know about '!' notation
+            outs[i_change] = (outs[i_change][0], outs[i_change][1], 0)
+            tx = Transaction.from_io(inputs, outs, sign_schnorr=sign_schnorr, token_datas=token_datas)
+            return tx.estimated_size()
+
+        # Next, try and satisfy the BCH requirement
+        while value_in() < value_out() + get_fee(est_tx_size()):
+            def sorter(tup):
+                name, utxo = tup
+                addr = utxo['address']
+                return int(addr not in addrs_seen), -utxo['value'], utxo['height'], name
+            sorted_utxo_tups = sorted(spec.non_token_utxos.items(), key=sorter)
+            for utxo_name, utxo in sorted_utxo_tups:
+                if utxo_name in input_names:
+                    continue
+                inputs.append(copy.deepcopy(utxo))
+                addrs_seen.add(inputs[-1]['address'])
+                input_names.add(utxo_name)
+                self.add_input_info(inputs[-1])
+                break
+            else:
+                raise NotEnoughFunds()
+
+        tx = self.make_unsigned_transaction(inputs, outputs, config, token_datas=token_datas, fixed_fee=get_fee,
+                                            sign_schnorr=sign_schnorr, bip69_sort=False)
+        if tx._outputs:
+            # Corner case: delete the change output if it contains dust
+            t, addr, value = tx._outputs[i_change]
+            if addr == spec.change_addr and value < dust_threshold(self.network):
+                self.print_error("Deleting last change output with value:", value)
+                if tx._token_datas[-1] is None:
+                    del tx._outputs[-1]
+                    del tx._token_datas[-1]
+                else:
+                    # This should never happen
+                    raise NotEnoughFunds(_("Unable to create the transaction due to an internal error"))
+
+        if bip69_sort:
+            # Sort the inputs and outputs deterministically
+            tx.BIP69_sort()
+
         return tx
 
     def is_frozen(self, addr):
@@ -3871,3 +4173,4 @@ def restore_wallet_from_text(text, *, path, config,
 
     wallet.storage.write()
     return {'wallet': wallet, 'msg': msg}
+

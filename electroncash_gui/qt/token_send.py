@@ -23,6 +23,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import copy
 from collections import defaultdict
 from enum import IntEnum
 from typing import DefaultDict, Dict, List, Optional, Set
@@ -73,7 +74,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.wallet: wallet.Abstract_Wallet = self.parent.wallet
         self.utxos_by_name: Dict[str, dict] = dict()
         self.token_utxos: DefaultDict[str, List[str]] = defaultdict(list)  # tokenid -> unique sorted list of utxonames
-        self.token_nfts: DefaultDict[str, List[str]] = defaultdict(list)
+        self.token_nfts: DefaultDict[str, List[str]] = defaultdict(list)  # tokenid -> list of utxonames
         self.token_fungible_only: DefaultDict[str, List[str]] = defaultdict(list)
         self.token_fungible_totals: DefaultDict[str, int] = defaultdict(int)  # tokenid -> fungible total
         self.token_nfts_selected: DefaultDict[str, Set[str]] = defaultdict(set)  # tokenid -> set of selected utxonames
@@ -235,13 +236,16 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         grid.addWidget(fee_e_label)
         col += 1
 
+        self.fee_rate = 1000  # this gets quickly overwritten below
+
         def fee_cb(dyn, pos, fee_rate):
-            pass
+            self.fee_rate = fee_rate
 
         self.fee_slider = FeeSlider(self.parent, self.parent.config, fee_cb)
         self.fee_slider.setFixedWidth(140)
         grid.addWidget(self.fee_slider, row, col)
         fee_e_label.setBuddy(self.fee_slider)
+        self.fee_slider.moved(self.fee_slider.value())  # Ensure callback fires at least once
 
         vbox.addWidget(gb)
 
@@ -484,6 +488,21 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
     def enable_disable_preview_tx_button(self):
         self.but_preview_tx.setEnabled(self.check_sanity())
 
+    def make_token_send_spec(self) -> wallet.TokenSendSpec:
+        spec = wallet.TokenSendSpec()
+        spec.payto_addr = address.Address.from_string(self.te_payto.text().strip())
+        spec.change_addr = self.wallet.get_unused_address(for_change=True, frozen_ok=False)
+        spec.feerate = self.fee_rate
+        spec.send_satoshis = self.amount_e.get_amount() or 0
+        spec.token_utxos = copy.deepcopy(self.utxos_by_name)
+        spec.non_token_utxos = {self.get_outpoint_longname(x): x
+                                for x in self.wallet.get_spendable_coins(None, self.parent.config)}
+        spec.send_fungible_amounts = {tid: amt for tid, amt in self.token_fungible_to_spend.items()}
+        spec.send_nfts = set()
+        for tid, utxo_name_set in self.token_nfts_selected.items():
+            spec.send_nfts |= utxo_name_set
+        return spec
+
     def on_preview_tx(self):
         # First, we must make sure that any amount line-edits have lost focus, so we can be 100% sure
         # "textEdited" signals propagate and what the user sees on-screen is what ends-up in the txn
@@ -494,4 +513,14 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         if not self.check_sanity():
             self.print_error("Spurious click of 'preview tx', returning early")
             return
-        self.show_error("Unimplemented")
+        spec = self.make_token_send_spec()
+        try:
+            tx = self.wallet.make_token_send_tx(self.parent.config, spec)
+            if tx:
+                self.parent.show_transaction(tx)
+            else:
+                self.show_error("Unimplemented")
+        except wallet.NotEnoughFunds as e:
+            self.show_error(str(e) or _("Not enough funds"))
+        except wallet.ExcessiveFee as e:
+            self.show_error(str(e) or _("Excessive fee"))

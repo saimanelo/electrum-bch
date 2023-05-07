@@ -27,7 +27,6 @@
 # SOFTWARE.
 
 
-
 # Note: The deserialization code originally comes from ABE.
 
 from .util import print_error, profiler
@@ -649,9 +648,10 @@ class Transaction:
             typ, addr_like, value = output
             if token_data is None:
                 # Ensure "None" sorts before any possible token tuple
-                tok_tup = (-1, 0, b'', b'')
+                tok_tup = (-1, -1, -1, b'', b'')
             else:
-                tok_tup = (token_data.amount, token_data.bitfield, token_data.id, token_data.commitment)
+                tok_tup = (token_data.amount, int(token_data.has_nft()), token_data.get_capability(),
+                           token_data.commitment, token_data.id)
             return value, self.pay_script(addr_like), tok_tup
 
         zipped_outputs.sort(key=lambda tup: output_as_tup(tup))
