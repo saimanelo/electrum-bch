@@ -2487,7 +2487,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             td_ft_only = clone_and_set_amt(td, amt=additional_amount, clear_nft=True)
                             add_token_input(utxo_name, utxo, td_ft_only)
                         else:
-                            add_token_input(utxo_name, utxo, None)   # consume input, no new outputs
+                            add_token_input(utxo_name, utxo, None)  # consume input, no new outputs
                             # have existing output for this token-id, update fungible amount
                             idx, td_existing = tup
                             td_updated = clone_and_set_amt(td_existing,
@@ -2495,12 +2495,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             tds_out[idx] = td_updated
                         # if input has nft (output doesn't), then preserve the NFT: tally this as a
                         # "change" output
-                        if td.has_nft():
-                            # clones just the NFT (and optionally maybe FT change)
+                        if td.has_nft() or change_amount > 0:
+                            # If any NFT or FT is leftover, clone what remains and add to change
                             add_token_change_out(clone_and_set_amt(td, amt=change_amount))
-                            change_amount = 0
-                        if change_amount > 0:
-                            add_token_change_out(clone_and_set_amt(td, amt=change_amount, clear_nft=True))
             if not have_enough():
                 # Ideally the UI prevents this situation. But we raise in case the TokenSendSpec is wrong
                 raise NotEnoughFunds()
