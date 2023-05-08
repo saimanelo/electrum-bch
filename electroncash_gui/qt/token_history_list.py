@@ -34,6 +34,7 @@ from electroncash import token
 from electroncash.i18n import _, ngettext
 from electroncash.util import profiler, PrintError
 
+from .token_list import TokenList
 from .util import MONOSPACE_FONT, MyTreeWidget, rate_limited, SortableTreeWidgetItem
 
 
@@ -55,9 +56,11 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         tx_hash = QtCore.Qt.UserRole  # This must be this value so that superclass on_edited() picks up the label change
         status = QtCore.Qt.UserRole + 1
         category = QtCore.Qt.UserRole + 2
-        commitment = QtCore.Qt.UserRole + 3
-        capability = QtCore.Qt.UserRole + 4
-        editable_label = QtCore.Qt.UserRole + 5
+        outpoint = QtCore.Qt.UserRole + 3
+        nft_row = QtCore.Qt.UserRole + 4
+        commitment = QtCore.Qt.UserRole + 5
+        capability = QtCore.Qt.UserRole + 6
+        editable_label = QtCore.Qt.UserRole + 7
 
     statusIcons = {}
 
@@ -115,6 +118,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 has_mutable_ctr = 0
                 item.setData(0, self.DataRoles.status, (status, conf))
                 item.setData(0, self.DataRoles.tx_hash, tx_hash)
+                item.setData(0, self.DataRoles.nft_row, False)
                 item.setData(0, self.DataRoles.category, category_id)
                 item.setData(0, self.DataRoles.editable_label, True)
                 item.setToolTip(self.Col.category_id, category_id)
@@ -132,13 +136,19 @@ class TokenHistoryList(MyTreeWidget, PrintError):
 
                 def add_nft(nft, out=False):
                     nonlocal has_minting_ctr, has_mutable_ctr
-                    commitment = nft.commitment.hex()
+                    outpoint_n, token_data = nft
+                    outpoint_str = TokenList.get_outpoint_longname({"prevout_hash": tx_hash, "prevout_n": outpoint_n})
                     capability = token.get_nft_flag_text(nft)
                     direction = "-" if out else "+"
+                    capability = get_nft_flag(token_data)
+                    commitment = token_data.commitment.hex()
+                    capability_str = f"{capability} " if len(capability) else ""
                     commitment_str = f": {commitment}" if commitment else ""
-                    name = f"{direction} {capability} NFT{commitment_str}"
+                    name = f"{direction} {capability_str}NFT{commitment_str}"
                     nft_item = SortableTreeWidgetItem(['', tx_hash, '', name, '', '', '', ''])
                     nft_item.setFont(self.Col.description, self.monospaceFont)
+                    nft_item.setData(0, self.DataRoles.nft_row, True)
+                    nft_item.setData(0, self.DataRoles.outpoint, outpoint_str)
                     nft_item.setData(0, self.DataRoles.commitment, commitment)
                     nft_item.setData(0, self.DataRoles.capability, capability)
                     if out:
@@ -208,14 +218,16 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 item = self.itemAt(position)
                 if item:
                     copy_text = item.text(col).strip()
-                    capability = item.data(0, self.DataRoles.capability)
-                    if capability:  # This is an NFT row
+                    nft_row = item.data(0, self.DataRoles.nft_row)
+                    if nft_row:
                         description = item.text(self.Col.description).strip()
                         commitment = item.data(0, self.DataRoles.commitment)
+                        outpoint = item.data(0, self.DataRoles.outpoint)
                         if description:
                             menu.addAction(_("Copy {}").format(_("NFT Description")), lambda: do_copy(description[2:]))
                         if commitment:
                             menu.addAction(_("Copy {}").format(_("NFT Commitment")), lambda: do_copy(commitment))
+                        menu.addAction(_("Copy Outpoint").format(_("Outpoint")), lambda: do_copy(outpoint))
                     elif copy_text:
                         menu.addAction(_("Copy {}").format(column_title), lambda: do_copy(copy_text))
 
