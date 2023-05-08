@@ -123,7 +123,14 @@ def sweep_preparations(privkeys, network, imax=100):
         else:
             address = PublicKey.from_pubkey(pubkey)
         sh = address.to_scripthash_hex()
-        u = network.synchronous_get(('blockchain.scripthash.listunspent', [sh]))
+        try:
+            # First try the protocol 1.5 version to explicitly ask for no tokens
+            u = network.synchronous_get(('blockchain.scripthash.listunspent', [sh, "exclude_tokens"]))
+        except util.ServerError as e:
+            print_error(f"sweep_preparations got exception from listunspent: \"{e}\""
+                        " (falling-back to 1.4-compatible call)")
+            # Failure; server likely doesn't know anything about tokens, fallback to 1.4 API
+            u = network.synchronous_get(('blockchain.scripthash.listunspent', [sh]))
         for item in u:
             if len(inputs) >= imax:
                 raise InputsMaxxed()
