@@ -234,6 +234,12 @@ class TokenSendSpec:
         return ret
 
 
+class TokensBurnedError(RuntimeError):
+    """Raised by Abstract_Wallet.make_token_send_tx if there is some internal logic error and tokens are being
+     burned by the txn in question.  In practice this should never actually be raised unless there are bugs
+     in that method."""
+
+
 class Abstract_Wallet(PrintError, SPVDelegate):
     """
     Wallet classes are created to handle various address generation methods.
@@ -2619,6 +2625,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             else:
                 raise NotEnoughFunds()
 
+        tx: Transaction
         tx = self.make_unsigned_transaction(inputs, outputs, config, token_datas=token_datas, fixed_fee=get_fee,
                                             sign_schnorr=sign_schnorr, bip69_sort=False)
         if tx._outputs:
@@ -2634,6 +2641,52 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         if bip69_sort:
             # Sort the inputs and outputs deterministically
             tx.BIP69_sort()
+
+        def raise_if_tokens_burned():
+            """If tokens are burned, raises TokensBurnedError. Tokens burned involves just counts for each
+            NFT out being less than NFT in, and FT amount counts mismatching. We don't enforce the consensus
+            rules regarding prevention of ex-nihilo-tokens (out of thin air) -- that's up to the full node to
+            prevent. We also don't correctly handle mutable or minting NFTs "dropping privileges" since for
+            the purposes of this function's pre/post conditions, that's not supported and would indicate a
+            programming error above if it were to occur.
+
+            In short: This function is just defensive programming to detect bugs in the above code that may
+            lead to tokens being destroyed."""
+            non_mint_in, non_mint_out = defaultdict(int), defaultdict(int)
+            ft_amts_in, ft_amts_out = defaultdict(int), defaultdict(int)
+            mint_in, mint_out = defaultdict(int), defaultdict(int)
+
+            for utxo in tx.inputs():
+                td: Optional[token.OutputData] = utxo['token_data']
+                if td:
+                    tid = td.id_hex
+                    ft_amts_in[tid] += td.amount
+                    if td.has_nft():
+                        if td.is_minting_nft():
+                            mint_in[tid] += 1
+                        else:
+                            non_mint_in[tid] += 1
+            for _, td in tx.outputs(tokens=True):
+                if td:
+                    tid = td.id_hex
+                    ft_amts_out[tid] += td.amount
+                    if td.has_nft():
+                        if td.is_minting_nft():
+                            mint_out[tid] += 1
+                        else:
+                            non_mint_out[tid] += 1
+
+            if ft_amts_in != ft_amts_out:
+                raise TokensBurnedError()
+            for tid, ct in mint_in.items():
+                if mint_out[tid] < ct:
+                    raise TokensBurnedError()
+            for tid, ct in non_mint_in.items():
+                out_ct = non_mint_out[tid]
+                if out_ct < ct:
+                    raise TokensBurnedError()
+
+        raise_if_tokens_burned()
 
         return tx
 

@@ -606,3 +606,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             self.show_error(str(e) or _("Not enough funds"))
         except wallet.ExcessiveFee as e:
             self.show_error(str(e) or _("Excessive fee"))
+        except wallet.TokensBurnedError as e:
+            self.show_error(str(e) or _("Internal Error: Transaction generation yielded a transaction in which"
+                                        " some tokens are being burned;  refusing to proceed. Please report this"
+                                        " situation to the developers."))
