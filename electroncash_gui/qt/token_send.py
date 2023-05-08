@@ -27,7 +27,7 @@ import copy
 import math
 from collections import defaultdict
 from enum import IntEnum
-from typing import DefaultDict, Dict, List, Optional, Set
+from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
@@ -63,7 +63,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
     headers_tok = [_("Token ID"), _("NFTs to Send"), _("Fungible Amount"), _("Fungible Amount to Send")]
     headers_nft = [_("Attach"), _("Token ID"), _("Commitment"), _("Flags")]
 
-    def __init__(self, parent: ElectrumWindow, token_utxos: List[dict]):
+    def __init__(self, parent: ElectrumWindow, token_utxos: List[dict],
+                 *, broadcast_callback: Optional[Callable[[bool], Any]] = None):
         assert isinstance(parent, ElectrumWindow)
         title = _("Send Tokens") + " - " + parent.wallet.basename()
         super().__init__(parent=parent, title=title)
@@ -81,6 +82,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.token_fungible_totals: DefaultDict[str, int] = defaultdict(int)  # tokenid -> fungible total
         self.token_nfts_selected: DefaultDict[str, Set[str]] = defaultdict(set)  # tokenid -> set of selected utxonames
         self.token_fungible_to_spend: DefaultDict[str, int] = defaultdict(int)  # tokenid -> amount
+        self.broadcast_callback = broadcast_callback
 
         # Setup data source; iterate over a sorted list of utxos
         def sort_func(u):
@@ -578,7 +580,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         try:
             tx = self.wallet.make_token_send_tx(self.parent.config, spec)
             if tx:
-                self.parent.show_transaction(tx, tx_desc=self.te_desc.toPlainText().strip())
+                self.parent.show_transaction(tx, tx_desc=self.te_desc.toPlainText().strip(),
+                                             broadcast_callback=self.broadcast_callback)
             else:
                 self.show_error("Unimplemented")
         except wallet.NotEnoughFunds as e:

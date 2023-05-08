@@ -166,6 +166,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.send_tab_opreturn_widgets, self.receive_tab_opreturn_widgets = [], []  # defaults to empty list
         self._shortcuts = Weak.Set()  # keep track of shortcuts and disable them on close
         self.create_new_token_dialog = None  # Gets lazy-initted by self.show_create_new_token_dialog()
+        self._send_token_form: Optional[WindowModalDialog] = None
 
         self.create_status_bar()
         self.need_update = threading.Event()
@@ -1111,9 +1112,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         d = address_dialog.AddressDialog(self,  addr, windowParent=parent)
         d.exec_()
 
-    def show_transaction(self, tx, tx_desc = None):
+    def show_transaction(self, tx, tx_desc=None, *, broadcast_callback=None):
         '''tx_desc is set only for txs created in the Send tab'''
-        d = show_transaction(tx, self, tx_desc)
+        d = show_transaction(tx, self, tx_desc, broadcast_callback=broadcast_callback)
         self._tx_dialogs.add(d)
 
     def on_toggled_opreturn(self, b):
@@ -2505,6 +2506,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         self.copy_to_clipboard(copy_link, _("Block explorer link copied to clipboard"), self.top_level_window())
                     self.invoice_list.update()
                     self.do_clear()
+
                 else:
                     if msg.startswith("error: "):
                         msg = msg.split(" ", 1)[-1] # take the last part, sans the "error: " prefix
@@ -5402,8 +5404,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         from .token_send import SendTokenForm
         from electroncash import token
         assert all(isinstance(u['token_data'], token.OutputData) for u in utxos)
-        self._send_token_form = w = SendTokenForm(self, utxos)
-        w.open()
+
+        form = None
+
+        def broadcast_done(success):
+            """On success, if the send token form is up, close it"""
+            nonlocal form
+            if success and form and self._send_token_form and self._send_token_form is form and form.isVisible():
+                form.accept()
+                form.deleteLater()
+                self._send_token_form = form = None
+
+        self._send_token_form = form = SendTokenForm(self, utxos, broadcast_callback=broadcast_done)
+        form.open()
 
 
 class TxUpdateMgr(QObject, PrintError):

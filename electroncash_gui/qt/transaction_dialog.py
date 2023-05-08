@@ -56,8 +56,8 @@ else:
     # On Linux & macOS it looks fine so we go with the more fancy unicode
     SCHNORR_SIGIL = "ⓢ"
 
-def show_transaction(tx, parent, desc=None, prompt_if_unsaved=False):
-    d = TxDialog(tx, parent, desc, prompt_if_unsaved)
+def show_transaction(tx, parent, desc=None, prompt_if_unsaved=False, *, broadcast_callback=None):
+    d = TxDialog(tx, parent, desc, prompt_if_unsaved, broadcast_callback=broadcast_callback)
     dialogs.append(d)
     d.show()
     return d
@@ -73,7 +73,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         Freeze = auto()
         Unfreeze = auto()
 
-    def __init__(self, tx, parent, desc, prompt_if_unsaved):
+    def __init__(self, tx, parent, desc, prompt_if_unsaved, *, broadcast_callback=None):
         '''Transactions in the wallet will show their description.
         Pass desc to give a description for txs not yet in the wallet.
         '''
@@ -95,6 +95,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.tx_hash = self.tx.txid_fast() if self.tx.raw and self.tx.is_complete() else None
         self.tx_height = self.wallet.get_tx_height(self.tx_hash)[0] or None
         self.block_hash = None
+        self.extra_broadcast_callback = broadcast_callback
         Weak.finalization_print_error(self)  # track object lifecycle
 
         self.setMinimumWidth(750)
@@ -272,6 +273,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 self.update()
                 # broadcast button will re-enable if we got nothing from server and >= BROADCAST_COOLDOWN_SECS elapsed
                 QTimer.singleShot(int(self.BROADCAST_COOLDOWN_SECS * 1e3 + 100), self.update)
+            if self.extra_broadcast_callback is not None:
+                self.extra_broadcast_callback(success)
         self.main_window.push_top_level_window(self)
         try:
             self.main_window.broadcast_transaction(self.tx, self.desc, callback=broadcast_done)
