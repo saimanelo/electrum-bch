@@ -164,9 +164,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         gb_desc = QtWidgets.QGroupBox(_("Description"))
         gb_desc.setToolTip(_("Enter an optional label for the transaction"))
         vbox_gb_desc = QtWidgets.QVBoxLayout(gb_desc)
-        self.te_desc = QtWidgets.QTextEdit()
+        self.te_desc = QtWidgets.QPlainTextEdit()
         vbox_gb_desc.addWidget(self.te_desc)
-        self.te_desc.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)
+        self.te_desc.setWordWrapMode(QtGui.QTextOption.WrapAnywhere)
         self.te_desc.setPlaceholderText(_("Memo") + "...")
         hbox.addWidget(gb_desc)
 
@@ -177,6 +177,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         but_clear = QtWidgets.QPushButton(_("Clear"))
         but_clear.clicked.connect(self.clear_form)
         hbox.addWidget(but_clear)
+        self.lbl_status_msg = l = QtWidgets.QLabel()
+        hbox.addWidget(l, 1, QtCore.Qt.AlignCenter | QtCore.Qt.AlignVCenter)
         spacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         hbox.addItem(spacer)
         but_cancel = QtWidgets.QPushButton(_("Cancel"))
@@ -487,7 +489,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         if max(ft_total, 0) + num_nfts <= 0:
             # No tokens specified!
             sane = False
-        elif not address.Address.is_valid(self.te_payto.text().strip()):
+        elif not address.Address.is_valid(self.te_payto.toPlainText().strip()):
             # Bad address
             sane = False
         return sane
@@ -521,6 +523,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             return
         sane = self.check_sanity()
         self.but_preview_tx.setEnabled(sane)
+
+        # Manage amt color state
         amt_color = ColorScheme.DEFAULT
         if self.cb_max.isChecked():
             amt = self._estimate_max_amount()
@@ -532,6 +536,20 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 if max_amt is not None and amt > max_amt:
                     amt_color = ColorScheme.RED
         self.amount_e.setStyleSheet(amt_color.as_stylesheet())
+
+        # Manage address color state
+        addr_color = ColorScheme.DEFAULT
+        msg = ""
+        if sane:
+            addr_str = self.te_payto.toPlainText().strip()
+            if address.Address.is_token(addr_str):
+                addr_color = ColorScheme.GREEN
+            else:
+                addr_color = ColorScheme.YELLOW
+                msg = _("Not a CashToken-aware address")
+        self.te_payto.setStyleSheet(addr_color.as_stylesheet())
+        self.lbl_status_msg.setText(msg)
+        self.lbl_status_msg.setStyleSheet(addr_color.as_stylesheet() if msg else ColorScheme.DEFAULT.as_stylesheet())
 
     def make_token_send_spec(self, dummy=False) -> wallet.TokenSendSpec:
         spec = wallet.TokenSendSpec()
