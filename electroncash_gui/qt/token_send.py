@@ -153,8 +153,22 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         vbox.addWidget(gb)
         self._adjust_te_payto_size()
 
+        # BCH to send plus description
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.setContentsMargins(0, 0, 0, 0)  # No inset
         # Additional BCH to Send
-        self._setup_additional_bch_gbox(vbox)
+        self._setup_additional_bch_gbox(hbox)
+        # Description
+        gb_desc = QtWidgets.QGroupBox(_("Description"))
+        gb_desc.setToolTip(_("Enter an optional label for the transaction"))
+        vbox_gb_desc = QtWidgets.QVBoxLayout(gb_desc)
+        self.te_desc = QtWidgets.QTextEdit()
+        vbox_gb_desc.addWidget(self.te_desc)
+        self.te_desc.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)
+        self.te_desc.setPlaceholderText(_("Memo") + "...")
+        hbox.addWidget(gb_desc)
+
+        vbox.addLayout(hbox)
 
         # Bottom buttons
         hbox = QtWidgets.QHBoxLayout()
@@ -191,7 +205,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         te.setMinimumHeight(height_min)
         te.setMaximumHeight(int(height_min * 1.5))
 
-    def _setup_additional_bch_gbox(self, vbox: QtWidgets.QVBoxLayout):
+    def _setup_additional_bch_gbox(self, parent_layout: QtWidgets.QLayout):
         gb = QtWidgets.QGroupBox(_("Additional BCH to Send"))
         grid = QtWidgets.QGridLayout(gb)
         row, col, n_cols = 0, 0, 5
@@ -249,7 +263,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         fee_e_label.setBuddy(self.fee_slider)
         self.fee_slider.moved(self.fee_slider.value())  # Ensure callback fires at least once
 
-        vbox.addWidget(gb)
+        parent_layout.addWidget(gb)
 
     def have_nfts(self) -> bool:
         return sum(len(u) for u in self.token_nfts.values()) > 0
@@ -460,6 +474,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.fee_slider.setValue(0)
         self.amount_e.clear()
         self.te_payto.clear()
+        self.te_desc.clear()
         self.tw_nft.itemChanged.connect(self.on_nft_item_changed)
         self.on_ui_state_changed()
 
@@ -563,7 +578,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         try:
             tx = self.wallet.make_token_send_tx(self.parent.config, spec)
             if tx:
-                self.parent.show_transaction(tx)
+                self.parent.show_transaction(tx, tx_desc=self.te_desc.toPlainText().strip())
             else:
                 self.show_error("Unimplemented")
         except wallet.NotEnoughFunds as e:
