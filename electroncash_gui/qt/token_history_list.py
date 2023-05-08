@@ -138,9 +138,11 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     nonlocal has_minting_ctr, has_mutable_ctr
                     outpoint_n, token_data = nft
                     outpoint_str = TokenList.get_outpoint_longname({"prevout_hash": tx_hash, "prevout_n": outpoint_n})
-                    capability = token.get_nft_flag_text(nft)
+                    capability = token.get_nft_flag_text(token_data)
                     direction = "-" if out else "+"
-                    capability = get_nft_flag(token_data)
+                    if token_data.is_immutable_nft():
+                        capability = ""
+                        direction = "   " + direction
                     commitment = token_data.commitment.hex()
                     capability_str = f"{capability} " if len(capability) else ""
                     commitment_str = f": {commitment}" if commitment else ""
@@ -153,11 +155,11 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     nft_item.setData(0, self.DataRoles.capability, capability)
                     if out:
                         nft_item.setForeground(self.Col.description, self.withdrawalBrush)
-                    if nft.is_minting_nft():
+                    if token_data.is_minting_nft():
                         has_minting_ctr += 1
                         nft_item.setIcon(self.Col.description, self.batonIcon)
                         nft_item.setToolTip(self.Col.description, _("Minting NFT"))
-                    elif nft.is_mutable_nft():
+                    elif token_data.is_mutable_nft():
                         has_mutable_ctr += 1
                         nft_item.setIcon(self.Col.description, self.mutableIcon)
                         nft_item.setToolTip(self.Col.description, _("Mutable NFT"))
