@@ -83,6 +83,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.token_nfts_selected: DefaultDict[str, Set[str]] = defaultdict(set)  # tokenid -> set of selected utxonames
         self.token_fungible_to_spend: DefaultDict[str, int] = defaultdict(int)  # tokenid -> amount
         self.broadcast_callback = broadcast_callback
+        self.icon_baton = QtGui.QIcon(":icons/baton.png")
+        self.icon_mutable = QtGui.QIcon(":icons/mutable.png")
 
         # Setup data source; iterate over a sorted list of utxos
         def sort_func(u):
@@ -383,15 +385,6 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             w.setAutoFillBackground(True)
             tw.setItemWidget(item, self.ColsTok.amount_send, w)
 
-    @staticmethod
-    def get_nft_flag(td: token.OutputData) -> Optional[str]:
-        if td.is_minting_nft():
-            return _('Minting')
-        elif td.is_mutable_nft():
-            return _('Mutable')
-        elif td.is_immutable_nft():
-            return _('Immutable')
-
     def rebuild_nfts_to_send_treewidget(self):
         tw = self.tw_nft
         tw.clear()
@@ -400,7 +393,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             utxo = self.get_utxo(name)
             td = utxo['token_data']
             assert isinstance(td, token.OutputData)
-            item = QtWidgets.QTreeWidgetItem(["", tid, td.commitment.hex(), self.get_nft_flag(td)])
+            item = QtWidgets.QTreeWidgetItem(["", tid, td.commitment.hex(), token.get_nft_flag_text(td)])
             item.setToolTip(self.ColsNFT.attqch, _("Check to send this NFT"))
             item.setToolTip(self.ColsNFT.token_id, tid)
             item.setToolTip(self.ColsNFT.commitment, td.commitment.hex()
@@ -408,6 +401,10 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             item.setFlags((item.flags() | QtCore.Qt.ItemIsUserCheckable) & ~QtCore.Qt.ItemIsSelectable)
             item.setData(0, self.DataRoles.token_id, tid)
             item.setData(0, self.DataRoles.output_point, name)
+            if td.is_minting_nft():
+                item.setIcon(self.ColsNFT.flags, self.icon_baton)
+            elif td.is_mutable_nft():
+                item.setIcon(self.ColsNFT.flags, self.icon_mutable)
             parent.addChild(item)
             item.setCheckState(0, QtCore.Qt.Checked)  # Need to call this at least once to make checkbox appear
             if name not in self.token_nfts_selected.get(tid, set()):

@@ -31,7 +31,7 @@ from PyQt5.QtGui import QBrush, QColor, QIcon, QFont
 from PyQt5.QtWidgets import QMenu, QHeaderView
 
 from electroncash import token
-from electroncash.i18n import _
+from electroncash.i18n import _, ngettext
 from electroncash.util import profiler, PrintError
 
 from .util import MONOSPACE_FONT, MyTreeWidget, rate_limited, SortableTreeWidgetItem
@@ -75,6 +75,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         self.monospaceFont = QFont(MONOSPACE_FONT)
         self.withdrawalBrush = QBrush(QColor("#BC1E1E"))
         self.batonIcon = QIcon(":icons/baton.png")
+        self.mutableIcon = QIcon(":icons/mutable.png")
         self.setTextElideMode(QtCore.Qt.ElideMiddle)
         self.header().setSectionResizeMode(self.Col.category_id, QHeaderView.Interactive)
         self.header().resizeSection(self.Col.category_id, 120)
@@ -110,6 +111,8 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 nft_amount = len(category_delta["nfts_in"]) - len(category_delta["nfts_out"])
                 entry = ['', tx_hash, status_str, label, category_id, str(fungible_amount), str(nft_amount)]
                 item = SortableTreeWidgetItem(entry)
+                has_minting_ctr = 0
+                has_mutable_ctr = 0
                 item.setData(0, self.DataRoles.status, (status, conf))
                 item.setData(0, self.DataRoles.tx_hash, tx_hash)
                 item.setData(0, self.DataRoles.category, category_id)
@@ -127,17 +130,10 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     item.setForeground(self.Col.fungible_amount if fungible_amount < 0 else self.Col.nft_amount,
                                        self.withdrawalBrush)
 
-                def get_nft_flag(td: token.OutputData) -> Optional[str]:
-                    if td.is_minting_nft():
-                        return _('Minting')
-                    elif td.is_mutable_nft():
-                        return _('Mutable')
-                    elif td.is_immutable_nft():
-                        return _('Immutable')
-
                 def add_nft(nft, out=False):
+                    nonlocal has_minting_ctr, has_mutable_ctr
                     commitment = nft.commitment.hex()
-                    capability = get_nft_flag(nft)
+                    capability = token.get_nft_flag_text(nft)
                     direction = "-" if out else "+"
                     commitment_str = f": {commitment}" if commitment else ""
                     name = f"{direction} {capability} NFT{commitment_str}"
@@ -147,15 +143,38 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     nft_item.setData(0, self.DataRoles.capability, capability)
                     if out:
                         nft_item.setForeground(self.Col.description, self.withdrawalBrush)
-                    if nft.is_minting_nft() or nft.is_mutable_nft():
-                        item.setIcon(self.Col.description, self.batonIcon)
-                        item.setToolTip(self.Col.description, _("Transaction involves a Minting or Mutable NFT"))
+                    if nft.is_minting_nft():
+                        has_minting_ctr += 1
+                        nft_item.setIcon(self.Col.description, self.batonIcon)
+                        nft_item.setToolTip(self.Col.description, _("Minting NFT"))
+                    elif nft.is_mutable_nft():
+                        has_mutable_ctr += 1
+                        nft_item.setIcon(self.Col.description, self.mutableIcon)
+                        nft_item.setToolTip(self.Col.description, _("Mutable NFT"))
                     item.addChild(nft_item)
 
                 for nft_in in category_delta["nfts_in"]:
                     add_nft(nft_in, False)
                 for nft_out in category_delta["nfts_out"]:
                     add_nft(nft_out, True)
+
+                if has_minting_ctr:
+                    if not has_mutable_ctr:
+                        item.setToolTip(self.Col.description,
+                                        ngettext("Transaction involves {ct} Minting NFT",
+                                                 "Transaction involves {ct} Minting NFTs", has_minting_ctr)
+                                        .format(ct=has_minting_ctr))
+                    else:
+                        item.setToolTip(self.Col.description,
+                                        _("Transaction involves {ct1} Minting and {ct2} Mutable NFTs")
+                                        .format(ct1=has_minting_ctr, ct2=has_mutable_ctr))
+                    item.setIcon(self.Col.description, self.batonIcon)
+                elif has_mutable_ctr:
+                    item.setToolTip(self.Col.description,
+                                    ngettext("Transaction involves {ct} Mutable NFT",
+                                             "Transaction involves {ct} Mutable NFTs", has_mutable_ctr)
+                                    .format(ct=has_mutable_ctr))
+                    item.setIcon(self.Col.description, self.mutableIcon)
 
                 self.addChild(item)
 

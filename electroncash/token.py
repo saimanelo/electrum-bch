@@ -11,6 +11,7 @@ import struct
 from typing import Optional, Tuple, Union
 
 from .bitcoin import OpCodes
+from .i18n import _
 from .serialize import BCDataStream, SerializationError
 
 # By consensus, NFT commitment byte blobs may not exceed this length
@@ -200,3 +201,23 @@ def heuristic_dust_limit_for_token_bearing_output() -> int:
     all conceivable token-bearing UTXOs to be beyond the dust limit."""
     return 800  # Worst-case; hard-coded for now.
 
+
+def get_nft_flag_text(td: OutputData) -> Optional[str]:
+    """Returns a UI-friendly string ot describe the NFT, or None if the token does not have an NFT."""
+    if td.is_minting_nft():
+        return _('Minting')
+    elif td.is_mutable_nft():
+        return _('Mutable')
+    elif td.is_immutable_nft():
+        return _('Immutable')
+
+
+def nft_flag_text_sorter(txt: str) -> int:
+    """Usable by UI code to sort NFT flag texts in order of importance.
+    Assumption is txt came from get_nft_flag_text() above."""
+    if txt == _("Minting"):
+        return 0
+    elif txt == _("Mutable"):
+        return 1
+    else:
+        return 2 + abs(hash(txt))

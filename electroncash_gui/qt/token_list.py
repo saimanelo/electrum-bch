@@ -91,6 +91,8 @@ class TokenList(MyTreeWidget, util.PrintError):
         self.light_blue = QtGui.QColor('lightblue') if not ColorScheme.dark_scheme else QtGui.QColor('blue')
         self.blue = ColorScheme.BLUE.as_color(True)
         self.cyan_blue = QtGui.QColor('#3399ff')
+        self.icon_baton = QtGui.QIcon(":icons/baton.png")
+        self.icon_mutable = QtGui.QIcon(":icons/mutable.png")
 
     def clean_up(self):
         self.cleaned_up = True
@@ -187,14 +189,6 @@ class TokenList(MyTreeWidget, util.PrintError):
                 # Otherwise group each token_id by the commitment bytes
                 tokens_grouped[token_id][td.commitment.hex()].append(utxo)
 
-        def get_nft_flag(td: token.OutputData) -> Optional[str]:
-            if td.is_minting_nft():
-                return _('Minting')
-            elif td.is_mutable_nft():
-                return _('Mutable')
-            elif td.is_immutable_nft():
-                return _('Immutable')
-
         def set_fonts(item: SortableTreeWidgetItem):
             for col in (self.Col.token_id, self.Col.quantity, self.Col.bch_amount):
                 txt = item.text(col)
@@ -214,17 +208,30 @@ class TokenList(MyTreeWidget, util.PrintError):
                                (self.Col.num_utxos, QtCore.Qt.AlignCenter)):
                 item.setTextAlignment(col, align)
 
+        def set_icons_inner(item: SortableTreeWidgetItem, minting, mutable):
+            if minting:
+                item.setIcon(self.Col.nft_flags, self.icon_baton)
+            elif mutable:
+                item.setIcon(self.Col.nft_flags, self.icon_mutable)
+
+        def set_icons(item: SortableTreeWidgetItem, td: Optional[token.OutputData]):
+            if not td:
+                return
+            if td.has_nft():
+                set_icons_inner(item, td.is_minting_nft(), td.is_mutable_nft())
+
         def add_utxo_item(parent: Optional[SortableTreeWidgetItem], utxo, name, label, item_key):
             td = utxo['token_data']
             tid = td.id_hex
             amt = str(td.amount)
-            nft_flags = get_nft_flag(td) or ""
+            nft_flags = token.get_nft_flag_text(td) or ""
             num_nfts = str(int(td.has_nft()))
             num_utxos = "1"
             outpt_shortname = self.get_outpoint_shortname(utxo)
             bch_amt = self.parent.format_amount(utxo['value'], is_diff=False, whitespaces=True)
             stwi = SortableTreeWidgetItem([name, label, amt, num_nfts, nft_flags, num_utxos, bch_amt, outpt_shortname])
             set_fonts(stwi)
+            set_icons(stwi, td)
             tt = self.get_outpoint_longname(utxo) + "\n"
             if utxo['height'] > 0:
                 tt += _("Confirmed in block {height}").format(height=utxo['height'])
@@ -234,6 +241,7 @@ class TokenList(MyTreeWidget, util.PrintError):
             stwi.setData(0, self.DataRoles.item_key, item_key)
             stwi.setData(0, self.DataRoles.token_id, tid)
             stwi.setData(0, self.DataRoles.utxos, [utxo])
+
             stwi.setData(0, self.DataRoles.nft_utxo, utxo if td.has_nft() else None)
             a_frozen = 'a' if self.wallet.is_frozen(utxo['address']) else ''
             c_frozen = 'c' if utxo.get('is_frozen_coin') else ''
@@ -272,15 +280,18 @@ class TokenList(MyTreeWidget, util.PrintError):
             quantity = str(sum(u['token_data'].amount for u in utxo_list))
             num_nfts = sum(1 for u in utxo_list if u['token_data'].has_nft())
             nfts = str(num_nfts)
-            flags = {get_nft_flag(u['token_data']) for u in utxo_list}
+            flags = {token.get_nft_flag_text(u['token_data']) for u in utxo_list}
+            has_minting = any(1 for u in utxo_list if u['token_data'] and u['token_data'].is_minting_nft())
+            has_mutable = any(1 for u in utxo_list if u['token_data'] and u['token_data'].is_mutable_nft())
             flags.discard(None)  # Non-nft's add "None" to this set. discard
-            nft_flags = ', '.join(sorted(flags))
+            nft_flags = ', '.join(sorted(flags, key=token.nft_flag_text_sorter))
             n_utxos = sum(len(ul) for ul in dd.values())
             num_utxos = str(n_utxos)
             bch_amt = self.parent.format_amount(sum(x['value'] for x in utxo_list), is_diff=False, whitespaces=True)
 
             item = SortableTreeWidgetItem([token_id, label, quantity, nfts, nft_flags, num_utxos, bch_amt, ""])
             set_fonts(item)
+            set_icons_inner(item, has_minting, has_mutable)
             item.setData(0, self.DataRoles.item_key, item_key)
             item.setData(0, self.DataRoles.token_id, token_id)
             item.setData(0, self.DataRoles.utxos, utxo_list)
@@ -364,7 +375,10 @@ class TokenList(MyTreeWidget, util.PrintError):
                     item_key = key_prefix + "_nft_" + commitment_hex
                     ft_amt = str(sum(u['token_data'].amount for u in utxo_list))
                     nfts = str(sum(1 for u in utxo_list if u['token_data'].has_nft()))
-                    nft_flags = ', '.join(sorted({get_nft_flag(u['token_data']) for u in utxo_list}))
+                    nft_flags = ', '.join(sorted({token.get_nft_flag_text(u['token_data']) for u in utxo_list},
+                                                 key=token.nft_flag_text_sorter))
+                    has_minting = any(1 for u in utxo_list if u['token_data'] and u['token_data'].is_minting_nft())
+                    has_mutable = any(1 for u in utxo_list if u['token_data'] and u['token_data'].is_mutable_nft())
                     num_utxos = str(len(utxo_list))
                     bch_amt = self.parent.format_amount(sum(x['value'] for x in utxo_list), is_diff=False,
                                                         whitespaces=True)
@@ -372,6 +386,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                     nft_parent = SortableTreeWidgetItem([name, parent_label, ft_amt, nfts, nft_flags, num_utxos,
                                                          bch_amt, ""])
                     set_fonts(nft_parent)
+                    set_icons_inner(nft_parent, has_minting, has_mutable)
                     nft_parent.setData(0, self.DataRoles.item_key, item_key)
                     nft_parent.setData(0, self.DataRoles.token_id, token_id)
                     nft_parent.setData(0, self.DataRoles.utxos, utxo_list)
