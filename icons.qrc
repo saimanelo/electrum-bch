@@ -14,9 +14,10 @@
     <file>icons/copy.png</file>
     <file>icons/digitalbitbox.png</file>
     <file>icons/digitalbitbox_unpaired.png</file>
-    <file>icons/expired.svg</file>
+    <file>icons/edit_nft.png</file>
     <file>icons/electron_light_icon.svg</file>
     <file>icons/electron_dark_icon.svg</file>
+    <file>icons/expired.svg</file>
     <file>icons/file.png</file>
     <file>icons/import.svg</file>
     <file>icons/import_dark_theme.svg</file>

@@ -422,6 +422,7 @@ class TokenList(MyTreeWidget, util.PrintError):
         nft_utxos = [item.data(0, self.DataRoles.nft_utxo)
                      for item in selected if item.data(0, self.DataRoles.nft_utxo)]
         non_frozen_utxos = []
+        non_frozen_utxos_that_are_editable = []
         frozen_utxos = []
         frozen_addresses = set()
 
@@ -429,13 +430,18 @@ class TokenList(MyTreeWidget, util.PrintError):
             if item.childCount() == 0:
                 uxs = item.data(0, self.DataRoles.utxos)
                 if len(uxs) == 1:
+                    utxo = uxs[0]
                     flags = item.data(0, self.DataRoles.frozen_flags)
                     if 'a' in flags:
-                        frozen_addresses.add(uxs[0]['address'])
+                        frozen_addresses.add(utxo['address'])
                     elif 'c' in flags:
-                        frozen_utxos.append(uxs[0])
+                        frozen_utxos.append(utxo)
                     elif not flags:
-                        non_frozen_utxos.append(uxs[0])
+                        non_frozen_utxos.append(utxo)
+                        td = utxo['token_data']
+                        if td and (td.is_mutable_nft() or td.is_minting_nft()):
+                            non_frozen_utxos_that_are_editable.append(utxo)
+
                 else:
                     self.print_error("WARNING: Unexpected state -- childCount is 0 but we have more than 1 utxo for a"
                                      "QTreeWidgetItem in token_list.py")
@@ -448,6 +454,7 @@ class TokenList(MyTreeWidget, util.PrintError):
 
         non_frozen_utxos = self.dedupe_utxos(non_frozen_utxos)
         frozen_utxos = self.dedupe_utxos(frozen_utxos)
+        non_frozen_utxos_that_are_editable = self.dedupe_utxos(non_frozen_utxos_that_are_editable)
 
         def do_copy(txt):
             txt = txt.strip()
@@ -542,6 +549,12 @@ class TokenList(MyTreeWidget, util.PrintError):
                                ngettext("Send Token", "Send Tokens", num_utxos)
                                + (f" ({num_utxos})" if num_utxos > 1 else "") + "...",
                                lambda: self.send_tokens(non_frozen_utxos))
+            num_editable_utxos = len(non_frozen_utxos_that_are_editable)
+            if num_editable_utxos:
+                menu.addAction(QtGui.QIcon(":icons/edit_nft.png"),
+                               ngettext("Edit NFT Commitment", "Edit NFT Commitments", num_editable_utxos)
+                               + (f" ({num_editable_utxos})" if num_editable_utxos > 1 else "") + "...",
+                               lambda: self.edit_tokens(non_frozen_utxos_that_are_editable))
 
         menu.addAction(QtGui.QIcon(":icons/tab_token.svg"), _("Create Token") + "...", self.create_new_token)
 
@@ -566,6 +579,11 @@ class TokenList(MyTreeWidget, util.PrintError):
     def send_tokens(self, utxos: List[Dict[str, Any]]):
         utxos = self.dedupe_utxos(utxos)
         self.parent.send_tokens(utxos)
+
+    @if_not_dead
+    def edit_tokens(self, utxos: List[Dict[str, Any]]):
+        utxos = self.dedupe_utxos(utxos)
+        self.parent.edit_tokens(utxos)
 
     @if_not_dead
     def update_labels(self):

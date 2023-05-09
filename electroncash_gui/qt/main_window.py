@@ -5400,7 +5400,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.create_new_token_dialog.activateWindow()
         self.create_new_token_dialog.raise_()
 
-    def send_tokens(self, utxos: List[Dict[str, Any]]):
+    def _send_or_edit_tokens_common(self, utxos: List[Dict[str, Any]], send=False, edit=False):
+        assert send + edit == 1, "Must specify exactly one of `send` or `edit`"
         from .token_send import SendTokenForm
         from electroncash import token
         assert all(isinstance(u['token_data'], token.OutputData) for u in utxos)
@@ -5415,8 +5416,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 form.deleteLater()
                 self._send_token_form = form = None
 
-        self._send_token_form = form = SendTokenForm(self, utxos, broadcast_callback=broadcast_done)
+        self._send_token_form = form = SendTokenForm(self, utxos, broadcast_callback=broadcast_done,
+                                                     edit_mode=edit)
         form.open()
+
+    def send_tokens(self, utxos: List[Dict[str, Any]]):
+        self._send_or_edit_tokens_common(utxos, send=True)
+
+    def edit_tokens(self, utxos: List[Dict[str, Any]]):
+        self._send_or_edit_tokens_common(utxos, edit=True)
 
 
 class TxUpdateMgr(QObject, PrintError):

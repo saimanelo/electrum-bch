@@ -197,7 +197,7 @@ def sweep(privkeys, network, config, recipient, fee=None, imax=100, sign_schnorr
 class TokenSendSpec:
     """Class used by Abstract_Wallet.make_token_send_tx to communicate to it what is required."""
     __slots__ = ('payto_addr', 'change_addr', 'feerate', 'non_token_utxos', 'token_utxos',
-                 'send_satoshis', 'send_fungible_amounts', 'send_nfts')
+                 'send_satoshis', 'send_fungible_amounts', 'send_nfts', 'edit_nfts')
     # The payee
     payto_addr: Address
     # Where to send all change back to wallet (both tokens and BCH)
@@ -218,6 +218,15 @@ class TokenSendSpec:
     send_fungible_amounts: Dict[str, int]  # token-id (hex) -> fungible amount to send
     # Set of utxo-names (which must exist in token_utxos above) that contain NFTs which are marked for sending
     send_nfts: Set[str]
+
+    # Dict of utxo-name -> new commitment that are mutable or minting NFTs which should have their commitment modified
+    # All utxo-name keys in this dict must appear in token_utxos and also be marked for sending in send_nfts
+    edit_nfts: Dict[str, bytes]
+
+    def __init__(self):
+        self.non_token_utxos, self.token_utxos, self.send_fungible_amounts, self.send_nfts, self.edit_nfts = \
+            dict(), dict(), dict(), set(), dict()
+        self.feerate, self.send_satoshis = 0, 0
 
     def get_utxo(self, utxoname: str) -> Optional[Dict[str, Any]]:
         return self.token_utxos.get(utxoname) or self.non_token_utxos.get(utxoname)
@@ -2397,15 +2406,18 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         assert isinstance(spec.payto_addr, Address) and isinstance(spec.change_addr, Address)
         assert isinstance(spec.feerate, int) and spec.feerate >= 0
         assert all(utxoname in spec.token_utxos for utxoname in spec.send_nfts)
+        assert all(utxoname in spec.token_utxos and utxoname in spec.send_nfts and isinstance(commitment, bytes)
+                   for utxoname, commitment in spec.edit_nfts.items())
 
         def get_utxo(name) -> Dict[str, Any]:
             ret = spec.get_utxo(name)
             assert ret
             return ret
 
-        def clone_and_set_amt(td: token.OutputData, amt: int, clear_nft=False) -> token.OutputData:
+        def clone_and_set_amt(td: token.OutputData, amt: int, clear_nft=False,
+                              edit_commitment: Optional[bytes] = None) -> token.OutputData:
             """Returns a clone of td with amount force-set to amt"""
-            assert amt >= 0
+            assert amt >= 0 and (not clear_nft or edit_commitment is None)
             bf = td.bitfield
             if amt > 0:
                 bf |= token.Structure.HasAmount
@@ -2416,6 +2428,13 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 commitment = b''
                 bf &= (0xff & ~(token.Structure.HasNFT | token.Structure.HasCommitmentLength))
                 bf &= (0xff & ~(token.Capability.Minting | token.Capability.Mutable))  # clear capability nybble
+            elif edit_commitment is not None:
+                assert td.has_nft()
+                commitment = edit_commitment
+                if not len(commitment):
+                    bf &= 0xff & ~token.Structure.HasCommitmentLength
+                else:
+                    bf |= token.Structure.HasCommitmentLength
             ret = token.OutputData(id=td.id, amount=amt, commitment=commitment, bitfield=bf)
             return ret
 
@@ -2503,7 +2522,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             ft_needed = max(0, spec.send_fungible_amounts.get(td.id_hex, 0) - have_ft(td.id_hex))
             target_amt = min(td.amount, ft_needed)
             # add to tds_out; strip excess fungibles out that aren't requested
-            td_out = clone_and_set_amt(td, amt=target_amt)
+            td_out = clone_and_set_amt(td, amt=target_amt, edit_commitment=spec.edit_nfts.get(utxo_name))
             assert td_out.amount == target_amt
             add_token_input(utxo_name, utxo, td_out)
             change_amt = td.amount - target_amt
