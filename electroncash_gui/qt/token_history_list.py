@@ -50,6 +50,8 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         category_id = 4
         fungible_amount = 5
         nft_amount = 6
+        fungible_balance = 7
+        nft_balance = 8
 
     class DataRoles(IntEnum):
         """Data roles. Again, to make code in on_update easier to read."""
@@ -68,7 +70,8 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         MyTreeWidget.__init__(self, parent, self.create_menu, [], self.Col.description, deferred_updates=True)
         PrintError.__init__(self)
 
-        headers = ['', '', _('Date'), _('Description'), _('Category ID'), _('Fungible Amount'), _('NFT Amount')]
+        headers = ['', '', _('Date'), _('Description'), _('Category ID'), _('Fungible Amount'), _('NFT Amount'),
+                   _("Fungible Balance"), _("NFT Balance")]
         self.update_headers(headers)
         self.setColumnHidden(1, True)
         self.setSortingEnabled(True)
@@ -76,13 +79,18 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         self.wallet = self.parent.wallet
         self.cleaned_up = False
         self.monospaceFont = QFont(MONOSPACE_FONT)
+        self.monospaceFontCondensed = QFont(MONOSPACE_FONT)
+        self.monospaceFontCondensed.setStretch(QFont.SemiCondensed)
         self.withdrawalBrush = QBrush(QColor("#BC1E1E"))
         self.batonIcon = QIcon(":icons/baton.png")
         self.mutableIcon = QIcon(":icons/mutable.png")
         self.mintingMutableIcon = QIcon(":icons/minting-mutable.png")
         self.setTextElideMode(QtCore.Qt.ElideMiddle)
-        self.header().setSectionResizeMode(self.Col.category_id, QHeaderView.Interactive)
-        self.header().resizeSection(self.Col.category_id, 120)
+        for col in range(self.Col.category_id, len(headers)):
+            self.header().setSectionResizeMode(col, QHeaderView.Interactive)
+        self.header().setSectionResizeMode(self.Col.description, QHeaderView.Stretch)
+        for col in range(self.Col.fungible_amount, len(headers)):
+            self.header().resizeSection(col, 100)
 
     def clean_up(self):
         self.cleaned_up = True
@@ -98,10 +106,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
     def on_update(self):
         self.clear()
         h = self.wallet.get_history(self.wallet.get_addresses(), reverse=True, receives_before_sends=True,
-                                    include_tokens=True,
-                                    # If we want to also display tokens balances as they accumulate per tx, set this to
-                                    # true
-                                    include_tokens_balances=False)
+                                    include_tokens=True, include_tokens_balances=True)
 
         for h_item in h:
             tx_hash, height, conf, timestamp, value, balance, tokens_deltas, tokens_balances = h_item
@@ -115,8 +120,11 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 fungible_amount = category_delta.get("fungibles", 0)
                 cat_nfts_in = category_delta.get("nfts_in", [])
                 cat_nfts_out = category_delta.get("nfts_out", [])
+                bal_fts = tokens_balances.get(category_id, {}).get("fungibles", 0)
+                bal_nfts = tokens_balances.get(category_id, {}).get("nfts", 0)
                 nft_amount = len(cat_nfts_in) - len(cat_nfts_out)
-                entry = ['', tx_hash, status_str, label, category_id, str(fungible_amount), str(nft_amount)]
+                entry = ['', tx_hash, status_str, label, category_id, str(fungible_amount), str(nft_amount),
+                         str(bal_fts), str(bal_nfts)]
                 item = SortableTreeWidgetItem(entry)
                 has_minting_ctr = 0
                 has_mutable_ctr = 0
@@ -126,17 +134,28 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 item.setData(0, self.DataRoles.category, category_id)
                 item.setData(0, self.DataRoles.editable_label, True)
                 item.setToolTip(self.Col.category_id, category_id)
+                item.setToolTip(self.Col.fungible_amount, str(fungible_amount))
+                item.setToolTip(self.Col.nft_amount, str(nft_amount))
+                item.setToolTip(self.Col.fungible_balance, str(bal_fts))
+                item.setToolTip(self.Col.nft_balance, str(bal_nfts))
                 if icon:
                     item.setIcon(0, icon)
-                item.setToolTip(0, str(conf) + " confirmation" + ("s" if conf != 1 else ""))
-                for col in (self.Col.category_id, self.Col.fungible_amount, self.Col.nft_amount):
+                conf_suffix = ngettext("confirmation", "confirmations", conf)
+                item.setToolTip(0, str(conf) + " " + conf_suffix)
+                for col in (self.Col.category_id, self.Col.fungible_amount, self.Col.nft_amount,
+                            self.Col.fungible_balance, self.Col.nft_balance):
                     item.setTextAlignment(col, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-                    item.setFont(col, self.monospaceFont)
+                    font = self.monospaceFont if col != self.Col.category_id else self.monospaceFontCondensed
+                    item.setFont(col, font)
                 item.setFont(self.Col.date, self.monospaceFont)
                 if fungible_amount < 0 or nft_amount < 0:
                     item.setForeground(self.Col.description, self.withdrawalBrush)
                     item.setForeground(self.Col.fungible_amount if fungible_amount < 0 else self.Col.nft_amount,
                                        self.withdrawalBrush)
+                if bal_fts < 0:
+                    item.setForeground(self.Col.fungible_balance, self.withdrawalBrush)
+                if bal_nfts < 0:
+                    item.setForeground(self.Col.nft_balance, self.withdrawalBrush)
 
                 def add_nft(nft, out=False):
                     nonlocal has_minting_ctr, has_mutable_ctr
@@ -151,7 +170,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     capability_str = f"{capability} " if len(capability) else ""
                     commitment_str = f": {commitment}" if commitment else ""
                     name = f"{direction} {capability_str}NFT{commitment_str}"
-                    nft_item = SortableTreeWidgetItem(['', tx_hash, '', name, '', '', '', ''])
+                    nft_item = SortableTreeWidgetItem(['', tx_hash, '', name, '', '', '', '', '', ''])
                     nft_item.setFont(self.Col.description, self.monospaceFont)
                     nft_item.setData(0, self.DataRoles.nft_row, True)
                     nft_item.setData(0, self.DataRoles.outpoint, outpoint_str)
@@ -159,14 +178,18 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     nft_item.setData(0, self.DataRoles.capability, capability)
                     if out:
                         nft_item.setForeground(self.Col.description, self.withdrawalBrush)
+                    tt_suffix = ((": " + commitment_str) if commitment_str else "")
                     if token_data.is_minting_nft():
                         has_minting_ctr += 1
                         nft_item.setIcon(self.Col.description, self.batonIcon)
-                        nft_item.setToolTip(self.Col.description, _("Minting NFT"))
+                        tt = _("Minting NFT") + tt_suffix
                     elif token_data.is_mutable_nft():
                         has_mutable_ctr += 1
                         nft_item.setIcon(self.Col.description, self.mutableIcon)
-                        nft_item.setToolTip(self.Col.description, _("Mutable NFT"))
+                        tt = _("Mutable NFT") + tt_suffix
+                    else:
+                        tt = _("NFT") + tt_suffix
+                    nft_item.setToolTip(self.Col.description, tt)
                     item.addChild(nft_item)
 
                 for nft_in in cat_nfts_in:

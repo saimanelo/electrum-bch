@@ -1979,27 +1979,38 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # 3. add balance
         c, u, x = self.get_balance(domain)
         balance = c + u + x
-        tokens_balances = defaultdict(lambda: {"fungibles": 0, "nfts": 0})
         h2 = []
+        tokens_balances = defaultdict(lambda: {"fungibles": 0, "nfts": 0})
+
+        def tally_token_balance(tokens_deltas, add: bool, cleanup_zeroes=False):
+            for token_id, tdelta in tokens_deltas.items():
+                ft_amt = tdelta.get("fungibles", 0)
+                nft_amt = len(tdelta.get("nfts_in", [])) - len(tdelta.get("nfts_out", []))
+                if add:
+                    tokens_balances[token_id]["fungibles"] += ft_amt
+                    tokens_balances[token_id]["nfts"] += nft_amt
+                else:
+                    tokens_balances[token_id]["fungibles"] -= ft_amt
+                    tokens_balances[token_id]["nfts"] -= nft_amt
+                if cleanup_zeroes:
+                    # After tallying, clean up zero balances
+                    if not tokens_balances[token_id]["fungibles"] and not tokens_balances[token_id]["nfts"]:
+                        del tokens_balances[token_id]
+
+        if include_tokens and include_tokens_balances:
+            for h_item in history:
+                tally_token_balance(h_item[5] or {}, True)
+
         for tx_hash, height, conf, timestamp, delta, tokens_deltas in history:
             tup_base = tx_hash, height, conf, timestamp, delta, balance
             if include_tokens:
-                seen_token_ids = set()
-                if tokens_deltas and include_tokens_balances:
-                    # accumulate balance
-                    for token_id, token_delta in tokens_deltas.items():
-                        tokens_balances[token_id]["fungibles"] += token_delta.get("fungibles", 0)
-                        tokens_balances[token_id]["nfts"] += (
-                            len(token_delta.get("nfts_in", [])) - len(token_delta.get("nfts_out", [])))
-                        seen_token_ids.add(token_id)
                 tup = tup_base + (tokens_deltas, copy.deepcopy(tokens_balances))
                 # Add to history
                 h2.append(self.TxHistory2(*tup))
 
-                # After adding to results, clean up zero balances
-                for token_id in seen_token_ids:
-                    if not tokens_balances[token_id]["fungibles"] and not tokens_balances[token_id]["nfts"]:
-                        del tokens_balances[token_id]
+                if tokens_deltas and include_tokens_balances:
+                    # maintain  balance
+                    tally_token_balance(tokens_deltas, False, True)
             else:
                 h2.append(self.TxHistory(*tup_base))
 
