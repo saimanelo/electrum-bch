@@ -97,22 +97,25 @@ class TokenHistoryList(MyTreeWidget, PrintError):
     @profiler
     def on_update(self):
         self.clear()
-        h = self.wallet.get_history(self.wallet.get_addresses(), reverse=True, receives_before_sends=True)
+        h = self.wallet.get_history(self.wallet.get_addresses(), reverse=True, receives_before_sends=True,
+                                    include_tokens=True,
+                                    # If we want to also display tokens balances as they accumulate per tx, set this to
+                                    # true
+                                    include_tokens_balances=False)
 
         for h_item in h:
-            tx_hash, height, conf, timestamp, value, balance = h_item
+            tx_hash, height, conf, timestamp, value, balance, tokens_deltas, tokens_balances = h_item
+            if not tokens_deltas:
+                continue
             label = self.wallet.get_label(tx_hash)
             status, status_str = self.wallet.get_tx_status(tx_hash, height, conf, timestamp)
             icon = self.parent.history_list.get_icon_for_status(status)
 
-            tx = self.wallet.get_wallet_tx(tx_hash)
-            # This should never happen
-            assert tx, f"Warning: Cannot find tx {tx_hash} in the wallet even though it is in history."
-
-            tokens_delta = self.wallet.get_wallet_tokens_delta(tx)
-            for category_id, category_delta in tokens_delta.items():
-                fungible_amount = category_delta["fungibles"]
-                nft_amount = len(category_delta["nfts_in"]) - len(category_delta["nfts_out"])
+            for category_id, category_delta in tokens_deltas.items():
+                fungible_amount = category_delta.get("fungibles", 0)
+                cat_nfts_in = category_delta.get("nfts_in", [])
+                cat_nfts_out = category_delta.get("nfts_out", [])
+                nft_amount = len(cat_nfts_in) - len(cat_nfts_out)
                 entry = ['', tx_hash, status_str, label, category_id, str(fungible_amount), str(nft_amount)]
                 item = SortableTreeWidgetItem(entry)
                 has_minting_ctr = 0
@@ -166,9 +169,9 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                         nft_item.setToolTip(self.Col.description, _("Mutable NFT"))
                     item.addChild(nft_item)
 
-                for nft_in in category_delta["nfts_in"]:
+                for nft_in in cat_nfts_in:
                     add_nft(nft_in, False)
-                for nft_out in category_delta["nfts_out"]:
+                for nft_out in cat_nfts_out:
                     add_nft(nft_out, True)
 
                 if has_minting_ctr:

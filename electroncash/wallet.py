@@ -1048,26 +1048,64 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             delta += v
         return delta
 
+    @staticmethod
+    def _token_delta_dict_factory():
+        return {"fungibles": 0, "nfts_in": [], "nfts_out": []}
+
+    def get_tx_tokens_delta(self, tx_hash, address) -> Optional[Dict[str, Dict[str, Any]]]:
+        """Returns the effect of tx on per-address token balance(s), if any
+
+        returns dict: {"token_id_hex" : {"fungibles": nnn,
+                                         "nfts_in": [(prevout_n, token_data)],
+                                         "nfts_out":[(out_n, token_data)]}}
+
+        May return None if `tx_hash` is pruned, otherwise will always return (a possibly-empty) dict.
+        """
+        assert isinstance(address, Address)
+        if tx_hash in self.pruned_txo_values:
+            return None
+
+        # Nota bene: self.ct_txi is a nested dict of dicts keyed by:
+        # tx_hash -> dict key: address -> dict key: prevout_hash -> dict key: prevout_n -> token_data (token.OutputData)
+        d = self.ct_txi.get(tx_hash, {}).get(address, {})
+        ret = defaultdict(self._token_delta_dict_factory)
+        # "substract" the fungibles and ntfs of tokens sent from address
+        for prevout_hash, inp_dict in d.items():
+            for prevout_n, token_data in inp_dict.items():
+                if token_data:
+                    id_hex = token_data.id_hex
+                    ret[id_hex]["fungibles"] -= token_data.amount
+                    if token_data.has_nft():
+                        ret[id_hex]["nfts_out"].append((prevout_n, token_data))
+        # Nota bene: self.ct_txo is a nested dict of dicts keyed by:
+        # tx_hash -> dict key: address -> dict key: address -> dict key: n -> token_data (token.OutputData)
+        d = self.ct_txo.get(tx_hash, {}).get(address, {})
+        # "add" the fungibles and ntfs received at address
+        for output_n, token_data in d.items():
+            if token_data:
+                id_hex = token_data.id_hex
+                ret[id_hex]["fungibles"] += token_data.amount
+                if token_data.has_nft():
+                    ret[id_hex]["nfts_in"].append((output_n, token_data))
+
+        # demote to regular dict for safety, and return
+        return dict(ret)
+
     WalletDelta = namedtuple("WalletDelta", "is_relevant, is_mine, v, fee")
     WalletDelta2 = namedtuple("WalletDelta2", WalletDelta._fields + ("spends_coins_mine",))
-    WalletDelta3 = namedtuple("WalletDelta3", WalletDelta2._fields + ("tokens_delta",))
 
     def get_wallet_delta(self, tx) -> WalletDelta:
         return self._get_wallet_delta(tx, ver=1)
 
-    def get_wallet_tokens_delta(self, tx):
-        return self._get_wallet_delta(tx, ver=3).tokens_delta
-
-    def _get_wallet_delta(self, tx, *, ver=1) -> Union[WalletDelta, WalletDelta2, WalletDelta3]:
+    def _get_wallet_delta(self, tx, *, ver=1) -> Union[WalletDelta, WalletDelta2]:
         """ Effect of tx on wallet """
-        assert ver in (1, 2, 3)
+        assert ver in (1, 2)
         is_relevant = False
         is_mine = False
         is_pruned = False
         is_partial = False
         v_in = v_out = v_out_mine = n_out = 0
         spends_coins_mine = list()
-        tokens_delta = defaultdict(lambda: {"fungibles": 0, "nfts_in": [], "nfts_out": []})  # key: category_id
 
         for item in tx.inputs():
             addr = item['address']
@@ -1080,19 +1118,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 for n, v, cb in d:
                     if n == prevout_n:
                         value = v
-                        if ver == 2:
+                        if ver >= 2:
                             spends_coins_mine.append(f'{prevout_hash}:{prevout_n}')
-                        if ver == 3:
-                            inputtx = self.get_input_tx(prevout_hash)
-                            if inputtx:
-                                _, token_data = inputtx.outputs(tokens=True)[prevout_n]
-                                if token_data:
-                                    assert isinstance(token_data, token.OutputData)
-                                    category_id = token_data.id_hex
-                                    if token_data.has_amount():
-                                        tokens_delta[category_id]["fungibles"] -= token_data.amount
-                                    if token_data.has_nft():
-                                        tokens_delta[category_id]["nfts_out"].append((prevout_n, token_data))
                         break
                 else:
                     value = None
@@ -1109,13 +1136,6 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if self.is_mine(addr):
                 v_out_mine += value
                 is_relevant = True
-                if ver == 3 and token_data:
-                    assert isinstance(token_data, token.OutputData)
-                    category_id = token_data.id_hex
-                    if token_data.has_amount():
-                        tokens_delta[category_id]["fungibles"] += token_data.amount
-                    if token_data.has_nft():
-                        tokens_delta[category_id]["nfts_in"].append((n_out, token_data))
             n_out += 1
 
         if is_pruned:
@@ -1138,10 +1158,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             fee = None
         if ver == 1:
             return self.WalletDelta(is_relevant, is_mine, v, fee)
-        elif ver == 2:
-            return self.WalletDelta2(is_relevant, is_mine, v, fee, spends_coins_mine)
-        return self.WalletDelta3(is_relevant, is_mine, v, fee, spends_coins_mine, tokens_delta)
-
+        return self.WalletDelta2(is_relevant, is_mine, v, fee, spends_coins_mine)
 
     TxInfo = namedtuple("TxInfo", "tx_hash, status, label, can_broadcast, amount, fee, height, conf, timestamp, exp_n")
 
@@ -1900,15 +1917,31 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     cur_hist.append((txid, 0))
                     self._history[addr] = cur_hist
 
+    # Returned by get_history iff include_tokens arg is False
     TxHistory = namedtuple("TxHistory", "tx_hash, height, conf, timestamp, amount, balance")
+    # Returned by get_history iff include_tokens arg is True
+    TxHistory2 = namedtuple("TxHistory", TxHistory._fields + ("tokens_deltas", "tokens_balances"))
 
-    def get_history(self, domain=None, *, reverse=False, receives_before_sends=False) -> List[TxHistory]:
+    def get_history(self, domain=None, *, reverse=False, receives_before_sends=False,
+                    include_tokens=False, include_tokens_balances=False) -> List[Union[TxHistory, TxHistory2]]:
+        """Iff include_tokens=True, returns a list of TxHistory2, otherwise returns a list of TxHistory
+           If include_tokens_balances is False, the TxHistory2.tokens_balances dict will be empty (perf. optimization)
+        """
         # get domain
         if domain is None:
             domain = self.get_addresses()
         # 1. Get the history of each address in the domain, maintain the
         #    delta of a tx as the sum of its deltas on domain addresses
         tx_deltas = defaultdict(int)
+        # key: tx_hash -> "category_id" -> merged token_delta dict for all addresses
+        tx_tokens_deltas = defaultdict(lambda: defaultdict(self._token_delta_dict_factory))
+
+        def accumulate_tokens_deltas(dest, tdelta):
+            for token_id, per_tok_delta in tdelta.items():
+                dest[token_id]["fungibles"] += per_tok_delta.get("fungibles", 0)
+                dest[token_id]["nfts_in"] += per_tok_delta.get("nfts_in", [])
+                dest[token_id]["nfts_out"] += per_tok_delta.get("nfts_out", [])
+
         for addr in domain:
             h = self.get_address_history(addr)
             for tx_hash, height in h:
@@ -1917,13 +1950,18 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     tx_deltas[tx_hash] = None
                 else:
                     tx_deltas[tx_hash] += delta
+                if include_tokens:
+                    tdelta = self.get_tx_tokens_delta(tx_hash, addr)
+                    if tdelta:
+                        accumulate_tokens_deltas(tx_tokens_deltas[tx_hash], tdelta)
 
         # 2. create sorted history
         history = []
         for tx_hash in tx_deltas:
             delta = tx_deltas[tx_hash]
+            tokens_deltas = tx_tokens_deltas.get(tx_hash, {}) if include_tokens else None
             height, conf, timestamp = self.get_tx_height(tx_hash)
-            history.append((tx_hash, height, conf, timestamp, delta))
+            history.append((tx_hash, height, conf, timestamp, delta, tokens_deltas))
 
         def sort_func_simple(h_item):
             """Here we naively sort just by tx_pos in the block (CTOR ordering), per block"""
@@ -1941,9 +1979,30 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         # 3. add balance
         c, u, x = self.get_balance(domain)
         balance = c + u + x
+        tokens_balances = defaultdict(lambda: {"fungibles": 0, "nfts": 0})
         h2 = []
-        for tx_hash, height, conf, timestamp, delta in history:
-            h2.append(self.TxHistory(tx_hash, height, conf, timestamp, delta, balance))
+        for tx_hash, height, conf, timestamp, delta, tokens_deltas in history:
+            tup_base = tx_hash, height, conf, timestamp, delta, balance
+            if include_tokens:
+                seen_token_ids = set()
+                if tokens_deltas and include_tokens_balances:
+                    # accumulate balance
+                    for token_id, token_delta in tokens_deltas.items():
+                        tokens_balances[token_id]["fungibles"] += token_delta.get("fungibles", 0)
+                        tokens_balances[token_id]["nfts"] += (
+                            len(token_delta.get("nfts_in", [])) - len(token_delta.get("nfts_out", [])))
+                        seen_token_ids.add(token_id)
+                tup = tup_base + (tokens_deltas, copy.deepcopy(tokens_balances))
+                # Add to history
+                h2.append(self.TxHistory2(*tup))
+
+                # After adding to results, clean up zero balances
+                for token_id in seen_token_ids:
+                    if not tokens_balances[token_id]["fungibles"] and not tokens_balances[token_id]["nfts"]:
+                        del tokens_balances[token_id]
+            else:
+                h2.append(self.TxHistory(*tup_base))
+
             if balance is None or delta is None:
                 balance = None
             else:
