@@ -79,6 +79,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         self.withdrawalBrush = QBrush(QColor("#BC1E1E"))
         self.batonIcon = QIcon(":icons/baton.png")
         self.mutableIcon = QIcon(":icons/mutable.png")
+        self.mintingMutableIcon = QIcon(":icons/minting-mutable.png")
         self.setTextElideMode(QtCore.Qt.ElideMiddle)
         self.header().setSectionResizeMode(self.Col.category_id, QHeaderView.Interactive)
         self.header().resizeSection(self.Col.category_id, 120)
@@ -138,7 +139,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     nonlocal has_minting_ctr, has_mutable_ctr
                     outpoint_n, token_data = nft
                     outpoint_str = TokenList.get_outpoint_longname({"prevout_hash": tx_hash, "prevout_n": outpoint_n})
-                    capability = token.get_nft_flag_text(token_data)
+                    capability = token.get_nft_flag_text(token_data) or ""
                     direction = "-" if out else "+"
                     if token_data.is_immutable_nft():
                         capability = ""
@@ -171,16 +172,17 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     add_nft(nft_out, True)
 
                 if has_minting_ctr:
-                    if not has_mutable_ctr:
+                    if has_mutable_ctr:
+                        item.setToolTip(self.Col.description,
+                                        _("Transaction involves {ct1} Minting and {ct2} Mutable NFTs")
+                                        .format(ct1=has_minting_ctr, ct2=has_mutable_ctr))
+                        item.setIcon(self.Col.description, self.mintingMutableIcon)
+                    else:
                         item.setToolTip(self.Col.description,
                                         ngettext("Transaction involves {ct} Minting NFT",
                                                  "Transaction involves {ct} Minting NFTs", has_minting_ctr)
                                         .format(ct=has_minting_ctr))
-                    else:
-                        item.setToolTip(self.Col.description,
-                                        _("Transaction involves {ct1} Minting and {ct2} Mutable NFTs")
-                                        .format(ct1=has_minting_ctr, ct2=has_mutable_ctr))
-                    item.setIcon(self.Col.description, self.batonIcon)
+                        item.setIcon(self.Col.description, self.batonIcon)
                 elif has_mutable_ctr:
                     item.setToolTip(self.Col.description,
                                     ngettext("Transaction involves {ct} Mutable NFT",
