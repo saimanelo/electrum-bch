@@ -63,6 +63,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         commitment = QtCore.Qt.UserRole + 5
         capability = QtCore.Qt.UserRole + 6
         editable_label = QtCore.Qt.UserRole + 7
+        item_key = QtCore.Qt.UserRole + 8
 
     statusIcons = {}
 
@@ -104,10 +105,20 @@ class TokenHistoryList(MyTreeWidget, PrintError):
 
     @profiler
     def on_update(self):
+        def item_key(item: SortableTreeWidgetItem) -> str:
+            return item.data(0, self.DataRoles.item_key) or ""
+        # Remember selections and expanded top-level items (must be done before clear)
+        selected_keys = {item_key(item) for item in self.selectedItems()}
+        expanded_keys = {item_key(self.topLevelItem(i)) for i in range(self.topLevelItemCount())
+                         if self.topLevelItem(i).childCount() > 0 and self.topLevelItem(i).isExpanded()}
+        was_empty = self.topLevelItemCount() == 0
+
         self.clear()
+
         h = self.wallet.get_history(self.wallet.get_addresses(), reverse=True, receives_before_sends=True,
                                     include_tokens=True, include_tokens_balances=True)
 
+        all_items = []
         for h_item in h:
             tx_hash, height, conf, timestamp, value, balance, tokens_deltas, tokens_balances = h_item
             if not tokens_deltas:
@@ -117,6 +128,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
             icon = self.parent.history_list.get_icon_for_status(status)
 
             for category_id, category_delta in tokens_deltas.items():
+                tl_item_key = tx_hash + category_id
                 fungible_amount = category_delta.get("fungibles", 0)
                 cat_nfts_in = category_delta.get("nfts_in", [])
                 cat_nfts_out = category_delta.get("nfts_out", [])
@@ -133,6 +145,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 item.setData(0, self.DataRoles.nft_row, False)
                 item.setData(0, self.DataRoles.category, category_id)
                 item.setData(0, self.DataRoles.editable_label, True)
+                item.setData(0, self.DataRoles.item_key, tl_item_key)
                 item.setToolTip(self.Col.category_id, category_id)
                 item.setToolTip(self.Col.fungible_amount, str(fungible_amount))
                 item.setToolTip(self.Col.nft_amount, str(nft_amount))
@@ -159,8 +172,13 @@ class TokenHistoryList(MyTreeWidget, PrintError):
 
                 def add_nft(nft, out=False):
                     nonlocal has_minting_ctr, has_mutable_ctr
-                    outpoint_n, token_data = nft
-                    outpoint_str = TokenList.get_outpoint_longname({"prevout_hash": tx_hash, "prevout_n": outpoint_n})
+                    if out:
+                        outpoint_hash, outpoint_n, token_data = nft
+                    else:
+                        outpoint_n, token_data = nft
+                        outpoint_hash = tx_hash
+                    outpoint_str = TokenList.get_outpoint_longname({"prevout_hash": outpoint_hash,
+                                                                    "prevout_n": outpoint_n})
                     capability = token.get_nft_flag_text(token_data) or ""
                     direction = "-" if out else "+"
                     if token_data.is_immutable_nft():
@@ -176,6 +194,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     nft_item.setData(0, self.DataRoles.outpoint, outpoint_str)
                     nft_item.setData(0, self.DataRoles.commitment, commitment)
                     nft_item.setData(0, self.DataRoles.capability, capability)
+                    nft_item.setData(0, self.DataRoles.item_key, tl_item_key + outpoint_str)
                     if out:
                         nft_item.setForeground(self.Col.description, self.withdrawalBrush)
                     tt_suffix = ((": " + commitment_str) if commitment_str else "")
@@ -190,7 +209,9 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     else:
                         tt = _("NFT") + tt_suffix
                     nft_item.setToolTip(self.Col.description, tt)
+
                     item.addChild(nft_item)
+                    all_items.append(nft_item)
 
                 for nft_in in cat_nfts_in:
                     add_nft(nft_in, False)
@@ -217,6 +238,20 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     item.setIcon(self.Col.description, self.mutableIcon)
 
                 self.addChild(item)
+                all_items.append(item)
+
+        # Restore selections of sub-items, and expanded top-level items
+        for item in all_items:
+            k = item_key(item)
+            if k in selected_keys:
+                item.setSelected(True)
+            if k in expanded_keys:
+                item.setExpanded(True)
+
+        if was_empty:
+            # Auto-expand if we have only 1 top-level item with children and this was the first run through
+            if self.invisibleRootItem().childCount() == 1:
+                self.invisibleRootItem().child(0).setExpanded(True)
 
     def on_permit_edit(self, item: SortableTreeWidgetItem, column):
         return bool(item.data(0, self.DataRoles.editable_label))

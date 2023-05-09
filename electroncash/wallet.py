@@ -1056,8 +1056,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         """Returns the effect of tx on per-address token balance(s), if any
 
         returns dict: {"token_id_hex" : {"fungibles": nnn,
-                                         "nfts_in": [(prevout_n, token_data)],
-                                         "nfts_out":[(out_n, token_data)]}}
+                                         "nfts_in": [(out_n, token_data)],
+                                         "nfts_out":[(prevout_hash, prevout_n, token_data)]}}
 
         May return None if `tx_hash` is pruned, otherwise will always return (a possibly-empty) dict.
         """
@@ -1076,7 +1076,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     id_hex = token_data.id_hex
                     ret[id_hex]["fungibles"] -= token_data.amount
                     if token_data.has_nft():
-                        ret[id_hex]["nfts_out"].append((prevout_n, token_data))
+                        ret[id_hex]["nfts_out"].append((prevout_hash, prevout_n, token_data))
         # Nota bene: self.ct_txo is a nested dict of dicts keyed by:
         # tx_hash -> dict key: address -> dict key: address -> dict key: n -> token_data (token.OutputData)
         d = self.ct_txo.get(tx_hash, {}).get(address, {})
