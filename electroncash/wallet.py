@@ -1316,19 +1316,27 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         received, sent = self.get_addr_io(address)
         return sum([v for height, v, is_cb, token_data in received.values()])
 
-    def get_addr_balance(self, address, exclude_frozen_coins=False):
-        ''' Returns the balance of a bitcoin address as a tuple of:
-            (confirmed_matured, unconfirmed, unmatured)
+    def get_addr_balance(self, address, exclude_frozen_coins=False, *, tokens=False):
+        """ Returns the balance of a bitcoin address as a tuple of:
+            (confirmed_matured, unconfirmed, unmatured) if tokens == False or
+            (confirmed_matured, unconfirmed, unmatured, cashtoken_utxo_balance) if tokens == True
             Note that 'exclude_frozen_coins = True' only checks for coin-level
-            freezing, not address-level. '''
+            freezing, not address-level. """
         assert isinstance(address, Address)
         mempoolHeight = self.get_local_height() + 1
-        if not exclude_frozen_coins:  # we do not use the cache when excluding frozen coins as frozen status is a dynamic quantity that can change at any time in the UI
+        return_arity = 3 + int(tokens)
+        if not exclude_frozen_coins:
+            # Note: We do not use the cache when excluding frozen coins as frozen status is
+            # a dynamic quantity that can change at any time in the UI
             cached = self._addr_bal_cache.get(address)
             if cached is not None:
-                return cached
+                # Account for the possible variation in tokens arg, leading to cached 3-tuple vs 4-tuple...
+                # Ensure the cached value has the arity we need for this invocation
+                if len(cached) >= return_arity:
+                    return cached[:return_arity]
         received, sent = self.get_addr_io(address)
         c = u = x = 0
+        tok_locked = 0
         had_cb = False
         for txo, (tx_height, v, is_cb, token_data) in received.items():
             if exclude_frozen_coins and (txo in self.frozen_coins or txo in self.frozen_coins_tmp):
@@ -1345,7 +1353,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     c -= v
                 else:
                     u -= v
-        result = c, u, x
+            elif token_data:
+                # This received output has a token on it and has not been spent.
+                # We can say its BCH amount is "locked" onto a CashToken
+                tok_locked += v
+
+        result = (c, u, x, tok_locked)[:return_arity]
         if not exclude_frozen_coins and not had_cb:
             # Cache the results.
             # Cache needs to be invalidated if a transaction is added to/
@@ -1366,7 +1379,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # In light of that fact, a possible approach would be to invalidate
             # this entire cache when a new block arrives (this is what Electrum
             # does). However, for Electron Cash with its focus on many addresses
-            # for future privacy features such as integrated CashShuffle --
+            # for privacy features such as integrated CashFusion --
             # being notified in the wallet and invalidating the *entire* cache
             # whenever a new block arrives (which is the exact time you do
             # the most GUI refreshing and calling of this function) seems a bit
@@ -1379,7 +1392,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # consequence of this policy, all the other addresses that are
             # non-coinbase can benefit from a cache that stays valid for longer
             # than 1 block (so long as their balances haven't changed).
-            self._addr_bal_cache[address] = result
+            self._addr_bal_cache[address] = result  # Note that the arity of `result` may be 3 or 4 here
         return result
 
     def get_spendable_coins(self, domain, config, isInvoice=False):
@@ -1459,18 +1472,24 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         cc_all, uu_all, xx_all = self.get_balance(None, exclude_frozen_coins = False, exclude_frozen_addresses = False)
         return (cc_all-cc_no_f), (uu_all-uu_no_f), (xx_all-xx_no_f)
 
-    def get_balance(self, domain=None, exclude_frozen_coins=False, exclude_frozen_addresses=False):
+    def get_balance(self, domain=None, exclude_frozen_coins=False, exclude_frozen_addresses=False, *,
+                    tokens=False):
+        """If tokens=True, returns a 4-tuple: (confirmed, unconfirmed, unmatured, tokens), otherwise returns a
+           3-tuple of just (confirmed, unconfirmed, unmatured) """
         if domain is None:
             domain = self.get_addresses()
         if exclude_frozen_addresses:
             domain = set(domain) - self.frozen_addresses
-        cc = uu = xx = 0
+        cc = uu = xx = toks = 0
         for addr in domain:
-            c, u, x = self.get_addr_balance(addr, exclude_frozen_coins)
+            tup = self.get_addr_balance(addr, exclude_frozen_coins, tokens=tokens)
+            c, u, x = tup[:3]
+            tok = tup[3] if tokens else 0
             cc += c
             uu += u
             xx += x
-        return cc, uu, xx
+            toks += tok
+        return (cc, uu, xx, toks)[:3 + int(tokens)]
 
     def get_address_history(self, address):
         assert isinstance(address, Address)
@@ -1977,7 +1996,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         history.sort(key=sort_func, reverse=True)
 
         # 3. add balance
-        c, u, x = self.get_balance(domain)
+        c, u, x, toks_ignored = self.get_balance(domain, tokens=True)
         balance = c + u + x
         h2 = []
         tokens_balances = defaultdict(lambda: {"fungibles": 0, "nfts": 0})

@@ -999,7 +999,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     icon = icon_dict["status_lagging_fork"]
                     status_tip = status_tip_dict["status_lagging_fork"] + "; " + text
             else:
-                c, u, x = self.wallet.get_balance()
+                c, u, x, cash_toks = self.wallet.get_balance(tokens=True)
 
                 text_items = [
                     _("Balance: {amount_and_unit}").format(
@@ -1012,6 +1012,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 if x:
                     text_items.append(_("[{amount} unmatured]").format(
                         amount=self.format_amount(x, True).strip()))
+                if cash_toks:
+                    text_items.append(_("[{amount} on CashToken UTXOs]").format(
+                        amount=self.format_amount(cash_toks, False).strip()))
 
                 extra = run_hook("balance_label_extra", self)
                 if isinstance(extra, str) and extra:
