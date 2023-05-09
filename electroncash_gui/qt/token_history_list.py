@@ -139,7 +139,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     nonlocal has_minting_ctr, has_mutable_ctr
                     outpoint_n, token_data = nft
                     outpoint_str = TokenList.get_outpoint_longname({"prevout_hash": tx_hash, "prevout_n": outpoint_n})
-                    capability = token.get_nft_flag_text(token_data)
+                    capability = token.get_nft_flag_text(token_data) or ""
                     direction = "-" if out else "+"
                     if token_data.is_immutable_nft():
                         capability = ""
