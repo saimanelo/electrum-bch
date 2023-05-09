@@ -78,7 +78,7 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
 
         help_text = _("In order to create a new token, you must spend a coin (UTXO) that has output number 0, e.g."
                       " \"xxxx:0\". Up to ~{tx_fee} satoshis from this coin will be used in fees, and the rest will"
-                      " got back to your wallet. If your wallet lacks any \"xxx:0\" coins, click the"
+                      " go back to your wallet. If your wallet lacks any \"xxx:0\" coins, click the"
                       " \"New...\" button to send some funds to yourself to create an eligible coin with tx output"
                       " number 0.").format(
             tx_fee=self.est_tx_fee())

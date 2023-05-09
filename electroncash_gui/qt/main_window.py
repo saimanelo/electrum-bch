@@ -5432,6 +5432,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def edit_tokens(self, utxos: List[Dict[str, Any]]):
         self._send_or_edit_tokens_common(utxos, edit=True)
 
+    def mint_tokens(self, utxos: List[Dict[str, Any]]):
+        self._send_or_edit_tokens_common(utxos, edit=True)
+
 
 class TxUpdateMgr(QObject, PrintError):
     ''' Manages new transaction notifications and transaction verified

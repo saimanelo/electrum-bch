@@ -453,6 +453,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                      for item in selected if item.data(0, self.DataRoles.nft_utxo)]
         non_frozen_utxos = []
         non_frozen_utxos_that_are_editable = []
+        non_frozen_utxos_that_are_minting = []
         frozen_utxos = []
         frozen_addresses = set()
 
@@ -471,7 +472,8 @@ class TokenList(MyTreeWidget, util.PrintError):
                         td = utxo['token_data']
                         if td and (td.is_mutable_nft() or td.is_minting_nft()):
                             non_frozen_utxos_that_are_editable.append(utxo)
-
+                            if td.is_minting_nft():
+                                non_frozen_utxos_that_are_minting.append(utxo)
                 else:
                     self.print_error("WARNING: Unexpected state -- childCount is 0 but we have more than 1 utxo for a"
                                      "QTreeWidgetItem in token_list.py")
@@ -485,6 +487,7 @@ class TokenList(MyTreeWidget, util.PrintError):
         non_frozen_utxos = self.dedupe_utxos(non_frozen_utxos)
         frozen_utxos = self.dedupe_utxos(frozen_utxos)
         non_frozen_utxos_that_are_editable = self.dedupe_utxos(non_frozen_utxos_that_are_editable)
+        non_frozen_utxos_that_are_minting = self.dedupe_utxos(non_frozen_utxos_that_are_minting)
 
         def do_copy(txt):
             txt = txt.strip()
@@ -585,6 +588,10 @@ class TokenList(MyTreeWidget, util.PrintError):
                                ngettext("Edit NFT Commitment", "Edit NFT Commitments", num_editable_utxos)
                                + (f" ({num_editable_utxos})" if num_editable_utxos > 1 else "") + "...",
                                lambda: self.edit_tokens(non_frozen_utxos_that_are_editable))
+            num_minting_utxos = len(non_frozen_utxos_that_are_minting)
+            if num_minting_utxos:
+                menu.addAction(QtGui.QIcon(":icons/baton.png"), _("Mint NFTs..."),
+                               lambda: self.edit_tokens(non_frozen_utxos_that_are_minting))
 
         menu.addAction(QtGui.QIcon(":icons/tab_token.svg"), _("Create Token") + "...", self.create_new_token)
 
@@ -614,6 +621,11 @@ class TokenList(MyTreeWidget, util.PrintError):
     def edit_tokens(self, utxos: List[Dict[str, Any]]):
         utxos = self.dedupe_utxos(utxos)
         self.parent.edit_tokens(utxos)
+
+    @if_not_dead
+    def mint_tokens(self, utxos: List[Dict[str, Any]]):
+        utxos = self.dedupe_utxos(utxos)
+        self.parent.mint_tokens(utxos)
 
     @if_not_dead
     def update_labels(self):
