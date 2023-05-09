@@ -941,7 +941,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 value_fmtd = self.main_window.format_amount(value)
                 copy_list += [ ( _("Copy Amount"), lambda: self._copy_to_clipboard(value_fmtd, o_text) ) ]
             if token_data:
-                copy_list += [ ( _("Copy Token ID"), lambda: self._copy_to_clipboard(token_data.id_hex, o_text) ) ]
+                copy_list += [ ( _("Copy Category ID"), lambda: self._copy_to_clipboard(token_data.id_hex, o_text) ) ]
                 if token_data.has_amount():
                     copy_list += [(_("Copy Token Amount"), lambda: self._copy_to_clipboard(str(token_data.amount), o_text))]
                 if token_data.has_commitment_length():

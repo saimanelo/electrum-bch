@@ -68,7 +68,7 @@ class TokenList(MyTreeWidget, util.PrintError):
 
     def __init__(self, parent: ElectrumWindow):
         assert isinstance(parent, ElectrumWindow)
-        columns = [_('Token ID'), _('Label'), _('Fungible Amount'), _('NFTs'), _('NFT Flags'), _('Num UTXOs'),
+        columns = [_('Category ID'), _('Label'), _('Fungible Amount'), _('NFTs'), _('NFT Flags'), _('Num UTXOs'),
                    self.amount_heading.format(unit=parent.base_unit()), _('Output Point')]
         super().__init__(parent=parent, create_menu=self.create_menu, headers=columns,
                          stretch_column=self.Col.label, deferred_updates=True,
@@ -528,7 +528,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                         alt_copy_texts = [i.data(0, self.DataRoles.token_id) + ", " + get_text(i)
                                           for i in selected if get_text(i) and get_text(i) != '-']
                         alt_copy_text = "\n".join(alt_copy_texts)
-                        alt_copy = _("Copy {}").format(_('Token ID')) + ", " + column_title + f" ({len(alt_copy_texts)})"
+                        alt_copy = _("Copy {}").format(_('Category ID')) + ", " + column_title + f" ({len(alt_copy_texts)})"
                     if texts:
                         copy_text = '\n'.join(texts)
                         menu.addAction(_("Copy {}").format(column_title) + f" ({len(texts)})",

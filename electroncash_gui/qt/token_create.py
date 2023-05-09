@@ -99,10 +99,10 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
 
         col = 0
         row += 1
-        help_text = _("The newly created token derives its Token ID (also known as a Category ID) from the tx hash"
+        help_text = _("The newly created token derives its Category ID (also known as a Token ID) from the tx hash"
                       " of the \"xxx:0\" coin that was used to create it.")
-        tt = _("Token ID of the newly created token")
-        l = HelpLabel(_("Token ID"), help_text)
+        tt = _("Category ID of the newly created token")
+        l = HelpLabel(_("Category ID"), help_text)
         l.setToolTip(tt)
         grid.addWidget(l, row, col)
         col += 1
@@ -457,7 +457,7 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         if select_index is not None:
             self.cb_utxos.setCurrentIndex(select_index)
         elif self.cb_utxos.currentIndex() < 0:
-            # Called to set the Token ID label to "-" on empty / no selection
+            # Called to set the Category ID label to "-" on empty / no selection
             self.on_cb_utxo_index_change(-1)
         # Only enable the "New..." button if it makes sense ot do so, and set the tooltip accordingly
         b = bool(len(self.other_non_dust_utxos))

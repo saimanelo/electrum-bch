@@ -60,8 +60,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         receives_nft_count_updates = QtCore.Qt.UserRole + 2
         receives_nft_flag_updates = QtCore.Qt.UserRole + 3
 
-    headers_tok = [_("Token ID"), _("NFTs to Send"), _("Fungible Amount"), _("Fungible Amount to Send")]
-    headers_nft = [_("Send"), _("Token ID"), _("Commitment"), _("Flags")]
+    headers_tok = [_("Category ID"), _("NFTs to Send"), _("Fungible Amount"), _("Fungible Amount to Send")]
+    headers_nft = [_("Send"), _("Category ID"), _("Commitment"), _("Flags")]
 
     def __init__(self, parent: ElectrumWindow, token_utxos: List[dict],
                  *, broadcast_callback: Optional[Callable[[bool], Any]] = None,
