@@ -1065,7 +1065,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         is_mine = False
         is_pruned = False
         is_partial = False
-        v_in = v_out = v_out_mine = 0
+        v_in = v_out = v_out_mine = n_out = 0
         spends_coins_mine = list()
         tokens_delta = defaultdict(lambda: {"fungibles": 0, "nfts_in": [], "nfts_out": []})  # key: category_id
 
@@ -1092,7 +1092,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                                     if token_data.has_amount():
                                         tokens_delta[category_id]["fungibles"] -= token_data.amount
                                     if token_data.has_nft():
-                                        tokens_delta[category_id]["nfts_out"].append(token_data)
+                                        tokens_delta[category_id]["nfts_out"].append((prevout_n, token_data))
                         break
                 else:
                     value = None
@@ -1115,7 +1115,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     if token_data.has_amount():
                         tokens_delta[category_id]["fungibles"] += token_data.amount
                     if token_data.has_nft():
-                        tokens_delta[category_id]["nfts_in"].append(token_data)
+                        tokens_delta[category_id]["nfts_in"].append((n_out, token_data))
+            n_out += 1
 
         if is_pruned:
             # some inputs are mine:
