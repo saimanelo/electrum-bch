@@ -36,7 +36,7 @@ from electroncash import token, util
 from electroncash.i18n import _, ngettext
 from .main_window import ElectrumWindow
 from .util import ColorScheme, MONOSPACE_FONT, MyTreeWidget, rate_limited, SortableTreeWidgetItem
-
+from .token_meta import TokenMetaQt
 
 class TokenList(MyTreeWidget, util.PrintError):
 
@@ -93,6 +93,7 @@ class TokenList(MyTreeWidget, util.PrintError):
         self.cyan_blue = QtGui.QColor('#3399ff')
         self.icon_baton = QtGui.QIcon(":icons/baton.png")
         self.icon_mutable = QtGui.QIcon(":icons/mutable.png")
+        self.token_meta: TokenMetaQt = self.parent.token_meta
 
     def clean_up(self):
         self.cleaned_up = True
@@ -402,6 +403,9 @@ class TokenList(MyTreeWidget, util.PrintError):
 
                     item.addChild(nft_parent)
 
+            # Lastly, grab the token icon. We set it last because above code may have
+            # replaced `item` with another instance.
+            item.setIcon(self.Col.token_id, self.token_meta.get_icon(token_id))
             self.addChild(item)
 
         # Now, at the very end, enforce previous UI state with respect to what was expanded or not. See #1042

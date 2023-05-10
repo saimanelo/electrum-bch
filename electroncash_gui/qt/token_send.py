@@ -37,6 +37,7 @@ from .amountedit import BTCAmountEdit
 from .fee_slider import FeeSlider
 from .main_window import ElectrumWindow
 from .qrtextedit import ScanQRTextEdit
+from .token_meta import TokenMetaQt
 from .util import ColorScheme, HelpLabel, OnDestroyedMixin, PrintError, WindowModalDialog
 
 
@@ -75,6 +76,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         util.finalization_print_error(self)
         self.setWindowIcon(QtGui.QIcon(":icons/tab_send.png"))
         self.parent = parent
+        self.token_meta: TokenMetaQt = parent.token_meta
         self.wallet: wallet.Abstract_Wallet = self.parent.wallet
         self.utxos_by_name: Dict[str, dict] = dict()
         self.token_utxos: DefaultDict[str, List[str]] = defaultdict(list)  # tokenid -> unique sorted list of utxonames
@@ -352,6 +354,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     # Skip displaying rows in this table for tokens that have no fungibles
                     continue
                 item = QtWidgets.QTreeWidgetItem([tid, "", str(amt), ""])
+                item.setIcon(self.ColsTok.token_id, self.token_meta.get_icon(tid))
                 item.setToolTip(self.ColsTok.token_id, item.text(self.ColsTok.token_id))
                 item.setToolTip(self.ColsTok.amount, item.text(self.ColsTok.amount))
                 item.setData(0, self.DataRoles.token_id, tid)
@@ -420,6 +423,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             assert isinstance(td, token.OutputData)
             commitment_hex = td.commitment.hex()
             item = QtWidgets.QTreeWidgetItem(["", tid, commitment_hex, token.get_nft_flag_text(td)])
+            item.setIcon(self.ColsNFT.token_id, self.token_meta.get_icon(tid))
             item.setToolTip(self.ColsNFT.token_id, tid)
             if not self.edit_mode:
                 item.setToolTip(self.ColsNFT.selected, _("Check to send this NFT"))
@@ -500,6 +504,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 continue
             # This group has more than 1 item, build a subgrouping
             parent = QtWidgets.QTreeWidgetItem(["", tid, "", ""])
+            parent.setIcon(self.ColsNFT.token_id, self.token_meta.get_icon(tid))
             parent.setToolTip(self.ColsNFT.token_id, tid)
             parent.setFlags((parent.flags() | QtCore.Qt.ItemIsAutoTristate | QtCore.Qt.ItemIsUserCheckable)
                             & ~QtCore.Qt.ItemIsSelectable)

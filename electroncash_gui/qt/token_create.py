@@ -54,6 +54,7 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         self.eligible_utxos = []
         self.other_non_dust_utxos = []
         self.did_warn_wallet_empty = False
+        self.token_meta = self.parent.token_meta
         self.setWindowTitle(_("Create Token") + " - " + self.wallet.basename())
         self.setWindowIcon(QtGui.QIcon(":icons/tab_token.svg"))
 
@@ -115,6 +116,31 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         l.setToolTip(tt)
         self.cb_utxos.currentIndexChanged.connect(self.on_cb_utxo_index_change)
         grid.addWidget(l, row, col)
+
+        # Embed icon
+        col += 1
+        vbox = QtWidgets.QVBoxLayout()
+        vbox.setContentsMargins(6, 12, 0, 0)
+        vbox.setSpacing(0)
+        tt = _("The icon is generated from the Category ID and is for display purposes only")
+        self.icon_lbl = l = QtWidgets.QLabel()
+        l.setToolTip(tt)
+        l.setScaledContents(True)
+        l.setFixedSize(64, 64)
+        l.setAlignment(QtCore.Qt.AlignBottom | QtCore.Qt.AlignCenter)
+        l.setFrameStyle(QtWidgets.QFrame.Box)
+        vbox.addWidget(l)
+        l = QtWidgets.QLabel(_("Icon"))
+        l.setToolTip(tt)
+        l.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignCenter)
+        f = l.font()
+        f.setPointSize(f.pointSize() - 1)
+        l.setFont(f)
+        vbox.addWidget(l)
+        vbox.addSpacerItem(QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding))
+        vbox.setStretch(2, 1)
+
+        grid.addLayout(vbox, row, col, 2, 1)
 
         col = 0
         row += 1
@@ -415,8 +441,11 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         data = self.cb_utxos.currentData()
         if data and data[0]:
             self.token_id_label.setText(data[0])
+            icon: QtGui.QIcon = self.token_meta.get_icon(data[0])
+            self.icon_lbl.setPixmap(icon.pixmap(64, 64))
         else:
             self.token_id_label.setText("-")
+            self.icon_lbl.setPixmap(QtGui.QPixmap())
         self.check_sanity()
 
     @staticmethod

@@ -35,6 +35,7 @@ from electroncash.i18n import _, ngettext
 from electroncash.util import profiler, PrintError
 
 from .token_list import TokenList
+from .token_meta import TokenMetaQt
 from .util import MONOSPACE_FONT, MyTreeWidget, rate_limited, SortableTreeWidgetItem
 
 
@@ -86,6 +87,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         self.batonIcon = QIcon(":icons/baton.png")
         self.mutableIcon = QIcon(":icons/mutable.png")
         self.mintingMutableIcon = QIcon(":icons/minting-mutable.png")
+        self.token_meta: TokenMetaQt = parent.token_meta
         self.setTextElideMode(QtCore.Qt.ElideMiddle)
         for col in range(self.Col.category_id, len(headers)):
             self.header().setSectionResizeMode(col, QHeaderView.Interactive)
@@ -151,6 +153,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 item.setToolTip(self.Col.nft_amount, str(nft_amount))
                 item.setToolTip(self.Col.fungible_balance, str(bal_fts))
                 item.setToolTip(self.Col.nft_balance, str(bal_nfts))
+                item.setIcon(self.Col.category_id, self.token_meta.get_icon(category_id))
                 if icon:
                     item.setIcon(0, icon)
                 conf_suffix = ngettext("confirmation", "confirmations", conf)

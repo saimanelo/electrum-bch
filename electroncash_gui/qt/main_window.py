@@ -75,6 +75,7 @@ from .fee_slider import FeeSlider
 from .popup_widget import ShowPopupLabel, KillPopupLabel
 from . import cashacctqt
 from .util import *
+from .token_meta import TokenMetaQt
 
 try:
     # pre-load QtMultimedia at app start, if possible
@@ -133,6 +134,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         QMainWindow.__init__(self)
 
         self.gui_object = gui_object
+        self.token_meta: TokenMetaQt = self.gui_object.token_meta
         self.wallet = wallet
         assert not self.wallet.weak_window
         self.wallet.weak_window = Weak.ref(self)  # This enables plugins such as CashFusion to keep just a reference to the wallet, but eventually be able to find the window it belongs to.
@@ -5066,6 +5068,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             d.close()
         self._close_wallet()
 
+        # Save any dirty token meta keys to disk
+        self.token_meta.save()
 
         try: self.gui_object.timer.timeout.disconnect(self.timer_actions)
         except TypeError: pass # defensive programming: this can happen if we got an exception before the timer action was connected

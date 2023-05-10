@@ -77,6 +77,7 @@ from .main_window import ElectrumWindow
 from .network_dialog import NetworkDialog
 from .exception_window import Exception_Hook
 from .update_checker import UpdateChecker
+from .token_meta import TokenMetaQt
 
 
 class ElectrumGui(QObject, PrintError):
@@ -99,6 +100,7 @@ class ElectrumGui(QObject, PrintError):
         self.config = config
         self.daemon = daemon
         self.plugins = plugins
+        self.token_meta = TokenMetaQt(self.config)
         self.windows = []
 
         self._setup_do_in_main_thread_handler()
