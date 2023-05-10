@@ -64,7 +64,7 @@ class OutputData:
 
     def __repr__(self) -> str:
         return f"<token.OutputData(id={self.id_hex}, bitfield={self.bitfield:02x}, amount={self.amount}, " \
-               f"commitment={self.commitment[:40].hex()})>"
+               f"commitment={self.commitment[:MAX_CONSENSUS_COMMITMENT_LENGTH].hex()})>"
 
     @classmethod
     def fromhex(cls, hexdata: str) -> Optional[object]:

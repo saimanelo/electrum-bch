@@ -29,13 +29,13 @@ import json
 import time
 
 from enum import Enum, auto
+from typing import Optional
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
-from electroncash import cashacct
-from electroncash import web
+from electroncash import cashacct, token, web
 
 from electroncash.address import Address, PublicKey, ScriptOutput
 from electroncash.bitcoin import base_encode
@@ -616,6 +616,20 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.main_window.gui_object.cashaddr_toggled_signal.connect(self.update_io)
         self.update_io()
 
+    @staticmethod
+    def _tok2str(tok: Optional[token.OutputData]) -> str:
+        if not tok:
+            return repr(tok)
+        ret = f"CashToken - {_('Category ID')}: {tok.id_hex}"
+        if tok.has_amount():
+            ret += f" - {_('Fungible Amount')}: {tok.amount}"
+        if tok.has_nft():
+            ret += f" - NFT"
+            if tok.has_commitment_length():
+                ret += ": " + tok.commitment[:token.MAX_CONSENSUS_COMMITMENT_LENGTH].hex()
+            ret += " - " + token.get_nft_flag_text(tok)
+        return ret
+
     def update_io(self):
         i_text = self.i_text
         o_text = self.o_text
@@ -630,7 +644,11 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         chg = QTextCharFormat(lnk)
         chg.setBackground(QBrush(ColorScheme.YELLOW.as_color(True)))
         tok = QTextCharFormat(ext)
-        tok.setFontItalic(True)
+        # CashTokens get a slightly smaller font
+        f = tok.font()
+        f.setPointSize(f.pointSize() - 1)
+        f.setItalic(True)
+        tok.setFont(f)
         tok.setToolTip(_("This output contains a CashToken"))
         tok_inp = QTextCharFormat(tok)
         tok_inp.setToolTip(_("This input contains a CashToken"))
@@ -702,7 +720,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                     cursor.insertBlock()
                     cr_text = '\u21b3 '
                     cursor.insertText(cr_text, ext)
-                    input_token_text = repr(x['token_data'])
+                    input_token_text = self._tok2str(x['token_data'])
                     fmt = text_format(addr)
                     # Set token background color to a slightly different shade of the change/receive color
                     brush = fmt.background()
@@ -775,7 +793,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 cursor.insertText(format_amount(v), ext)
             # /Mark B. Lundeberg's patented output formatting logic™
             if token_data is not None:
-                tokstr = repr(token_data)
+                tokstr = self._tok2str(token_data)
                 cursor.insertBlock()
                 cr_text = '\u21b3 '
                 cursor.insertText(cr_text, ext)
