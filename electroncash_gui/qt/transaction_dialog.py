@@ -671,7 +671,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         has_schnorr = False
         for i, x in enumerate(self.tx.fetched_inputs() or self.tx.inputs()):
             a_name = f"input {i}"
-            for fmt in (ext, rec, chg, lnk):
+            for fmt in (ext, rec, chg, lnk, tok, tok_inp):
                 fmt.setAnchorNames([a_name])  # anchor name for this line (remember input#); used by context menu creation
             if x['type'] == 'coinbase':
                 cursor.insertText('coinbase', ext)
@@ -874,6 +874,14 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 if isinstance(value, int):
                     value_fmtd = self.main_window.format_amount(value)
                     copy_list += [ ( _("Copy Amount"), lambda: self._copy_to_clipboard(value_fmtd, i_text) ) ]
+                token_data = inp.get('token_data')
+                if token_data:
+                    copy_list += [ ( _("Copy Category ID"), lambda: self._copy_to_clipboard(token_data.id_hex, i_text) ) ]
+                    if token_data.has_amount():
+                        copy_list += [(_("Copy Token Amount"), lambda: self._copy_to_clipboard(str(token_data.amount), i_text))]
+                    if token_data.has_commitment_length():
+                        copy_list += [(_("Copy Token Commitment"), lambda: self._copy_to_clipboard(token_data.commitment.hex(), i_text))]
+
         except (TypeError, ValueError, IndexError, KeyError, AttributeError) as e:
             self.print_error("Inputs right-click menu exception:", repr(e))
 
