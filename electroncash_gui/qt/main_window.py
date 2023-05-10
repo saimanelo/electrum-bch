@@ -36,7 +36,7 @@ import traceback
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -55,7 +55,7 @@ from electroncash.util import (format_time, format_satoshis, PrintError,
                                print_error)
 import electroncash.web as web
 from electroncash import Transaction
-from electroncash import util, bitcoin, commands, cashacct
+from electroncash import util, bitcoin, commands, cashacct, token
 from electroncash import paymentrequest
 from electroncash.transaction import OPReturn
 from electroncash.wallet import Multisig_Wallet, sweep_preparations
@@ -5406,7 +5406,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
     def _send_or_edit_tokens_common(self, utxos: List[Dict[str, Any]], send=False, edit=False):
         assert send + edit == 1, "Must specify exactly one of `send` or `edit`"
         from .token_send import SendTokenForm
-        from electroncash import token
         assert all(isinstance(u['token_data'], token.OutputData) for u in utxos)
 
         form = None
@@ -5582,9 +5581,13 @@ class TxUpdateMgr(QObject, PrintError):
                 n_ok, n_cashacct, total_amount = 0, 0, 0
                 last_seen_ca_name = ''
                 ca_txs = dict()  # 'txid' -> ('name', address)  -- will be given to contacts_list for "unconfirmed registrations" display
+                token_category_ids: Set[bytes] = set()
+                n_nfts_in, n_nfts_out = 0, 0
                 for tx in txns:
                     if tx:
-                        is_relevant, is_mine, v, fee = parent.wallet.get_wallet_delta(tx)
+
+                        wallet_delta, txinfo3 = parent.wallet.get_tx_extended_info(tx, ver=3)
+                        is_relevant, is_mine, v, fee = wallet_delta[:4]
                         for _typ, addr, val in tx.outputs():
                             # Find Cash Account registrations that are for addresses *in* this wallet
                             if isinstance(addr, cashacct.ScriptOutput) and parent.wallet.is_mine(addr.address):
@@ -5594,6 +5597,20 @@ class TxUpdateMgr(QObject, PrintError):
                                 if txid: ca_txs[txid] = (addr.name, addr.address)
                         if not is_relevant:
                             continue
+                        for (_typ, addr, val), token_data in tx.outputs(tokens=True):
+                            if (isinstance(token_data, token.OutputData) and isinstance(addr, Address)
+                                    and parent.wallet.is_mine(addr)):
+                                token_category_ids.add(token_data.id)
+                                n_nfts_in += token_data.has_nft()
+                        input_token_datas = txinfo3.token_data
+                        for i, token_data in enumerate(input_token_datas):
+                            if token_data is None:
+                                continue
+                            addr = tx.inputs()[i].get('address')
+                            if (isinstance(token_data, token.OutputData) and isinstance(addr, Address)
+                                    and parent.wallet.is_mine(addr)):
+                                token_category_ids.add(token_data.id)
+                                n_nfts_out += token_data.has_nft()
                         total_amount += v
                         n_ok += 1
                 if n_cashacct:
@@ -5615,24 +5632,36 @@ class TxUpdateMgr(QObject, PrintError):
                         parent.contact_list.ca_update_potentially_unconfirmed_registrations(ca_txs)
                 if parent.wallet.storage.get('gui_notify_tx', True):
                     ca_text = ''
+                    tok_text = ''
                     if n_cashacct > 1:
                         # plural
                         ca_text = " + " + _("{number_of_cashaccounts} Cash Accounts registrations").format(number_of_cashaccounts = n_cashacct)
                     elif n_cashacct == 1:
                         # singular
                         ca_text = " + " + _("1 Cash Accounts registration ({cash_accounts_name})").format(cash_accounts_name = last_seen_ca_name)
-                    if total_amount > 0:
+                    if token_category_ids:
+                        n_cats = len(token_category_ids)
+                        tok_text = " | " + ngettext("{n_cats} CashToken category", "{n_cats} CashToken categories",
+                                                    n_cats).format(n_cats=n_cats)
+                        n_nft_net = n_nfts_in - n_nfts_out
+                        if n_nft_net > 0:
+                            tok_text += " " + ngettext("with {n_in} NFT in", "with {n_in} NFTs in",
+                                                       n_nft_net).format(n_in=n_nft_net)
+                        elif n_nft_net < 0:
+                            tok_text += " " + ngettext("with {n_out} NFT out", "with {n_out} NFTs out",
+                                                       abs(n_nft_net)).format(n_out=abs(n_nft_net))
+                    if total_amount > 0 or token_category_ids:
                         self.print_error("Notifying GUI %d tx"%(max(n_ok, n_cashacct)))
                         if max(n_ok, n_cashacct) > 1:
                             parent.notify(_("{} new transactions: {}")
-                                          .format(n_ok, parent.format_amount_and_units(total_amount, is_diff=True)) + ca_text)
+                                          .format(n_ok, parent.format_amount_and_units(total_amount, is_diff=True)) + ca_text + tok_text)
                         else:
-                            parent.notify(_("New transaction: {}").format(parent.format_amount_and_units(total_amount, is_diff=True)) + ca_text)
+                            parent.notify(_("New transaction: {}").format(parent.format_amount_and_units(total_amount, is_diff=True)) + ca_text + tok_text)
                     elif n_cashacct:
                         # No total amount (was just a cashacct reg tx)
                         ca_text = ca_text[3:]  # pop off the " + "
                         if n_cashacct > 1:
                             parent.notify(_("{} new transactions: {}")
-                                          .format(n_cashacct, ca_text))
+                                          .format(n_cashacct, ca_text) + tok_text)
                         else:
-                            parent.notify(_("New transaction: {}").format(ca_text))
+                            parent.notify(_("New transaction: {}").format(ca_text) + tok_text)
