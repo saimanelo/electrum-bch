@@ -671,7 +671,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         has_schnorr = False
         for i, x in enumerate(self.tx.fetched_inputs() or self.tx.inputs()):
             a_name = f"input {i}"
-            for fmt in (ext, rec, chg, lnk, tok, tok_inp):
+            for fmt in (ext, rec, chg, lnk, tok_inp):
                 fmt.setAnchorNames([a_name])  # anchor name for this line (remember input#); used by context menu creation
             if x['type'] == 'coinbase':
                 cursor.insertText('coinbase', ext)
