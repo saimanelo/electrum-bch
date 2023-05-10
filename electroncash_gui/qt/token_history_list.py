@@ -163,8 +163,10 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 item.setFont(self.Col.date, self.monospaceFont)
                 if fungible_amount < 0 or nft_amount < 0:
                     item.setForeground(self.Col.description, self.withdrawalBrush)
-                    item.setForeground(self.Col.fungible_amount if fungible_amount < 0 else self.Col.nft_amount,
-                                       self.withdrawalBrush)
+                if fungible_amount < 0:
+                    item.setForeground(self.Col.fungible_amount, self.withdrawalBrush)
+                if nft_amount < 0:
+                    item.setForeground(self.Col.nft_amount, self.withdrawalBrush)
                 if bal_fts < 0:
                     item.setForeground(self.Col.fungible_balance, self.withdrawalBrush)
                 if bal_nfts < 0:
