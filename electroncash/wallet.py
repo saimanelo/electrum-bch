@@ -197,8 +197,9 @@ def sweep(privkeys, network, config, recipient, fee=None, imax=100, sign_schnorr
 class TokenSendSpec:
     """Class used by Abstract_Wallet.make_token_send_tx to communicate to it what is required."""
     __slots__ = ('payto_addr', 'change_addr', 'feerate', 'non_token_utxos', 'token_utxos',
-                 'send_satoshis', 'send_fungible_amounts', 'send_nfts', 'edit_nfts')
-    # The payee
+                 'send_satoshis', 'send_fungible_amounts', 'send_nfts', 'edit_nfts', 'mint_nfts')
+    # The payee -- they will receive all fungibles specified as well as nfts marked for sending. Can be a local wallet
+    # addresss in the case of minting or editing NFTs.
     payto_addr: Address
     # Where to send all change back to wallet (both tokens and BCH)
     change_addr: Address
@@ -212,20 +213,28 @@ class TokenSendSpec:
     non_token_utxos: Dict[str, Dict[str, Any]]  # Dict of: utxo-name ("prevout_hash:prevout_n") -> utxo dict
 
     # We spend send_fundible_amount and send_nfts from this set of utxos. All utxos here must have 'token_data'.
+    # Note that a utxo won't get picked up for sending necessarily if it appears in this dict. It's just the "pool"
+    # of token-bearing utxos to use for the send_fungible_amount, send_nfts, edit_nfts, and mint_nfts fields below.
     token_utxos: Dict[str, Dict[str, Any]]  # utxo-name ("prevout_hash:n") -> utxo
 
-    send_satoshis: int  # BCH to attach
-    send_fungible_amounts: Dict[str, int]  # token-id (hex) -> fungible amount to send
+    send_satoshis: int  # BCH to attach, can be 0
+    send_fungible_amounts: Dict[str, int]  # token-id (hex) -> fungible amount to send. Can be empty.
     # Set of utxo-names (which must exist in token_utxos above) that contain NFTs which are marked for sending
-    send_nfts: Set[str]
+    send_nfts: Set[str]  # Can be empty
 
     # Dict of utxo-name -> new commitment that are mutable or minting NFTs which should have their commitment modified
     # All utxo-name keys in this dict must appear in token_utxos and also be marked for sending in send_nfts
-    edit_nfts: Dict[str, bytes]
+    edit_nfts: Dict[str, bytes]  # Can be empty
+
+    # Dict of utxo-name -> newly minted NFTs to send to the payto_addr.  All utxo-name keys appearing here must
+    # appear in token_utxos and also have been marked for "sending" in send_nfts.  The utxo-name's UTXO should contain
+    # a minting NFT.  The newly-generated NFTs will inherit category-id of the utxo-name that is referenced, but with
+    # the specified Capability and commitment (commitment can be zero-length bytes).
+    mint_nfts: Dict[str, List[Tuple[token.Capability, bytes]]]  # Can be empty
 
     def __init__(self):
-        self.non_token_utxos, self.token_utxos, self.send_fungible_amounts, self.send_nfts, self.edit_nfts = \
-            dict(), dict(), dict(), set(), dict()
+        (self.non_token_utxos, self.token_utxos, self.send_fungible_amounts, self.send_nfts, self.edit_nfts,
+         self.mint_nfts) = dict(), dict(), dict(), set(), dict(), dict()
         self.feerate, self.send_satoshis = 0, 0
 
     def get_utxo(self, utxoname: str) -> Optional[Dict[str, Any]]:
@@ -2498,6 +2507,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         assert all(utxoname in spec.token_utxos for utxoname in spec.send_nfts)
         assert all(utxoname in spec.token_utxos and utxoname in spec.send_nfts and isinstance(commitment, bytes)
                    for utxoname, commitment in spec.edit_nfts.items())
+        assert all(utxoname in spec.token_utxos and utxoname in spec.send_nfts and isinstance(l, (list, tuple))
+                   and len(l) > 0 and spec.get_utxo(utxoname)['token_data'].is_minting_nft()
+                   for utxoname, l in spec.mint_nfts.items())
 
         def get_utxo(name) -> Dict[str, Any]:
             ret = spec.get_utxo(name)
@@ -2619,6 +2631,22 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if change_amt > 0:
                 td_ft_change = clone_and_set_amt(td, amt=change_amt, clear_nft=True)
                 add_token_change_out(td_ft_change)
+            # Lastly, append newly-minted NFTs specified in spec.mint_nfts, if any
+            if spec.mint_nfts and td.is_minting_nft():
+                tuplist = spec.mint_nfts.get(utxo_name)
+                if tuplist:
+                    for capability, commitment in tuplist:
+                        # Ensure sanity
+                        assert (isinstance(capability, int) and isinstance(commitment, bytes)
+                                and len(commitment) <= token.MAX_CONSENSUS_COMMITMENT_LENGTH
+                                and capability in (token.Capability.NoCapability, token.Capability.Mutable,
+                                                   token.Capability.Minting))
+                        bitfield = 0xff & (token.Structure.HasNFT | capability)
+                        if len(commitment):
+                            bitfield |= 0xff & token.Structure.HasCommitmentLength
+                        new_nft = token.OutputData(id=td.id, amount=0, bitfield=bitfield, commitment=commitment)
+                        # Finally, append to end of "token datas out" list..
+                        tds_out.append(new_nft)
 
         # Find fungibles to spend, prefer pure ft-only, but fall-back to nft
         for tid, amt in spec.send_fungible_amounts.items():
