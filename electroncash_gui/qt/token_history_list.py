@@ -228,23 +228,17 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 for nft_out in cat_nfts_out:
                     add_nft(nft_out, True)
 
+                def get_tip_text(number, nft_capability):
+                    return ngettext(f"Transaction has {number} {nft_capability} NFT entry",
+                                    f"Transaction has {number} {nft_capability} NFT entries", number)
                 if has_minting_ctr:
-                    item.setToolTip(self.Col.cap_icon_main,
-                                    ngettext("Transaction involves {ct} Minting NFT",
-                                             "Transaction involves {ct} Minting NFTs", has_minting_ctr)
-                                    .format(ct=has_minting_ctr))
+                    item.setToolTip(self.Col.cap_icon_main, get_tip_text(has_minting_ctr, "Minting"))
                     item.setIcon(self.Col.cap_icon_main, self.batonIcon)
                     if has_mutable_ctr:
-                        item.setToolTip(self.Col.cap_icon_extra,
-                                        ngettext("Transaction involves {ct} Mutable NFT",
-                                                 "Transaction involves {ct} Mutable NFTs", has_mutable_ctr)
-                                        .format(ct=has_mutable_ctr))
+                        item.setToolTip(self.Col.cap_icon_extra, get_tip_text(has_mutable_ctr, "Mutable"))
                         item.setIcon(self.Col.cap_icon_extra, self.mutableIcon)
                 elif has_mutable_ctr:
-                    item.setToolTip(self.Col.cap_icon_main,
-                                    ngettext("Transaction involves {ct} Mutable NFT",
-                                             "Transaction involves {ct} Mutable NFTs", has_mutable_ctr)
-                                    .format(ct=has_mutable_ctr))
+                    item.setToolTip(self.Col.cap_icon_main, get_tip_text(has_mutable_ctr, "Mutable"))
                     item.setIcon(self.Col.cap_icon_main, self.mutableIcon)
 
                 self.addChild(item)
