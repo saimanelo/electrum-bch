@@ -488,6 +488,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     item.setData(0, self.DataRoles.token_id, tid)
                     item.setData(0, self.DataRoles.output_point, name)
                     item.setIcon(self.ColsBaton.icon, self.icon_baton)
+                    item.setIcon(self.ColsBaton.category_id, self.token_meta.get_icon(category_id))
                     tw.addTopLevelItem(item)
                     w = QtWidgets.QWidget()
                     w.setToolTip(item.toolTip(self.ColsNFT.commitment))
@@ -599,8 +600,12 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         if self.form_mode == self.FormMode.mint:
             row_num = 0
             for row_data in self.nfts_to_mint:
-                item = QtWidgets.QTreeWidgetItem(["", row_data["category_id"], "", "", ""])
-                item.setToolTip(self.ColsMint.category_id, row_data["category_id"])
+                category_id = row_data["category_id"]
+                commitment = row_data["commitment"]
+                capability = row_data["capability"]
+                copies = row_data["copies"]
+                item = QtWidgets.QTreeWidgetItem(["", category_id, "", "", ""])
+                item.setToolTip(self.ColsMint.category_id, category_id)
                 item.setToolTip(self.ColsNFT.commitment, _("Enter an even number of up to 80 hex characters"))
                 item.setFlags((item.flags() | QtCore.Qt.ItemIsUserCheckable) & ~QtCore.Qt.ItemIsSelectable)
                 tw.addTopLevelItem(item)
@@ -621,6 +626,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 hbox.addWidget(close_button)
                 tw.setItemWidget(item, self.ColsMint.remove, w)
 
+                # Category ID field
+                item.setIcon(self.ColsBaton.category_id, self.token_meta.get_icon(category_id))
+
                 # Commitment field
                 w = QtWidgets.QWidget()
                 w.setToolTip(item.toolTip(self.ColsMint.commitment))
@@ -628,13 +636,13 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 hbox.setContentsMargins(2, 4, 2, 2)
                 commitment_le = QtWidgets.QLineEdit()
                 commitment_le.setTextMargins(0, 4, 0, 3)
-                commitment_le.setText(row_data["commitment"])
+                commitment_le.setText(commitment)
 
-                def on_text_changed(text, le=commitment_le, commitment=row_data["commitment"], _row_num=row_num):
+                def on_text_changed(text, le=commitment_le, _commitment=commitment, _row_num=row_num):
                     color = ColorScheme.DEFAULT
                     if self.is_commitment_valid(text):
                         self.nfts_to_mint[_row_num]["commitment"] = text
-                        if text != commitment:
+                        if text != _commitment:
                             color = ColorScheme.BLUE
                     else:
                         color = ColorScheme.RED
@@ -654,9 +662,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 capability_cb.addItems(['Immutable', 'Mutable', 'Minting'])
                 capability_cb.setItemIcon(1, self.icon_mutable)
                 capability_cb.setItemIcon(2, self.icon_baton)
-                if row_data["capability"] == token.Capability.Minting:
+                if capability == token.Capability.Minting:
                     capability_cb.setCurrentIndex(2)
-                elif row_data["capability"] == token.Capability.Mutable:
+                elif capability == token.Capability.Mutable:
                     capability_cb.setCurrentIndex(1)
                 else:
                     capability_cb.setCurrentIndex(0)
@@ -684,7 +692,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 multiplier_sb.setMaximum(10_000)
                 multiplier_sb.setSuffix(" " + _("copies"))
                 multiplier_sb.setSpecialValueText(_("Single"))
-                multiplier_sb.setValue(row_data["copies"])
+                multiplier_sb.setValue(copies)
 
                 def on_multiplier_change(value, _row_num=row_num):
                     self.nfts_to_mint[_row_num]["copies"] = value
