@@ -75,6 +75,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                          save_sort_settings=True)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
+        self.setAlternatingRowColors(True)
         self.wallet = self.parent.wallet
         self.cleaned_up = False
         self.fixed_width = QFont(MONOSPACE_FONT, QFont().pointSize() - 1)

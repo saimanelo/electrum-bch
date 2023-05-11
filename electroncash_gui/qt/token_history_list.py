@@ -78,6 +78,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         self.setColumnHidden(1, True)
         self.setSortingEnabled(True)
         self.sortByColumn(0, QtCore.Qt.AscendingOrder)
+        self.setAlternatingRowColors(True)
         self.wallet = self.parent.wallet
         self.cleaned_up = False
         self.monospaceFont = QFont(MONOSPACE_FONT)
