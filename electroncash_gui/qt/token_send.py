@@ -710,7 +710,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 hbox.setContentsMargins(2, 2, 2, 2)
                 multiplier_sb = QtWidgets.QSpinBox()
                 multiplier_sb.setMinimum(1)
-                multiplier_sb.setMaximum(10_000)
+                multiplier_sb.setMaximum(1000)
                 multiplier_sb.setSuffix(" " + _("copies"))
                 multiplier_sb.setSpecialValueText(_("Single"))
                 multiplier_sb.setValue(copies)
