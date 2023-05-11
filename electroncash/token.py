@@ -202,8 +202,16 @@ def heuristic_dust_limit_for_token_bearing_output() -> int:
     return 800  # Worst-case; hard-coded for now.
 
 
+# def get_capability_text(capability: Capability) -> str:
+#     if capability == Capability.Minting:
+#         return _('Minting')
+#     elif capability == Capability.Mutable:
+#         return _('Mutable')
+#     else:
+#         return _('Immutable')
+
 def get_nft_flag_text(td: OutputData) -> Optional[str]:
-    """Returns a UI-friendly string ot describe the NFT, or None if the token does not have an NFT."""
+    """Returns a UI-friendly string to describe the NFT, or None if the token does not have an NFT."""
     if td.is_minting_nft():
         return _('Minting')
     elif td.is_mutable_nft():

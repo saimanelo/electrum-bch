@@ -591,7 +591,7 @@ class TokenList(MyTreeWidget, util.PrintError):
             num_minting_utxos = len(non_frozen_utxos_that_are_minting)
             if num_minting_utxos:
                 menu.addAction(QtGui.QIcon(":icons/baton.png"), _("Mint NFTs..."),
-                               lambda: self.edit_tokens(non_frozen_utxos_that_are_minting))
+                               lambda: self.mint_tokens(non_frozen_utxos_that_are_minting))
 
         menu.addAction(QtGui.QIcon(":icons/tab_token.svg"), _("Create Token") + "...", self.create_new_token)
 
