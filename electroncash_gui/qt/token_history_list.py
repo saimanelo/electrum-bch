@@ -88,7 +88,6 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         self.withdrawalBrush = QBrush(QColor("#BC1E1E"))
         self.batonIcon = QIcon(":icons/baton.png")
         self.mutableIcon = QIcon(":icons/mutable.png")
-        self.mintingMutableIcon = QIcon(":icons/minting-mutable.png")
         self.token_meta: TokenMetaQt = parent.token_meta
         self.setTextElideMode(QtCore.Qt.ElideMiddle)
         self.header().setSectionResizeMode(self.Col.description, QHeaderView.Stretch)
