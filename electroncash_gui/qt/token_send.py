@@ -145,7 +145,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
 
         # Build UI
         vbox = QtWidgets.QVBoxLayout(self)
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
 
+        # Top panel
         if self.form_mode == self.FormMode.mint:
             gb_tok_title = _("Available Minting Tokens")
         else:
@@ -166,7 +168,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             tw.setHeaderLabels(self.headers_tok)
             tw.header().setSectionResizeMode(self.ColsTok.amount_send, QtWidgets.QHeaderView.Stretch)
         vbox_gb.addWidget(tw)
+        splitter.addWidget(gb)
 
+        # Middle pannel
         if self.form_mode == self.FormMode.send:
             gb_nft_title = _("NFTs to Send")
         elif self.form_mode == self.FormMode.edit:
@@ -204,11 +208,14 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         # Receive notification and update nft selected sets when user clicks the NFT widget
         self.tw_nft.itemChanged.connect(self.on_nft_item_changed)
 
-        vbox.addWidget(gb)
-        vbox.addWidget(gb_nft)
+        splitter.addWidget(gb_nft)
+        vbox.addWidget(splitter)
 
+        # Bottom panels
         # Pay To
+        vbox_bottom = QtWidgets.QVBoxLayout()
         gb = QtWidgets.QGroupBox(_("Pay To"))
+        gb.setMaximumHeight(60)
         vbox_payto = QtWidgets.QVBoxLayout(gb)
         self.te_payto = te = ScanQRTextEdit()
 
@@ -216,7 +223,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         te.setPlaceholderText(networks.net.CASHADDR_PREFIX + ":" + "...")
         te.textChanged.connect(self.on_ui_state_changed)
 
-        vbox.addWidget(gb)
+        vbox_bottom.addWidget(gb)
         self._adjust_te_payto_size()
         if self.form_mode in (self.FormMode.edit, self.FormMode.mint):
             gb.setHidden(True)
@@ -237,7 +244,14 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.te_desc.setPlaceholderText(_("Memo") + "...")
         hbox.addWidget(gb_desc)
 
-        vbox.addLayout(hbox)
+        w_bch_desc = QtWidgets.QWidget()
+        w_bch_desc.setLayout(hbox)
+        vbox_bottom.addWidget(w_bch_desc)
+        w_bottom = QtWidgets.QWidget()
+        w_bottom.setLayout(vbox_bottom)
+
+        splitter.addWidget(w_bottom)
+        vbox.addWidget(splitter)
 
         # Bottom buttons
         hbox = QtWidgets.QHBoxLayout()
