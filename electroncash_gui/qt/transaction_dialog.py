@@ -274,7 +274,19 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 # broadcast button will re-enable if we got nothing from server and >= BROADCAST_COOLDOWN_SECS elapsed
                 QTimer.singleShot(int(self.BROADCAST_COOLDOWN_SECS * 1e3 + 100), self.update)
             if self.extra_broadcast_callback is not None:
-                self.extra_broadcast_callback(success)
+                # extra_broadcast_callback may have signature: foo(success, tx) or foo(success) -- decide which
+                import inspect
+                params = inspect.signature(self.extra_broadcast_callback).parameters
+                n_non_default_args = sum(p.default is p.empty for name, p in params.items())
+                args = [success]
+                if n_non_default_args > 1:
+                    # Accepts at least 2 args
+                    args += [self.tx]
+                if n_non_default_args > 2:
+                    # Accepts at least 3 args
+                    args += [self]
+                self.extra_broadcast_callback(*args)
+
         self.main_window.push_top_level_window(self)
         try:
             self.main_window.broadcast_transaction(self.tx, self.desc, callback=broadcast_done)

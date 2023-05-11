@@ -23,9 +23,12 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import hashlib
 import math
 import re
+import requests
 import threading
+import urllib.parse
 import weakref
 from typing import Optional, Tuple
 
@@ -36,7 +39,9 @@ from electroncash.i18n import _
 from electroncash import address, bitcoin, networks, token, util, wallet
 
 from .main_window import ElectrumWindow
-from .util import HelpLabel, MessageBoxMixin, MONOSPACE_FONT, OnDestroyedMixin, PrintError
+from .util import HelpLabel, MessageBoxMixin, MONOSPACE_FONT, OnDestroyedMixin, PrintError, WaitingDialog
+
+BCMR_URL_REQUIRED_PREFIX = "https://"
 
 
 class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroyedMixin):
@@ -285,6 +290,34 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         self.le_address.mouse_clicked.connect(self.rb_ext.setChecked)
         self.le_address.mouse_clicked.connect(self.le_address.setFocus)
 
+        # BCMR Url
+        col = 0
+        row += 1
+        tt = _("Optional URL to embed as an OP_RETURN in the token genesis txn")
+        help_text = _("This field is optional, but if specified, Electron Cash will embed an OP_RETURN in the"
+                      " genesis tx for this token which contains the URL and a hash of the URL's contents. This"
+                      " would make the token conform to the BCMR token meta-data standard for Bitcoin Cash. The"
+                      " URL must begin with {bcmr_prefix} and should serve up a BCMR-conforming JSON document.\n\n"
+                      "See: https://github.com/bitjson/chip-bcmr\n\n"
+                      "Electron Cash will fetch this document once before creating the token and calculate"
+                      " the SHA-256 hash of this document which gets embedded into the genesis tx along with"
+                      " the URL.\n\n"
+                      "Therefore, before you create the token, be sure that the URL points to the final"
+                      " BCMR-conforming JSON document describing this token's metadata.\n\n"
+                      "Feel free to leave this field blank to not associate this token with any BCMR metadata.").format(
+            bcmr_prefix=BCMR_URL_REQUIRED_PREFIX
+        )
+        l = HelpLabel(_("BCMR URL"), help_text)
+        grid.addWidget(l, row, col)
+        col += 1
+        self.le_url = QtWidgets.QLineEdit()
+        self.le_url.setPlaceholderText(BCMR_URL_REQUIRED_PREFIX + "server.com/mytoken.json" + " " + _("(Optional)"))
+        grid.addWidget(l, row, col)
+        self.le_url.textChanged.connect(self.check_sanity)
+        grid.addWidget(self.le_url, row, col)
+        col += 1
+
+        # Bottom buttons
         col = 0
         row += 1
         self.dlg_buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok
@@ -332,6 +365,7 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         self.le_fungible.clear()
         if self.cb_utxos.count():
             self.cb_utxos.setCurrentIndex(0)
+        self.le_url.clear()
 
     def check_sanity(self) -> bool:
         sane = True
@@ -359,10 +393,15 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
                     sane = False
             except ValueError:
                 sane = False
+        if sane:
+            url = self.le_url.text().strip()
+            len_prefix = len(BCMR_URL_REQUIRED_PREFIX)
+            if url and (not url.startswith(BCMR_URL_REQUIRED_PREFIX) or len(url) <= len_prefix):
+                sane = False
         self.create_button.setEnabled(sane)
         return sane
 
-    def read_form(self) -> Optional[Tuple[dict, address.Address, token.OutputData]]:
+    def read_form(self) -> Optional[Tuple[dict, address.Address, token.OutputData, str]]:
         if not self.check_sanity():
             return None
         utxo = self.tup2u(self.cb_utxos.currentData())
@@ -394,23 +433,91 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
                 assert self.rb_none.isChecked()
                 bitfield |= token.Capability.NoCapability
         tok = token.OutputData(id=token_id_hex, amount=fungible_amt, commitment=commitment, bitfield=bitfield)
-        return utxo, addr, tok
+        url = self.le_url.text().strip()
+        return utxo, addr, tok, url
+
+    def _do_validate_url_and_get_hash(self, url: str) -> Optional[Tuple[bytes, bytes]]:
+        """Returns a tuple of hash_bytes, url_bytes (url-encoded to ascii) after retrieving the data from
+        url, or None if there was an error or user canceled."""
+
+        assert url.startswith(BCMR_URL_REQUIRED_PREFIX)
+        len_prefix = len(BCMR_URL_REQUIRED_PREFIX)
+        try:
+            url_encoded_sans_prefix = urllib.parse.quote(url[len_prefix:],
+                                                         safe="/~", encoding="ascii", errors="strict").encode("ascii")
+        except UnicodeError as e:
+            self.show_error(_("Unable to url-encode URL: {error}").format(error=repr(e)))
+            return None
+
+        full_url_as_bytes = BCMR_URL_REQUIRED_PREFIX.encode('ascii') + url_encoded_sans_prefix
+
+        def retrieve_document_in_thread_and_calculate_hash() -> bytes:
+            r = requests.get(full_url_as_bytes, timeout=20.0)
+            if r.status_code != 200:
+                raise RuntimeError(f"{r.status_code} {r.reason}")
+            h = hashlib.sha256()
+            h.update(r.content)
+            the_hash = h.digest()
+            self.print_error(f"Got hash from \"{full_url_as_bytes.decode('ascii')}\" -> {the_hash.hex()}")
+            return the_hash
+
+        def on_error(exc_info: tuple):
+            self.show_error(_("Unable to retrieve document from \"{url}\", error: {errmsg}")
+                            .format(url=full_url_as_bytes.decode('ascii'), errmsg=str(exc_info[1])))
+
+        hash_bytes: Optional[bytes] = None
+
+        def on_success(result):
+            nonlocal hash_bytes
+            assert isinstance(result, (bytes, bytearray))
+            hash_bytes = bytes(result)
+
+        WaitingDialog(self, _("Retrieving document from specified URL, please wait..."),
+                      task=retrieve_document_in_thread_and_calculate_hash, on_success=on_success, on_error=on_error,
+                      auto_cleanup=True, auto_exec=True, title=_("Checking URL"))
+
+        if not hash_bytes:
+            return None
+
+        assert len(hash_bytes) == 32
+
+        return hash_bytes, url_encoded_sans_prefix
 
     def do_create(self):
         tup = self.read_form()
         if tup is None:
             self.show_error("Error: Form is not sane; unexpected return value from read_form()")
             return
-        utxo, addr, tok = tup
+        utxo, addr, tok, url = tup
+        if url:
+            tup = self._do_validate_url_and_get_hash(url)
+            if not tup:
+                return
+            hash_bytes, url_bytes = tup
+        else:
+            hash_bytes, url_bytes = None, None
         # We intentionally order things so that the change goes to output 0, so that the wallet doesn't run out of
         # genesis-capable UTXOs.
         change_addr = self.wallet.get_unused_address(for_change=True, frozen_ok=False) or utxo["address"]
         outputs = [(bitcoin.TYPE_ADDRESS, change_addr, '!'),
                    (bitcoin.TYPE_ADDRESS, addr, token.heuristic_dust_limit_for_token_bearing_output())]
+        if hash_bytes and url_bytes:
+            script = address.ScriptOutput.from_string("OP_RETURN {BCMR} {hash} {url}"
+                                                      .format(BCMR=b'BCMR'.hex(),
+                                                              hash=hash_bytes.hex(),
+                                                              url=url_bytes.hex()))
+            # Check that OP_RETURN size is sane according to current relay policy
+            if len(script.script) > 223:
+                self.show_error(_("OP_RETURN script too large, needs to be no longer than 223 bytes")
+                                + ".\n\n" + _("To fix this, please ensure the URL is shorter."))
+                return
+            outputs += [(bitcoin.TYPE_SCRIPT, script, 0)]
         token_datas = [None, tok]
         tx = self.wallet.make_unsigned_transaction(inputs=[utxo], outputs=outputs, config=self.parent.config,
                                                    token_datas=token_datas, bip69_sort=False)
-        self.parent.show_transaction(tx, tx_desc=_("Token genesis: {token_id}").format(token_id=tok.id_hex))
+
+        tx_desc = _("Token genesis: {token_id}").format(token_id=tok.id_hex)
+        self.parent.show_transaction(tx, tx_desc=tx_desc)
 
     def get_utxos(self):
         return self.wallet.get_utxos(exclude_frozen=True, mature=True, confirmed_only=False, exclude_slp=True,
@@ -446,7 +553,10 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         else:
             self.token_id_label.setText("-")
             self.icon_lbl.setPixmap(QtGui.QPixmap())
-        self.check_sanity()
+        is_sane = self.check_sanity()
+        if is_sane:
+            # Ensure that if the index changed, we clear the URL to avoid problems for users
+            self.le_url.clear()
 
     @staticmethod
     def utxo_short_name(utxo: dict) -> str:
