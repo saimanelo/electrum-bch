@@ -418,7 +418,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                         # Skip displaying rows in this table for tokens that have no fungibles
                         continue
                     item = QtWidgets.QTreeWidgetItem([tid, "", str(amt), ""])
-                item.setIcon(self.ColsTok.token_id, self.token_meta.get_icon(tid))
+                    item.setIcon(self.ColsTok.token_id, self.token_meta.get_icon(tid))
                     item.setToolTip(self.ColsTok.token_id, item.text(self.ColsTok.token_id))
                     item.setToolTip(self.ColsTok.amount, item.text(self.ColsTok.amount))
                     item.setData(0, self.DataRoles.token_id, tid)
@@ -706,7 +706,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     continue
                 # This group has more than 1 item, build a subgrouping
                 parent = QtWidgets.QTreeWidgetItem(["", tid, "", ""])
-            parent.setIcon(self.ColsNFT.token_id, self.token_meta.get_icon(tid))
+                parent.setIcon(self.ColsNFT.token_id, self.token_meta.get_icon(tid))
                 parent.setToolTip(self.ColsNFT.token_id, tid)
                 parent.setFlags((parent.flags() | QtCore.Qt.ItemIsAutoTristate | QtCore.Qt.ItemIsUserCheckable)
                                 & ~QtCore.Qt.ItemIsSelectable)
