@@ -48,11 +48,13 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         status = 1
         date = 2
         description = 3
-        category_id = 4
-        fungible_amount = 5
-        nft_amount = 6
-        fungible_balance = 7
-        nft_balance = 8
+        cap_icon_extra = 4
+        cap_icon_main = 5
+        category_id = 6
+        fungible_amount = 7
+        nft_amount = 8
+        fungible_balance = 9
+        nft_balance = 10
 
     class DataRoles(IntEnum):
         """Data roles. Again, to make code in on_update easier to read."""
@@ -72,8 +74,8 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         MyTreeWidget.__init__(self, parent, self.create_menu, [], self.Col.description, deferred_updates=True)
         PrintError.__init__(self)
 
-        headers = ['', '', _('Date'), _('Description'), _('Category ID'), _('Fungible Amount'), _('NFT Amount'),
-                   _("Fungible Balance"), _("NFT Balance")]
+        headers = ['', '', _('Date'), _('Description'), _(""), _(""), _('Category ID'), _('Fungible Amount'),
+                   _('NFT Amount'), _("Fungible Balance"), _("NFT Balance")]
         self.update_headers(headers)
         self.setColumnHidden(1, True)
         self.setSortingEnabled(True)
@@ -89,9 +91,12 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         self.mintingMutableIcon = QIcon(":icons/minting-mutable.png")
         self.token_meta: TokenMetaQt = parent.token_meta
         self.setTextElideMode(QtCore.Qt.ElideMiddle)
+        self.header().setSectionResizeMode(self.Col.description, QHeaderView.Stretch)
+        for col in (self.Col.cap_icon_main, self.Col.cap_icon_extra):
+            self.header().setSectionResizeMode(col, QHeaderView.Fixed)
+            self.header().resizeSection(col, 16)
         for col in range(self.Col.category_id, len(headers)):
             self.header().setSectionResizeMode(col, QHeaderView.Interactive)
-        self.header().setSectionResizeMode(self.Col.description, QHeaderView.Stretch)
         for col in range(self.Col.fungible_amount, len(headers)):
             self.header().resizeSection(col, 100)
 
@@ -137,7 +142,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 bal_fts = tokens_balances.get(category_id, {}).get("fungibles", 0)
                 bal_nfts = tokens_balances.get(category_id, {}).get("nfts", 0)
                 nft_amount = len(cat_nfts_in) - len(cat_nfts_out)
-                entry = ['', tx_hash, status_str, label, category_id, str(fungible_amount), str(nft_amount),
+                entry = ['', tx_hash, status_str, label, '', '', category_id, str(fungible_amount), str(nft_amount),
                          str(bal_fts), str(bal_nfts)]
                 item = SortableTreeWidgetItem(entry)
                 has_minting_ctr = 0
@@ -205,11 +210,11 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     tt_suffix = ((": " + commitment_str) if commitment_str else "")
                     if token_data.is_minting_nft():
                         has_minting_ctr += 1
-                        nft_item.setIcon(self.Col.description, self.batonIcon)
+                        nft_item.setIcon(self.Col.cap_icon_main, self.batonIcon)
                         tt = _("Minting NFT") + tt_suffix
                     elif token_data.is_mutable_nft():
                         has_mutable_ctr += 1
-                        nft_item.setIcon(self.Col.description, self.mutableIcon)
+                        nft_item.setIcon(self.Col.cap_icon_main, self.mutableIcon)
                         tt = _("Mutable NFT") + tt_suffix
                     else:
                         tt = _("NFT") + tt_suffix
@@ -228,19 +233,20 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                         item.setToolTip(self.Col.description,
                                         _("Transaction involves {ct1} Minting and {ct2} Mutable NFTs")
                                         .format(ct1=has_minting_ctr, ct2=has_mutable_ctr))
-                        item.setIcon(self.Col.description, self.mintingMutableIcon)
+                        item.setIcon(self.Col.cap_icon_main, self.batonIcon)
+                        item.setIcon(self.Col.cap_icon_extra, self.mutableIcon)
                     else:
                         item.setToolTip(self.Col.description,
                                         ngettext("Transaction involves {ct} Minting NFT",
                                                  "Transaction involves {ct} Minting NFTs", has_minting_ctr)
                                         .format(ct=has_minting_ctr))
-                        item.setIcon(self.Col.description, self.batonIcon)
+                        item.setIcon(self.Col.cap_icon_main, self.batonIcon)
                 elif has_mutable_ctr:
                     item.setToolTip(self.Col.description,
                                     ngettext("Transaction involves {ct} Mutable NFT",
                                              "Transaction involves {ct} Mutable NFTs", has_mutable_ctr)
                                     .format(ct=has_mutable_ctr))
-                    item.setIcon(self.Col.description, self.mutableIcon)
+                    item.setIcon(self.Col.cap_icon_main, self.mutableIcon)
 
                 self.addChild(item)
                 all_items.append(item)
