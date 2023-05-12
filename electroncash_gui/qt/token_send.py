@@ -173,7 +173,10 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             tw.header().setSectionResizeMode(self.ColsTok.amount_send, QtWidgets.QHeaderView.Stretch)
         vbox_gb.addWidget(tw)
         splitter.addWidget(gb)
-        splitter.setStretchFactor(splitter.count()-1, 38)
+        if self.form_mode == self.FormMode.mint:
+            splitter.setStretchFactor(splitter.count()-1, 38)
+        else:
+            splitter.setStretchFactor(splitter.count()-1, 100)
 
         # Middle panel
         if self.form_mode == self.FormMode.send:
@@ -257,7 +260,10 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         w_bottom.setContentsMargins(0, 0, 0, 0)  # No inset
         w_bottom.setLayout(vbox_bottom)
         splitter.addWidget(w_bottom)
-        splitter.setStretchFactor(splitter.count()-1, 20)
+        if self.form_mode == self.FormMode.mint:
+            splitter.setStretchFactor(splitter.count()-1, 38)
+        else:
+            splitter.setStretchFactor(splitter.count()-1, 26)
         vbox.addWidget(splitter)
         vbox.setStretch(vbox.count()-1, 100)
 
