@@ -916,7 +916,11 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         # Gather tx inputs
         spec.send_nfts = set()
         if self.form_mode == self.FormMode.mint:
-            for nft_mint_row in self.nfts_to_mint:
+            for i, nft_mint_row in enumerate(self.nfts_to_mint):
+                if nft_mint_row["commitment"] is None:
+                    # Defensive programming: This should never happen
+                    self.print_error(f"BUG: commitment for nft_mint_row {i} was None")
+                    continue
                 spec.send_nfts.add(nft_mint_row["baton_name"])
         else:
             for tid, utxo_name_set in self.token_nfts_selected.items():
@@ -931,10 +935,11 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                             spec.send_nfts.add(utxo_name)
                             spec.edit_nfts[utxo_name] = new_commitment
 
-        # In edit mode, avoid splitting NFTs with amounts on them when editing them, by specifying that
-        # the fungible amount should be "sent"
-        if self.form_mode == self.FormMode.edit:
-            for utxo_name in spec.edit_nfts:
+        # In edit or mint mode, avoid splitting NFTs with amounts on them when editing/minting them, by specifying
+        # that the fungible amount should be "sent"
+        if self.form_mode in (self.FormMode.edit, self.FormMode.mint):
+            iterable = spec.edit_nfts if self.form_mode == self.FormMode.edit else spec.send_nfts
+            for utxo_name in iterable:
                 utxo = spec.get_utxo(utxo_name)
                 td = utxo['token_data']
                 spec.send_fungible_amounts[td.id_hex] = td.amount + spec.send_fungible_amounts.get(td.id_hex, 0)
@@ -952,15 +957,21 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
 
         # Determine outputs for minting tx
         if self.form_mode == self.FormMode.mint:
-            for nft_mint_row in self.nfts_to_mint:
+            for i, nft_mint_row in enumerate(self.nfts_to_mint):
                 copies = nft_mint_row["copies"]
                 baton_name = nft_mint_row["baton_name"]
                 capability = nft_mint_row["capability"]
                 commitment = nft_mint_row["commitment"]
+                if baton_name not in spec.send_nfts:
+                    # Defensive programming: This should never happen
+                    self.print_error(f"BUG: commitment for nft_mint_row {i} not in spec.send_nfts")
+                    continue
                 for _ in range(copies):
-                    if baton_name not in spec.mint_nfts:
-                        spec.mint_nfts[baton_name] = list()
-                    spec.mint_nfts[baton_name].append((capability, commitment))
+                    l = spec.mint_nfts.get(baton_name, list())
+                    l.append((capability, commitment))
+                    if len(l) == 1:
+                        # Was missing, ensure exists in dict
+                        spec.mint_nfts[baton_name] = l
 
         return spec
 
