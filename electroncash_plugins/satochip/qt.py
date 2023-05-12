@@ -304,11 +304,12 @@ class SatochipSettingsDialog(WindowModalDialog):
             client.handler.show_message(msg)
             #to do: close client?
         elif (sw1==0x9c and sw2==0x0b):
-            msg= _(f"Failed to reset seed: request rejected by 2FA device (error code: {hex(256*sw1+sw2)})")
+            msg= _("Failed to reset seed: request rejected by 2FA device (error code: {errcode})").format(
+                errcode=hex(256*sw1+sw2))
             client.handler.show_message(msg)
             #to do: close client?
         else:
-            msg= _(f"Failed to reset seed with error code: {hex(256*sw1+sw2)}")
+            msg= _("Failed to reset seed with error code: {errcode}").format(errcode=hex(256*sw1+sw2))
             client.handler.show_error(msg)
 
     def reset_seed_dialog(self, msg):
@@ -351,7 +352,7 @@ class SatochipSettingsDialog(WindowModalDialog):
                 else:
                     client.handler.show_message("2FA enabled successfully!")
         else:
-            msg= _(f"2FA is already enabled!")
+            msg= _("2FA is already enabled!")
             client.handler.show_error(msg)
 
     def reset_2FA(self, client):
@@ -389,16 +390,18 @@ class SatochipSettingsDialog(WindowModalDialog):
                 client.cc.needs_2FA= False
                 client.handler.show_message(msg)
             elif (sw1==0x9c and sw2==0x17):
-                msg= _(f"Failed to reset 2FA: \nyou must reset the seed first (error code {hex(256*sw1+sw2)})")
+                msg= _("Failed to reset 2FA: \nyou must reset the seed first (error code {errcode})").format(
+                    errcode=hex(256*sw1+sw2))
                 client.handler.show_error(msg)
             elif (sw1==0x9c and sw2==0x0b):
-                msg= _(f"Failed to reset 2FA: \nrequest rejected by 2FA device (error code: {hex(256*sw1+sw2)})")
+                msg= _("Failed to reset 2FA: \nrequest rejected by 2FA device (error code: {errcode})").format(
+                    errcode=hex(256*sw1+sw2))
                 client.handler.show_message(msg)
             else:
-                msg= _(f"Failed to reset 2FA with error code: {hex(256*sw1+sw2)}")
+                msg= _("Failed to reset 2FA with error code: {errcode}").format(errcode=hex(256*sw1+sw2))
                 client.handler.show_error(msg)
         else:
-            msg= _(f"2FA is already disabled!")
+            msg= _("2FA is already disabled!")
             client.handler.show_error(msg)
 
     def verify_card(self, client):

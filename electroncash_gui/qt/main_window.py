@@ -2877,7 +2877,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         assert contact
         if replace != contact:
             if self.contacts.has(contact):
-                self.show_error(_(f"A contact named {contact.name} with the same address and type already exists."))
+                self.show_error(_("A contact named {contact_name} with the same address and type already exists.")
+                                .format(contact_name=contact.name))
                 self.contact_list.update()
                 return replace or contact
             self.contacts.add(contact, replace_old=replace, unique=True)
