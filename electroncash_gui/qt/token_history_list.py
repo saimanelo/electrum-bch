@@ -74,8 +74,8 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         MyTreeWidget.__init__(self, parent, self.create_menu, [], self.Col.description, deferred_updates=True)
         PrintError.__init__(self)
 
-        headers = ['', '', _('Date'), _('Description'), _(""), _(""), _('Category ID'), _('Fungible Amount'),
-                   _('NFT Amount'), _("Fungible Balance"), _("NFT Balance")]
+        headers = ['', '', _('Date'), _('Description'), '', '', _('Category ID'), _('Fungible Amount'),
+                   _('NFT Amount'), _('Fungible Balance'), _('NFT Balance')]
         self.update_headers(headers)
         self.setColumnHidden(1, True)
         self.setSortingEnabled(True)

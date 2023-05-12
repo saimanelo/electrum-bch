@@ -70,7 +70,7 @@ class TokenList(MyTreeWidget, util.PrintError):
 
     def __init__(self, parent: ElectrumWindow):
         assert isinstance(parent, ElectrumWindow)
-        columns = [_('Category ID'), _('Label'), _('Fungible Amount'), _('NFTs'), _(''), _(''), _('NFT Flags'),
+        columns = [_('Category ID'), _('Label'), _('Fungible Amount'), _('NFTs'), '', '', _('NFT Flags'),
                    _('Num UTXOs'),
                    self.amount_heading.format(unit=parent.base_unit()), _('Output Point')]
         super().__init__(parent=parent, create_menu=self.create_menu, headers=columns,
