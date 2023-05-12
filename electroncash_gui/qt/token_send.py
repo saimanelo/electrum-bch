@@ -214,8 +214,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         # Bottom panels
         # Pay To
         vbox_bottom = QtWidgets.QVBoxLayout()
+        vbox_bottom.setContentsMargins(0, 0, 0, 0)  # No inset
         gb = QtWidgets.QGroupBox(_("Pay To"))
-        gb.setMaximumHeight(60)
+        gb.setMaximumHeight(120)
         vbox_payto = QtWidgets.QVBoxLayout(gb)
         self.te_payto = te = ScanQRTextEdit()
 
@@ -245,9 +246,11 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         hbox.addWidget(gb_desc)
 
         w_bch_desc = QtWidgets.QWidget()
+        w_bch_desc.setContentsMargins(0, 0, 0, 0)  # No inset
         w_bch_desc.setLayout(hbox)
         vbox_bottom.addWidget(w_bch_desc)
         w_bottom = QtWidgets.QWidget()
+        w_bottom.setContentsMargins(0, 0, 0, 0)  # No inset
         w_bottom.setLayout(vbox_bottom)
 
         splitter.addWidget(w_bottom)
