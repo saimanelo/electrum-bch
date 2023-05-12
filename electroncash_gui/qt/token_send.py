@@ -163,8 +163,11 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         if self.form_mode == self.FormMode.mint:
             tw.setHeaderLabels(self.headers_baton)
             tw.setStyleSheet("QTreeView::item:hover { background: none; }")
-            tw.header().setSectionResizeMode(self.ColsBaton.category_id, QtWidgets.QHeaderView.Stretch)
+            tw.header().setSectionResizeMode(self.ColsBaton.category_id, QtWidgets.QHeaderView.ResizeToContents)
+            tw.header().setSectionResizeMode(self.ColsBaton.buttons, QtWidgets.QHeaderView.ResizeToContents)
+            tw.header().setStretchLastSection(False)
             tw.header().resizeSection(self.ColsBaton.icon, 42)
+            tw.itemDoubleClicked.connect(self.on_mint_mode_top_tree_dbl_click)
         else:
             tw.setHeaderLabels(self.headers_tok)
             tw.header().setSectionResizeMode(self.ColsTok.amount_send, QtWidgets.QHeaderView.Stretch)
@@ -418,11 +421,27 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
              "baton_name": baton_name})
         self.rebuild_output_tokens_treewidget()
         self.on_ui_state_changed()
+        # Scroll to bottom so user understands where the new NFT ended up (otherwise he/she might have impression
+        # that the Mint button had no effect on UI)
+        self.tw_nft.scrollToBottom()
 
     def remove_nft_to_mint(self, row_number):
+        scroll_pos_val = self.tw_nft.verticalScrollBar().value()
         del self.nfts_to_mint[row_number]
         self.rebuild_output_tokens_treewidget()
+        self.tw_nft.verticalScrollBar().setValue(scroll_pos_val)
         self.on_ui_state_changed()
+
+    def on_mint_mode_top_tree_dbl_click(self, item, column):
+        """Slot to make double-clicks do the same things as clicking the "Mint NFTs..." button"""
+        if self.form_mode != self.FormMode.mint:
+            return
+        baton_name = item.data(0, self.DataRoles.output_point)
+        w = self.tw_tok.itemWidget(item, self.ColsBaton.buttons)
+        if w and baton_name:
+            but = w.findChild(QtWidgets.QToolButton, "mint_" + baton_name, QtCore.Qt.FindChildrenRecursively)
+            if but:
+                but.clicked.emit()
 
     def rebuild_input_tokens_treewidget(self):
         tw = self.tw_tok
@@ -500,6 +519,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     item = QtWidgets.QTreeWidgetItem(["", category_id, ""])
                     item.setToolTip(self.ColsBaton.icon, _("Minting NFT"))
                     item.setToolTip(self.ColsBaton.category_id, category_id)
+                    f = item.font(self.ColsBaton.category_id)
+                    f.setStretch(f.SemiCondensed)
+                    item.setFont(self.ColsBaton.category_id, f)
                     item.setFlags((item.flags() | QtCore.Qt.ItemIsUserCheckable) & ~QtCore.Qt.ItemIsSelectable)
                     item.setData(0, self.DataRoles.token_id, tid)
                     item.setData(0, self.DataRoles.output_point, baton_name)
@@ -621,10 +643,13 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             row_num = 0
             for row_data in self.nfts_to_mint:
                 category_id = row_data["category_id"]
-                commitment = row_data["commitment"]
+                commitment = row_data["commitment"] or b''
                 capability = row_data["capability"]
                 copies = row_data["copies"]
                 item = QtWidgets.QTreeWidgetItem(["", category_id, "", "", ""])
+                f = item.font(self.ColsMint.category_id)
+                f.setStretch(f.SemiCondensed)
+                item.setFont(self.ColsMint.category_id, f)
                 item.setToolTip(self.ColsMint.category_id, category_id)
                 max_chars = token.MAX_CONSENSUS_COMMITMENT_LENGTH * 2
                 item.setToolTip(self.ColsNFT.commitment,
@@ -640,8 +665,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 hbox.setContentsMargins(0, 2, 2, 2)
                 close_button = QtWidgets.QPushButton()
                 close_button.setText("X")
-                close_button.setFixedWidth(24)
-                close_button.setFixedHeight(24)
+                close_button.setStyleSheet(ColorScheme.RED.as_stylesheet())
 
                 def on_button_click(_, _row_num=row_num):
                     self.remove_nft_to_mint(_row_num)
@@ -658,21 +682,22 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 hbox = QtWidgets.QHBoxLayout(w)
                 hbox.setContentsMargins(2, 4, 2, 2)
                 commitment_le = QtWidgets.QLineEdit()
-                commitment_le.setTextMargins(0, 4, 0, 3)
-                commitment_le.setText(commitment.hex())
+                commitment_le.setText(row_data.get("last_text_seen") or commitment.hex())
 
-                def on_text_changed(text, le=commitment_le, commitment_hex=commitment.hex(), _row_num=row_num):
+                def on_text_changed(text, no_updaate_ui=False, le=commitment_le, _row_num=row_num):
+                    self.nfts_to_mint[_row_num]["last_text_seen"] = text
                     color = ColorScheme.DEFAULT
                     valid, new_commitment = self.is_commitment_valid(text)
                     if valid:
                         self.nfts_to_mint[_row_num]["commitment"] = new_commitment
-                        if text != commitment_hex:
-                            color = ColorScheme.BLUE
                     else:
                         color = ColorScheme.RED
                         self.nfts_to_mint[_row_num]["commitment"] = None  # Indicate that we have an error
                     le.setStyleSheet(color.as_stylesheet())
-                    self.on_ui_state_changed()
+                    if not no_updaate_ui:
+                        self.on_ui_state_changed()
+
+                on_text_changed(commitment_le.text(), False)  # Call once to properly set color
 
                 commitment_le.textChanged.connect(on_text_changed)
                 hbox.addWidget(commitment_le)
@@ -723,6 +748,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     self.nfts_to_mint[_row_num]["copies"] = value
                 multiplier_sb.valueChanged.connect(on_multiplier_change)
                 hbox.addWidget(multiplier_sb)
+                hbox.addStretch(10)
                 tw.setItemWidget(item, self.ColsMint.multiplier, w)
 
                 row_num += 1
