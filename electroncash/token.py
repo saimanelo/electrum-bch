@@ -6,13 +6,15 @@
 # License: MIT
 """Encapsulation of Cash Token data in a transaction output"""
 
-from enum import IntEnum
 import struct
+from decimal import Decimal as PyDecimal
+from enum import IntEnum
 from typing import Optional, Tuple, Union
 
 from .bitcoin import OpCodes
 from .i18n import _
 from .serialize import BCDataStream, SerializationError
+from .util import print_error
 
 # By consensus, NFT commitment byte blobs may not exceed this length
 MAX_CONSENSUS_COMMITMENT_LENGTH = 40
@@ -221,3 +223,65 @@ def nft_flag_text_sorter(txt: str) -> int:
         return 1
     else:
         return 2 + abs(hash(txt))
+
+
+def format_fungible_amount(x: int, decimal_point: int, num_zeros=0, precision=None, is_diff=False, whitespaces=False,
+                           append_tokentoshis=False):
+    """Inspired by format_satoshis(), but always uses decimal.Decimal for exact precision"""
+    assert decimal_point >= 0
+    if x is None:
+        return _('Unknown')
+    if precision is None:
+        precision = decimal_point
+    decimal_format = ".0" + str(precision) if precision > 0 else ""
+    if is_diff:
+        decimal_format = '+' + decimal_format
+    try:
+        scale = pow(10, decimal_point)
+        pd = PyDecimal(x)
+        if scale > 1:
+            pd /= scale
+        result = ("{:" + decimal_format + "f}").format(pd)
+    except ArithmeticError as e:
+        # Normally doesn't happen unless X is a bad value
+        print_error("token.format_amount:", repr(e))
+        return 'unknown'
+    parts = result.split(".")
+    integer_part = parts[0]
+    if len(parts) >= 2:
+        fract_part = parts[1].rstrip("0")
+    else:
+        fract_part = ""
+    dp = '.'
+    if not integer_part:
+        integer_part = "0"
+    if len(fract_part) < num_zeros:
+        fract_part += "0" * (num_zeros - len(fract_part))
+    result = integer_part + dp + fract_part
+    if whitespaces:
+        result += " " * (decimal_point - len(fract_part))
+        result = " " * (19 - len(result)) + result
+    if decimal_point == 0 and result.endswith("."):
+        result = result.rstrip('.')
+    if decimal_point > 0 and append_tokentoshis and x != 0:
+        result += " (" + str(x) + ")"
+    return result
+
+
+def parse_fungible_amount(x: str, decimal_point: int) -> int:
+    """Convert formatted amount string to token-level units (token sats), without losing precision"""
+    assert decimal_point >= 0
+    parts = x.strip().split('.')
+    if len(parts) < 2:
+        parts.append("0")
+    int_part, frac_part = parts
+    if len(frac_part) < decimal_point:
+        frac_part += "0" * (decimal_point - len(frac_part))
+    elif len(frac_part) > decimal_point:
+        frac_part = frac_part[:decimal_point]
+    if not frac_part:
+        frac_part = "0"
+    if not int_part:
+        int_part = "0"
+    scale = pow(10, decimal_point)
+    return int(int_part) * scale + int(frac_part)

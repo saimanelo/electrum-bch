@@ -11,9 +11,9 @@ import os
 import threading
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
-from electroncash import util
+from electroncash import token, util
 from electroncash.simple_config import SimpleConfig
 
 
@@ -177,3 +177,22 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
             if was_empty:
                 self.d["decimals"] = dd
         self.dirty = True
+
+    def format_amount(self, token_or_id: Union[str, token.OutputData, bytes], fungible_amount: int,
+                      num_zeros=0, is_diff=False, whitespace=False, precision=None,
+                      append_tokentoshis=False) -> str:
+        """Formats a particular token's amount string, according to that token's metadata spec for decimals.
+        If the token is unknown we tread the 'decimals' for that token as '0'."""
+        assert isinstance(token_or_id, (str, bytes, bytearray, token.OutputData))
+        if isinstance(token_or_id, str):
+            token_id_hex = token_or_id
+        elif isinstance(token_or_id (bytes, bytearray)):
+            token_id_hex = token_or_id.hex()
+        else:
+            token_id_hex = token_or_id.id_hex
+        decimals = self.get_token_decimals(token_id_hex)
+        if not isinstance(decimals, int):
+            decimals = 0
+        return token.format_fungible_amount(fungible_amount, decimal_point=decimals, num_zeros=num_zeros,
+                                            precision=precision, is_diff=is_diff, whitespaces=whitespace,
+                                            append_tokentoshis=append_tokentoshis)

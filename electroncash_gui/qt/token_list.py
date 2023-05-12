@@ -251,7 +251,7 @@ class TokenList(MyTreeWidget, util.PrintError):
         def add_utxo_item(parent: Optional[SortableTreeWidgetItem], utxo, name, label, item_key):
             td = utxo['token_data']
             tid = td.id_hex
-            amt = str(td.amount)
+            amt = self.token_meta.format_amount(tid, td.amount)
             nft_flags = token.get_nft_flag_text(td) or ""
             num_nfts = str(int(td.has_nft()))
             num_utxos = "1"
@@ -305,7 +305,7 @@ class TokenList(MyTreeWidget, util.PrintError):
             key_prefix = f'token_{token_id}'
             item_key = key_prefix
             label = self.wallet.get_label(item_key) or ""
-            quantity = str(sum(u['token_data'].amount for u in utxo_list))
+            quantity = self.token_meta.format_amount(token_id, sum(u['token_data'].amount for u in utxo_list))
             num_nfts = sum(1 for u in utxo_list if u['token_data'].has_nft())
             nfts = str(num_nfts)
             flags = {token.get_nft_flag_text(u['token_data']) for u in utxo_list}
@@ -356,7 +356,8 @@ class TokenList(MyTreeWidget, util.PrintError):
                 if create_subgroup:
                     # Create a subgroup called "Fungible-Only" because we have NFTs
                     ft_parent_label = self.wallet.get_label(item_key) or label
-                    ft_amt = str(sum(u['token_data'].amount for u in ft_only_utxo_list))
+                    ft_amt = self.token_meta.format_amount(token_id,
+                                                           sum(u['token_data'].amount for u in ft_only_utxo_list))
                     bch_amt = self.parent.format_amount(sum(x['value'] for x in ft_only_utxo_list), is_diff=False,
                                                         whitespaces=True)
                     ft_parent = SortableTreeWidgetItem([name, ft_parent_label, ft_amt, "0", "", "", "",
@@ -401,7 +402,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                                   item_key)
                 else:
                     item_key = key_prefix + "_nft_" + commitment_hex
-                    ft_amt = str(sum(u['token_data'].amount for u in utxo_list))
+                    ft_amt = self.token_meta.format_amount(token_id, sum(u['token_data'].amount for u in utxo_list))
                     nfts = str(sum(1 for u in utxo_list if u['token_data'].has_nft()))
                     nft_flags = ', '.join(sorted({token.get_nft_flag_text(u['token_data']) for u in utxo_list},
                                                  key=token.nft_flag_text_sorter))

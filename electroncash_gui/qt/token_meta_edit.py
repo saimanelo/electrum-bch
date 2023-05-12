@@ -23,19 +23,17 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from collections import defaultdict, namedtuple
-from enum import IntEnum
-from functools import wraps
-from typing import Any, DefaultDict, Dict, List, Optional, Set, Union
+from collections import namedtuple
+from typing import Optional
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import pyqtSignal
 
 from electroncash import token, util
-from electroncash.i18n import _, ngettext
+from electroncash.i18n import _
 from .main_window import ElectrumWindow
-from .util import ColorScheme, HelpLabel, MessageBoxMixin, MONOSPACE_FONT, OnDestroyedMixin, PrintError
+from .util import HelpLabel, MessageBoxMixin, MONOSPACE_FONT, OnDestroyedMixin, PrintError
 from .token_meta import TokenMetaQt
 
 MAX_UI_DECIMALS = len(str(2**63 - 1))
@@ -45,15 +43,20 @@ ICON_BUT_SIZE = 64
 class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroyedMixin):
     token_metadata_updated = pyqtSignal(str)
 
-    def __init__(self, parent: ElectrumWindow, token_id: str):
-        assert isinstance(parent, ElectrumWindow)
-        super().__init__(parent=parent, flags=QtCore.Qt.Window)
+    def __init__(self, parent: QtWidgets.QWidget, token_id: str, *,
+                 flags=None, window: Optional[ElectrumWindow] = None):
+        window = window or parent
+        assert isinstance(window, ElectrumWindow)
+        if flags:
+            super().__init__(parent=parent, flags=flags)
+        else:
+            super().__init__(parent=parent)
         MessageBoxMixin.__init__(self)
         PrintError.__init__(self)
         OnDestroyedMixin.__init__(self)
         util.finalization_print_error(self)
-        self.parent: ElectrumWindow = parent
-        self.token_meta: TokenMetaQt = self.parent.token_meta
+        self.window: ElectrumWindow = window
+        self.token_meta: TokenMetaQt = self.window.token_meta
         self.token_id = token_id
 
         self.setWindowTitle(_("Edit Token Properties") + f" - {self.token_id}")
@@ -85,7 +88,7 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         l2.setFont(f)
         l2.setTextInteractionFlags(l2.textInteractionFlags() | QtCore.Qt.TextSelectableByMouse)
         a = QtWidgets.QAction(_("Copy Category ID"), self)
-        a.triggered.connect(lambda: self.parent.copy_to_clipboard(self.token_id))
+        a.triggered.connect(lambda: self.window.copy_to_clipboard(self.token_id))
         l.addAction(a)
         l2.addAction(a)
         l.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
@@ -219,8 +222,8 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         self.selected_icon = icon
 
     def update_token_dec_example(self, num_decimals):
-        val = 654_321_234_567_890
-        fmt = util.format_satoshis(val, num_decimals, num_decimals)
+        val = 2**63 - 1
+        fmt = token.format_fungible_amount(val, decimal_point=num_decimals, precision=num_decimals)
         if fmt.endswith('.'):
             fmt = fmt[:-1]
         example = _("Example") + "<font face='" + MONOSPACE_FONT + "'>:&nbsp;" + fmt + "</font>"

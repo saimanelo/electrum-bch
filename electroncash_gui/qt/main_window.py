@@ -5443,7 +5443,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if self.edit_token_metadata_dialog:
             self.edit_token_metadata_dialog.close()
             self.edit_token_metadata_dialog.deleteLater()
-        self.edit_token_metadata_dialog = TokenMetaEditorForm(self, token_id_hex)
+        self.edit_token_metadata_dialog = TokenMetaEditorForm(self, token_id_hex, flags=Qt.Window)
         self.edit_token_metadata_dialog.token_metadata_updated.connect(lambda x: self.update_tabs())
         self.edit_token_metadata_dialog.show()
 

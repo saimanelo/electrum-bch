@@ -138,13 +138,15 @@ class TokenHistoryList(MyTreeWidget, PrintError):
             for category_id, category_delta in tokens_deltas.items():
                 tl_item_key = tx_hash + category_id
                 fungible_amount = category_delta.get("fungibles", 0)
+                fungible_amount_str = self.token_meta.format_amount(category_id, fungible_amount)
                 cat_nfts_in = category_delta.get("nfts_in", [])
                 cat_nfts_out = category_delta.get("nfts_out", [])
                 bal_fts = tokens_balances.get(category_id, {}).get("fungibles", 0)
+                bal_fts_str = self.token_meta.format_amount(category_id, bal_fts)
                 bal_nfts = tokens_balances.get(category_id, {}).get("nfts", 0)
                 nft_amount = len(cat_nfts_in) - len(cat_nfts_out)
-                entry = ['', tx_hash, status_str, label, '', '', category_id, str(fungible_amount), str(nft_amount),
-                         str(bal_fts), str(bal_nfts)]
+                entry = ['', tx_hash, status_str, label, '', '', category_id, fungible_amount_str, str(nft_amount),
+                         bal_fts_str, str(bal_nfts)]
                 item = SortableTreeWidgetItem(entry)
                 has_minting_ctr = 0
                 has_mutable_ctr = 0
@@ -155,9 +157,11 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 item.setData(0, self.DataRoles.editable_label, True)
                 item.setData(0, self.DataRoles.item_key, tl_item_key)
                 item.setToolTip(self.Col.category_id, category_id)
-                item.setToolTip(self.Col.fungible_amount, str(fungible_amount))
+                item.setToolTip(self.Col.fungible_amount, self.token_meta.format_amount(category_id, fungible_amount,
+                                                                                        append_tokentoshis=True))
                 item.setToolTip(self.Col.nft_amount, str(nft_amount))
-                item.setToolTip(self.Col.fungible_balance, str(bal_fts))
+                item.setToolTip(self.Col.fungible_balance, self.token_meta.format_amount(category_id, bal_fts,
+                                                                                        append_tokentoshis=True))
                 item.setToolTip(self.Col.nft_balance, str(bal_nfts))
                 item.setIcon(self.Col.category_id, self.token_meta.get_icon(category_id))
                 if icon:

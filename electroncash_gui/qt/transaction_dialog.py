@@ -85,6 +85,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.tx = copy.deepcopy(tx)
         self.tx.deserialize()
         self.main_window = parent
+        self.token_meta = self.main_window.token_meta
         self.wallet = parent.wallet
         self.prompt_if_unsaved = prompt_if_unsaved
         self.saved = False
@@ -628,13 +629,13 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.main_window.gui_object.cashaddr_toggled_signal.connect(self.update_io)
         self.update_io()
 
-    @staticmethod
-    def _tok2str(tok: Optional[token.OutputData]) -> str:
+    def _tok2str(self, tok: Optional[token.OutputData]) -> str:
         if not tok:
             return repr(tok)
-        ret = f"CashToken - {_('Category ID')}: {tok.id_hex}"
+        ret = f"CashToken - " + _('Category ID') + f": {tok.id_hex}"
         if tok.has_amount():
-            ret += f" - {_('Fungible Amount')}: {tok.amount}"
+            formatted_amt = self.token_meta.format_amount(tok.id_hex, tok.amount, append_tokentoshis=True)
+            ret += " - " + _('Fungible Amount') + ": " + formatted_amt
         if tok.has_nft():
             ret += f" - NFT"
             if tok.has_commitment_length():
