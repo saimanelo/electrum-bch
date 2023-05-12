@@ -168,6 +168,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.send_tab_opreturn_widgets, self.receive_tab_opreturn_widgets = [], []  # defaults to empty list
         self._shortcuts = Weak.Set()  # keep track of shortcuts and disable them on close
         self.create_new_token_dialog = None  # Gets lazy-initted by self.show_create_new_token_dialog()
+        self.edit_token_metadata_dialog = None  # Also gets lazy-initted on-demand
         self._send_token_form: Optional[WindowModalDialog] = None
 
         self.create_status_bar()
@@ -5436,6 +5437,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def mint_tokens(self, utxos: List[Dict[str, Any]]):
         self._send_or_edit_tokens_common(utxos, form_mode=2)
+
+    def show_edit_token_metadata_dialog(self, token_id_hex: str):
+        from .token_meta_edit import TokenMetaEditorForm
+        if self.edit_token_metadata_dialog:
+            self.edit_token_metadata_dialog.close()
+            self.edit_token_metadata_dialog.deleteLater()
+        self.edit_token_metadata_dialog = TokenMetaEditorForm(self, token_id_hex)
+        self.edit_token_metadata_dialog.token_metadata_updated.connect(lambda x: self.update_tabs())
+        self.edit_token_metadata_dialog.show()
 
 
 class TxUpdateMgr(QObject, PrintError):

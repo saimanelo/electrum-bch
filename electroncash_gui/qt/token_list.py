@@ -457,12 +457,16 @@ class TokenList(MyTreeWidget, util.PrintError):
         non_frozen_utxos_that_are_minting = []
         frozen_utxos = []
         frozen_addresses = set()
+        unique_token_ids_selected_that_may_be_frozen_or_unfrozen = set()
 
         def recurse_find_non_frozen_leaves(item):
             if item.childCount() == 0:
                 uxs = item.data(0, self.DataRoles.utxos)
                 if len(uxs) == 1:
                     utxo = uxs[0]
+                    td = utxo['token_data']
+                    if td:
+                        unique_token_ids_selected_that_may_be_frozen_or_unfrozen.add(td.id_hex)
                     flags = item.data(0, self.DataRoles.frozen_flags)
                     if 'a' in flags:
                         frozen_addresses.add(utxo['address'])
@@ -470,7 +474,6 @@ class TokenList(MyTreeWidget, util.PrintError):
                         frozen_utxos.append(utxo)
                     elif not flags:
                         non_frozen_utxos.append(utxo)
-                        td = utxo['token_data']
                         if td and (td.is_mutable_nft() or td.is_minting_nft()):
                             non_frozen_utxos_that_are_editable.append(utxo)
                             if td.is_minting_nft():
@@ -579,6 +582,10 @@ class TokenList(MyTreeWidget, util.PrintError):
                 menu.addAction(ngettext(_("Unfreeze Address"), _("Unfreeze Addresses"), len(frozen_addresses)),
                                lambda: self.parent.set_frozen_state(frozen_addresses, False))
 
+            if len(unique_token_ids_selected_that_may_be_frozen_or_unfrozen) == 1:
+                token_id_hex = list(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)[0]
+                menu.addAction(_("Edit Token Metadata") + "...", lambda: self.on_edit_metadata(token_id_hex))
+
             menu.addSeparator()
             num_utxos = len(non_frozen_utxos)
             if num_utxos:
@@ -604,6 +611,10 @@ class TokenList(MyTreeWidget, util.PrintError):
     @if_not_dead
     def create_new_token(self):
         self.parent.show_create_new_token_dialog()
+
+    @if_not_dead
+    def on_edit_metadata(self, token_id_hex: str):
+        self.parent.show_edit_token_metadata_dialog(token_id_hex)
 
     @classmethod
     def dedupe_utxos(cls, utxos: List[Dict], enforce_unique_token_ids=False) -> List[Dict]:

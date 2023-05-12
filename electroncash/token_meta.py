@@ -74,7 +74,7 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         if buf:
             icon = self._bytes_to_icon(buf)
         if not icon:
-            icon = self._gen_default_icon(token_id_hex)
+            icon = self.gen_default_icon(token_id_hex)
         assert icon is not None
         self._icon_cache[token_id_hex] = icon
         return icon
@@ -112,7 +112,7 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _gen_default_icon(self, token_id_hex: str) -> Any:
+    def gen_default_icon(self, token_id_hex: str) -> Any:
         """Reimplement in subclasses to generate a default icon for a token_id if the icon file is missing"""
         pass
 
@@ -127,38 +127,53 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
             with open(filepath, "wb") as f:
                 f.write(buf)
 
-
-    def get_token_display_name(self, token_id_hex: str) -> str:
-        """Returns the token_id_hex if not found, otherwise returns the display name"""
-        return str(self.d.get("display_names", {}).get(token_id_hex) or token_id_hex)
+    def get_token_display_name(self, token_id_hex: str) -> Optional[str]:
+        """Returns None if not found or if empty, otherwise returns the display name if found and not empty"""
+        ret = self.d.get("display_names", {}).get(token_id_hex)
+        if isinstance(ret, str):
+            return ret
 
     def get_token_ticker_symbol(self, token_id_hex: str) -> Optional[str]:
-        return self.d.get("tickers", {}).get(token_id_hex)
+        ret = self.d.get("tickers", {}).get(token_id_hex)
+        if isinstance(ret, str):
+            return ret
 
-    def get_token_decimals(self, token_id_hex: str) -> int:
-        """Returns 0 if unknown or undefined decimals for token"""
-        return int(self.d.get("decimals", {}).get(token_id_hex, 0))
+    def get_token_decimals(self, token_id_hex: str) -> Optional[int]:
+        """Returns None if unknown or undefined decimals for token"""
+        ret = self.d.get("decimals", {}).get(token_id_hex)
+        if isinstance(ret, int):
+            return ret
+        return ret
 
-    def set_token_display_name(self, token_id_hex: str, name: str):
+    def set_token_display_name(self, token_id_hex: str, name: Optional[str]):
         dd = self.d.get("display_names", {})
-        was_empty = not dd
-        dd[token_id_hex] = str(name)
-        if was_empty:
-            self.d["display_names"] = dd
+        if name is None:
+            dd.pop(token_id_hex, None)
+        elif isinstance(name, str):
+            was_empty = not dd
+            dd[token_id_hex] = str(name)
+            if was_empty:
+                self.d["display_names"] = dd
         self.dirty = True
 
-    def set_token_ticker_symbol(self, token_id_hex: str, ticker: str):
+    def set_token_ticker_symbol(self, token_id_hex: str, ticker: Optional[str]):
         dd = self.d.get("tickers", {})
-        was_empty = not dd
-        dd[token_id_hex] = str(ticker)
-        if was_empty:
-            self.d["tickers"] = dd
+        if ticker is None:
+            dd.pop(token_id_hex, None)
+        elif isinstance(ticker, str):
+            was_empty = not dd
+            dd[token_id_hex] = str(ticker)
+            if was_empty:
+                self.d["tickers"] = dd
         self.dirty = True
 
-    def set_token_decimals(self, token_id_hex: str, decimals: int):
+    def set_token_decimals(self, token_id_hex: str, decimals: Optional[int]):
         dd = self.d.get("decimals", {})
-        was_empty = not dd
-        dd[token_id_hex] = int(decimals)
-        if was_empty:
-            self.d["tickers"] = dd
+        if decimals is None:
+            dd.pop(token_id_hex, None)
+        elif isinstance(decimals, int):
+            was_empty = not dd
+            dd[token_id_hex] = int(decimals)
+            if was_empty:
+                self.d["decimals"] = dd
         self.dirty = True

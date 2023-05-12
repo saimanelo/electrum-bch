@@ -30,7 +30,7 @@ class TokenMetaQt(TokenMeta):
         icon = QIcon(pm)
         return icon
 
-    def _gen_default_icon(self, token_id_hex: str) -> QIcon:
+    def gen_default_icon(self, token_id_hex: str) -> QIcon:
         img = qblockies.create(token_id_hex, size=12, scale=4, spotcolor=QColor(0, 0, 0))
         return QIcon(QPixmap.fromImage(img))
 
