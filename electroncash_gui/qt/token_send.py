@@ -145,6 +145,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         # Build UI
         vbox = QtWidgets.QVBoxLayout(self)
         splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        splitter.setChildrenCollapsible(False)
+        splitter.setContentsMargins(0, 0, 0, 0)  # contains the two top groupboxess (each containing a treewidget)
 
         # Top panel
         if self.form_mode == self.FormMode.mint:
@@ -168,6 +170,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             tw.header().setSectionResizeMode(self.ColsTok.amount_send, QtWidgets.QHeaderView.Stretch)
         vbox_gb.addWidget(tw)
         splitter.addWidget(gb)
+        splitter.setStretchFactor(splitter.count()-1, 10)
 
         # Middle pannel
         if self.form_mode == self.FormMode.send:
@@ -208,26 +211,26 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.tw_nft.itemChanged.connect(self.on_nft_item_changed)
 
         splitter.addWidget(gb_nft)
-        vbox.addWidget(splitter)
+        splitter.setStretchFactor(splitter.count()-1, 10)
 
-        # Bottom panels
         # Pay To
-        vbox_bottom = QtWidgets.QVBoxLayout()
-        vbox_bottom.setContentsMargins(0, 0, 0, 0)  # No inset
-        gb = QtWidgets.QGroupBox(_("Pay To"))
-        gb.setMaximumHeight(120)
-        vbox_payto = QtWidgets.QVBoxLayout(gb)
+        gb_payto = self.gb_payto = QtWidgets.QGroupBox(_("Pay To"))
+        vbox_payto = QtWidgets.QVBoxLayout(gb_payto)
         self.te_payto = te = ScanQRTextEdit()
 
         vbox_payto.addWidget(te)
         te.setPlaceholderText(networks.net.CASHADDR_PREFIX + ":" + "...")
         te.textChanged.connect(self.on_ui_state_changed)
 
-        vbox_bottom.addWidget(gb)
         self._adjust_te_payto_size()
         if self.form_mode in (self.FormMode.edit, self.FormMode.mint):
-            gb.setHidden(True)
+            gb_payto.setHidden(True)
             self.te_payto.setText(self.wallet.get_unused_address(for_change=True).to_token_string())
+
+        splitter.addWidget(gb_payto)
+        splitter.setStretchFactor(splitter.count()-1, 1)
+        vbox.addWidget(splitter)
+        vbox.setStretch(vbox.count()-1, 10)
 
         # BCH to send plus description
         hbox = QtWidgets.QHBoxLayout()
@@ -244,16 +247,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.te_desc.setPlaceholderText(_("Memo") + "...")
         hbox.addWidget(gb_desc)
 
-        w_bch_desc = QtWidgets.QWidget()
-        w_bch_desc.setContentsMargins(0, 0, 0, 0)  # No inset
-        w_bch_desc.setLayout(hbox)
-        vbox_bottom.addWidget(w_bch_desc)
-        w_bottom = QtWidgets.QWidget()
-        w_bottom.setContentsMargins(0, 0, 0, 0)  # No inset
-        w_bottom.setLayout(vbox_bottom)
-
-        splitter.addWidget(w_bottom)
-        vbox.addWidget(splitter)
+        vbox.addLayout(hbox)
+        vbox.setStretch(vbox.count()-1, 1)
 
         # Bottom buttons
         hbox = QtWidgets.QHBoxLayout()
@@ -281,6 +276,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
 
     def _adjust_te_payto_size(self):
         te = self.te_payto
+        gb = self.gb_payto
         font_spacing = QtGui.QFontMetrics(te.document().defaultFont()).lineSpacing()
         margins = te.contentsMargins()
         document_margin = te.document().documentMargin()
@@ -290,7 +286,10 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
 
         height_min = font_spacing + vertical_margins
         te.setMinimumHeight(height_min)
-        te.setMaximumHeight(int(height_min * 1.5))
+        sp = gb.sizePolicy()
+        sp.setVerticalPolicy(sp.Maximum)
+        gb.setSizePolicy(sp)
+        te.setSizePolicy(sp)
 
     def _setup_additional_bch_gbox(self, parent_layout: QtWidgets.QLayout):
         gb = QtWidgets.QGroupBox(_("Additional BCH to Send"))
