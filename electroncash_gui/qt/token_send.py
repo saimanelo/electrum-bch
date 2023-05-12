@@ -163,7 +163,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         if self.form_mode == self.FormMode.mint:
             tw.setHeaderLabels(self.headers_baton)
             tw.setStyleSheet("QTreeView::item:hover { background: none; }")
-            tw.header().setSectionResizeMode(self.ColsBaton.category_id, QtWidgets.QHeaderView.ResizeToContents)
+            tw.header().setSectionResizeMode(self.ColsBaton.category_id, QtWidgets.QHeaderView.Stretch)
             tw.header().setSectionResizeMode(self.ColsBaton.buttons, QtWidgets.QHeaderView.ResizeToContents)
             tw.header().setStretchLastSection(False)
             tw.header().resizeSection(self.ColsBaton.icon, 42)
@@ -173,9 +173,12 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             tw.header().setSectionResizeMode(self.ColsTok.amount_send, QtWidgets.QHeaderView.Stretch)
         vbox_gb.addWidget(tw)
         splitter.addWidget(gb)
-        splitter.setStretchFactor(splitter.count()-1, 10)
+        if self.form_mode == self.FormMode.mint:
+            splitter.setStretchFactor(splitter.count()-1, 38)
+        else:
+            splitter.setStretchFactor(splitter.count()-1, 100)
 
-        # Middle pannel
+        # Middle panel
         if self.form_mode == self.FormMode.send:
             gb_nft_title = _("NFTs to Send")
         elif self.form_mode == self.FormMode.edit:
@@ -214,9 +217,11 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.tw_nft.itemChanged.connect(self.on_nft_item_changed)
 
         splitter.addWidget(gb_nft)
-        splitter.setStretchFactor(splitter.count()-1, 10)
+        splitter.setStretchFactor(splitter.count()-1, 100)
 
         # Pay To
+        vbox_bottom = QtWidgets.QVBoxLayout()
+        vbox_bottom.setContentsMargins(0, 0, 0, 0)  # No inset
         gb_payto = self.gb_payto = QtWidgets.QGroupBox(_("Pay To"))
         vbox_payto = QtWidgets.QVBoxLayout(gb_payto)
         self.te_payto = te = ScanQRTextEdit()
@@ -230,13 +235,12 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             gb_payto.setHidden(True)
             self.te_payto.setText(self.wallet.get_unused_address(for_change=True).to_token_string())
 
-        splitter.addWidget(gb_payto)
-        splitter.setStretchFactor(splitter.count()-1, 1)
-        vbox.addWidget(splitter)
-        vbox.setStretch(vbox.count()-1, 10)
+        vbox_bottom.addWidget(gb_payto)
+        vbox_bottom.setStretch(vbox_bottom.count()-1, 1)
 
         # BCH to send plus description
         hbox = QtWidgets.QHBoxLayout()
+        vbox_bottom.setStretch(vbox.count()-1, 100)
         hbox.setContentsMargins(0, 0, 0, 0)  # No inset
         # Additional BCH to Send
         self._setup_additional_bch_gbox(hbox)
@@ -250,8 +254,18 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.te_desc.setPlaceholderText(_("Memo") + "...")
         hbox.addWidget(gb_desc)
 
-        vbox.addLayout(hbox)
-        vbox.setStretch(vbox.count()-1, 1)
+        vbox_bottom.addLayout(hbox)
+        vbox_bottom.setStretch(vbox_bottom.count()-1, 100)
+        w_bottom = QtWidgets.QWidget()
+        w_bottom.setContentsMargins(0, 0, 0, 0)  # No inset
+        w_bottom.setLayout(vbox_bottom)
+        splitter.addWidget(w_bottom)
+        if self.form_mode == self.FormMode.mint:
+            splitter.setStretchFactor(splitter.count()-1, 38)
+        else:
+            splitter.setStretchFactor(splitter.count()-1, 26)
+        vbox.addWidget(splitter)
+        vbox.setStretch(vbox.count()-1, 100)
 
         # Bottom buttons
         hbox = QtWidgets.QHBoxLayout()
@@ -433,7 +447,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.on_ui_state_changed()
 
     def on_mint_mode_top_tree_dbl_click(self, item, column):
-        """Slot to make double-clicks do the same things as clicking the "Mint NFTs..." button"""
+        """Slot to make double-clicks do the same things as clicking the "Mint..." button"""
         if self.form_mode != self.FormMode.mint:
             return
         baton_name = item.data(0, self.DataRoles.output_point)
@@ -538,7 +552,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                         self.add_nft_to_mint(_category_id, _baton_name)
                         self.on_ui_state_changed()
                     but.clicked.connect(on_clicked)
-                    but.setText(_("Mint NFTs..."))
+                    but.setText(_("Mint..."))
                     but.setObjectName("mint_" + baton_name)
                     but.setToolTip("Use this Minting token to mint new NFTs")
                     hbox.addWidget(but)
