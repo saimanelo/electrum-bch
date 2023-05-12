@@ -488,7 +488,10 @@ class TokenList(MyTreeWidget, util.PrintError):
         non_frozen_utxos = self.dedupe_utxos(non_frozen_utxos)
         frozen_utxos = self.dedupe_utxos(frozen_utxos)
         non_frozen_utxos_that_are_editable = self.dedupe_utxos(non_frozen_utxos_that_are_editable)
-        non_frozen_utxos_that_are_minting = self.dedupe_utxos(non_frozen_utxos_that_are_minting)
+        non_frozen_utxos_that_are_minting = self.dedupe_utxos(non_frozen_utxos_that_are_minting,
+                                                              # For mint, we only care to grab at most 1 of each token
+                                                              # category.
+                                                              enforce_unique_token_ids=True)
 
         def do_copy(txt):
             txt = txt.strip()
@@ -603,13 +606,18 @@ class TokenList(MyTreeWidget, util.PrintError):
         self.parent.show_create_new_token_dialog()
 
     @classmethod
-    def dedupe_utxos(cls, utxos: List[Dict]) -> List[Dict]:
+    def dedupe_utxos(cls, utxos: List[Dict], enforce_unique_token_ids=False) -> List[Dict]:
         deduped_utxos = []
         seen = set()
+        seen_token_ids = set()
         for utxo in utxos:
             key = cls.get_outpoint_longname(utxo)
-            if key not in seen:
+            td = utxo['token_data']
+            tid = td and td.id
+            if key not in seen and (not enforce_unique_token_ids or not tid or tid not in seen_token_ids):
                 seen.add(key)
+                if tid:
+                    seen_token_ids.add(tid)
                 deduped_utxos.append(utxo)
         return deduped_utxos
 
@@ -625,7 +633,7 @@ class TokenList(MyTreeWidget, util.PrintError):
 
     @if_not_dead
     def mint_tokens(self, utxos: List[Dict[str, Any]]):
-        utxos = self.dedupe_utxos(utxos)
+        utxos = self.dedupe_utxos(utxos, enforce_unique_token_ids=True)
         self.parent.mint_tokens(utxos)
 
     @if_not_dead
