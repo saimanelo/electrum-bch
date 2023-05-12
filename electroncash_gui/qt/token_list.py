@@ -223,11 +223,12 @@ class TokenList(MyTreeWidget, util.PrintError):
                 if leaf:
                     prefix = ""
                 elif toplevel:
-                    prefix = f"Category contains {number} "
+                    prefix = _("Category contains {number} ").format(number=number)
                 else:
-                    prefix = f"Group contains {number} "
-                return ngettext(f"{prefix}{nft_capability} NFT",
-                                f"{prefix}{nft_capability} NFTs", number)
+                    prefix = _("Group contains {number} ").format(number=number)
+                return ngettext("{prefix}{nft_capability} NFT",
+                                "{prefix}{nft_capability} NFTs",
+                                number).format(prefix=prefix, nft_capability=nft_capability)
             if num_minting > 0:
                 item.setIcon(self.Col.cap_icon_main, self.icon_baton)
                 item.setToolTip(self.Col.cap_icon_main, get_tip_text(num_minting, "Minting"))
