@@ -5407,10 +5407,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.create_new_token_dialog.activateWindow()
         self.create_new_token_dialog.raise_()
 
-    def _send_or_edit_tokens_common(self, utxos: List[Dict[str, Any]], form_mode=0):
-        assert form_mode in (0, 1, 2), "Must specify 1, 2, or 3: indicating send, edit or mint respectively."
+    def _send_or_edit_tokens_common(self, utxos: List[Dict[str, Any]], form_mode: int):
         from .token_send import SendTokenForm
         assert all(isinstance(u['token_data'], token.OutputData) for u in utxos)
+        modes = {0: SendTokenForm.FormMode.send, 1: SendTokenForm.FormMode.edit, 2: SendTokenForm.FormMode.mint}
+        assert form_mode in modes, "Bad form_mode argument"
+        form_mode = modes[form_mode]
 
         form = None
 
@@ -5422,7 +5424,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 form.deleteLater()
                 self._send_token_form = form = None
 
-        self._send_token_form = form = SendTokenForm(self, utxos, broadcast_callback=broadcast_done, form_mode=form_mode)
+        self._send_token_form = form = SendTokenForm(self, utxos, broadcast_callback=broadcast_done,
+                                                     form_mode=form_mode)
         form.open()
 
     def send_tokens(self, utxos: List[Dict[str, Any]]):
