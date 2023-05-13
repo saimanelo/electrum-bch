@@ -61,11 +61,10 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         buttons = 2
 
     class ColsMint(IntEnum):
-        remove = 0
-        category = 1
-        commitment = 2
-        capability = 3
-        multiplier = 4
+        category = 0
+        commitment = 1
+        capability = 2
+        multiplier = 3
 
     class DataRoles(IntEnum):
         token_id = QtCore.Qt.UserRole
@@ -81,7 +80,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
     headers_tok = [_("Category"), _("NFTs to Send"), _("Fungible Amount"), _("Fungible Amount to Send")]
     headers_nft = [_("Send"), _("Category"), _("Commitment"), _("Capability")]
     headers_baton = ["", _("Category"), ""]
-    headers_mint = ["", _("Category"), _("Commitment"), _("Capability"), _("Multiplier")]
+    headers_mint = [_("Category"), _("Commitment"), _("Capability"), _("Multiplier")]
 
     def __init__(self, parent: ElectrumWindow, token_utxos: List[dict],
                  *, broadcast_callback: Optional[Callable[[bool], Any]] = None, form_mode=FormMode.send):
@@ -115,6 +114,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.broadcast_callback = broadcast_callback
         self.icon_baton = QtGui.QIcon(":icons/baton.png")
         self.icon_mutable = QtGui.QIcon(":icons/mutable.png")
+        self.icon_trash = QtGui.QIcon(":icons/trash-10-24.png")
         self.form_mode = form_mode
 
         # Setup data source; iterate over a sorted list of utxos
@@ -166,12 +166,14 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             tw.header().setSectionResizeMode(self.ColsBaton.category, QtWidgets.QHeaderView.Stretch)
             tw.header().setSectionResizeMode(self.ColsBaton.buttons, QtWidgets.QHeaderView.ResizeToContents)
             tw.header().setStretchLastSection(False)
-            tw.header().resizeSection(self.ColsBaton.icon, 42)
+            tw.header().resizeSection(self.ColsBaton.icon, 21)
             tw.itemDoubleClicked.connect(self.on_mint_mode_top_tree_dbl_click)
             tw.setMinimumHeight(100)
         else:
             tw.setHeaderLabels(self.headers_tok)
             tw.header().setSectionResizeMode(self.ColsTok.amount_send, QtWidgets.QHeaderView.Stretch)
+        tw.setRootIsDecorated(False)  # Saves space in col0
+        tw.setItemsExpandable(False)  # ditto
         vbox_gb.addWidget(tw)
         splitter.addWidget(gb)
         if self.form_mode == self.FormMode.mint:
@@ -201,9 +203,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             tw.setHeaderLabels(self.headers_nft)
             tw.header().setSectionResizeMode(self.ColsNFT.commitment, QtWidgets.QHeaderView.Stretch)
         elif self.form_mode == self.FormMode.mint:
+            tw.setRootIsDecorated(False)
+            tw.setItemsExpandable(False)
             tw.setHeaderLabels(self.headers_mint)
-            tw.header().setSectionResizeMode(self.ColsMint.remove, QtWidgets.QHeaderView.Fixed)
-            tw.setColumnWidth(self.ColsMint.remove, 50)
             tw.header().setSectionResizeMode(self.ColsMint.commitment, QtWidgets.QHeaderView.Stretch)
             tw.header().setSectionResizeMode(self.ColsMint.capability, QtWidgets.QHeaderView.Fixed)
         gb_nft_vbox.addWidget(tw)
@@ -648,7 +650,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 commitment = row_data["commitment"] or b''
                 capability = row_data["capability"]
                 copies = row_data["copies"]
-                item = QtWidgets.QTreeWidgetItem(["", "", "", "", ""])
+                item = QtWidgets.QTreeWidgetItem(["", "", "", ""])
                 self._set_category_col(item, category_id, self.ColsMint.category)
                 max_chars = token.MAX_CONSENSUS_COMMITMENT_LENGTH * 2
                 item.setToolTip(self.ColsNFT.commitment,
@@ -656,21 +658,6 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                                 .format(max_chars=max_chars))
                 item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
                 tw.addTopLevelItem(item)
-
-                # Delete button field
-                w = QtWidgets.QWidget()
-                w.setToolTip(item.toolTip(self.ColsMint.remove))
-                hbox = QtWidgets.QHBoxLayout(w)
-                self._set_field_margins(hbox, first_row, first_column=True)
-                close_button = QtWidgets.QPushButton()
-                close_button.setText("X")
-                close_button.setStyleSheet(ColorScheme.RED.as_stylesheet())
-
-                def on_button_click(_, _row_num=row_num):
-                    self.remove_nft_to_mint(_row_num)
-                close_button.clicked.connect(on_button_click)
-                hbox.addWidget(close_button)
-                tw.setItemWidget(item, self.ColsMint.remove, w)
 
                 # Commitment field
                 w = QtWidgets.QWidget()
@@ -711,6 +698,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 capability_cb.addItems([_('Immutable'), _('Mutable'), _('Minting')])
                 capability_cb.setItemIcon(1, self.icon_mutable)
                 capability_cb.setItemIcon(2, self.icon_baton)
+                capability_cb.setToolTip(_("Capability of the newly-minted NFT"))
                 if capability == token.Capability.Minting:
                     capability_cb.setCurrentIndex(2)
                 elif capability == token.Capability.Mutable:
@@ -744,12 +732,23 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 multiplier_sb.setSuffix(" " + _("copies"))
                 multiplier_sb.setSpecialValueText(_("Single"))
                 multiplier_sb.setValue(copies)
+                multiplier_sb.setToolTip(_("Number of identical copies of this NFT to mint"))
 
                 def on_multiplier_change(value, _row_num=row_num):
                     self.nfts_to_mint[_row_num]["copies"] = value
                 multiplier_sb.valueChanged.connect(on_multiplier_change)
                 hbox.addWidget(multiplier_sb)
+                delete_button = QtWidgets.QToolButton()
+                delete_button.setIcon(self.icon_trash)
+                delete_button.setToolTip(_("Remove this NFT from the list"))
+
+                def on_button_click(_, _row_num=row_num):
+                    self.remove_nft_to_mint(_row_num)
+                delete_button.clicked.connect(on_button_click)
+                hbox.addWidget(delete_button)
+
                 hbox.addStretch(10)
+
                 tw.setItemWidget(item, self.ColsMint.multiplier, w)
                 self.allow_transparent_background(w)
                 first_row = False
