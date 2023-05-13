@@ -870,6 +870,14 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     add_leaf_item(parent, tid, name, first_row)
                     first_row = False
 
+            if self.form_mode == self.FormMode.edit:
+                # After above is built, do a 1-pass to re-set the counts for items receiving count updates,
+                # so that the UI starts off with the right counts. This is necessary in "edit" mode only;
+                # "send" mode has the "fungibles" box firing a re-count as it builds itself, thereby implicitly
+                # causing the below update_tokens_to_send_nft_count(tid) to run for each `tid`.
+                for tid in self.token_nfts.keys():
+                    self.update_tokens_to_send_nft_count(tid)
+
             if tw.topLevelItemCount() == 1:
                 # Auto-expand if only 1 item
                 item = tw.topLevelItem(0)
