@@ -79,7 +79,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         mint = 2
 
     headers_tok = [_("Category"), _("NFTs to Send"), _("Fungible Amount"), _("Fungible Amount to Send")]
-    headers_nft = [_("Send"), _("Category"), _("Commitment"), _("Flags")]
+    headers_nft = [_("Send"), _("Category"), _("Commitment"), _("Capability")]
     headers_baton = ["", _("Category"), ""]
     headers_mint = ["", _("Category"), _("Commitment"), _("Capability"), _("Multiplier")]
 

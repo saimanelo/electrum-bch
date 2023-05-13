@@ -70,7 +70,7 @@ class TokenList(MyTreeWidget, util.PrintError):
 
     def __init__(self, parent: ElectrumWindow):
         assert isinstance(parent, ElectrumWindow)
-        columns = [_('Category'), _('Fungible Amount'), _('NFTs'), '', '', _('NFT Flags'), _('Num UTXOs'),
+        columns = [_('Category'), _('Fungible Amount'), _('NFTs'), '', '', _('Capability'), _('Num UTXOs'),
                    self.amount_heading.format(unit=parent.base_unit()), _('Output Point')]
         super().__init__(parent=parent, create_menu=self.create_menu, headers=columns,
                          stretch_column=None, deferred_updates=True,
@@ -520,7 +520,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                     if nft_utxo:
                         # NFT child item
                         if col == self.Col.category:
-                            alt_column_title = _("NFT Hex")
+                            alt_column_title = _("NFT Commitment")
                             alt_copy_text = nft_utxo['token_data'].commitment.hex()
                             copy_text = nft_utxo['token_data'].id_hex
                         if copy_text == '-':
@@ -556,7 +556,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                                 seen_token_ids.add(tid)
                                 texts.append(tid)
                         if nft_utxos:
-                            alt_copy = _("Copy {}").format(_("NFT Hex")) + f" ({len(nft_utxos)})"
+                            alt_copy = _("Copy {}").format(_("NFT Commitment")) + f" ({len(nft_utxos)})"
                             alt_copy_text = '\n'.join([u['token_data'].commitment.hex() for u in nft_utxos])
                     else:
                         def get_text(item):
