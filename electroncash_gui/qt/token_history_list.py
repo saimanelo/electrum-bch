@@ -94,7 +94,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         self.header().setSectionResizeMode(self.Col.description, QHeaderView.Stretch)
         self.header().setMinimumSectionSize(21)
         for col in (self.Col.cap_icon_main, self.Col.cap_icon_extra):
-            self.header().setSectionResizeMode(col, QHeaderView.Fixed)
+            self.header().setSectionResizeMode(col, QHeaderView.Interactive)
             self.header().resizeSection(col, 21)
         for col in range(self.Col.category, len(headers)):
             self.header().setSectionResizeMode(col, QHeaderView.Interactive)
