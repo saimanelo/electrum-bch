@@ -891,8 +891,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         if token_data:
             id_hex = token_data.id_hex
             dname = self.format_token_name(id_hex, append_parenthetical=False)
-            if dname != id_hex:
-                ret += [(_("Copy Token Category"), lambda: self._copy_to_clipboard(dname, io_text))]
+            if dname != id_hex and dname:
+                ret += [(_("Copy Token Name"), lambda: self._copy_to_clipboard(dname, io_text))]
             ret += [(_("Copy Token Category ID"), lambda: self._copy_to_clipboard(id_hex, io_text))]
             if token_data.has_amount():
                 formatted_amt = self.format_token_amount(id_hex, token_data.amount, append_tokentoshis=False)
