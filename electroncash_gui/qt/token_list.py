@@ -138,6 +138,7 @@ class TokenList(MyTreeWidget, util.PrintError):
         return s
 
     @if_not_dead
+    @util.profiler
     def on_update(self):
         def item_path(item: SortableTreeWidgetItem) -> str:
             """ Recursively builds the path for an item eg 'parent_name/item_name' """
