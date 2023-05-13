@@ -320,19 +320,22 @@ class CreateTokenForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroye
         # Bottom buttons
         col = 0
         row += 1
-        self.dlg_buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok
-                                                      | QtWidgets.QDialogButtonBox.Cancel
-                                                      | QtWidgets.QDialogButtonBox.Reset)
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.setContentsMargins(0, 0, 0, 0)
+        self.clear_button = QtWidgets.QPushButton(_("Clear"))
+        self.clear_button.clicked.connect(self.clear_form)
+        hbox.addWidget(self.clear_button)
+        hbox.addStretch(2)
+
+        self.dlg_buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
         self.create_button = self.dlg_buttons.button(QtWidgets.QDialogButtonBox.Ok)
         self.cancel_button = self.dlg_buttons.button(QtWidgets.QDialogButtonBox.Cancel)
-        self.clear_button = self.dlg_buttons.button(QtWidgets.QDialogButtonBox.Reset)
         self.create_button.setText(_("Create..."))
-        self.clear_button.setText(_("Clear"))
-        self.clear_button.clicked.connect(self.clear_form)
         assert self.create_button and self.cancel_button
         self.dlg_buttons.accepted.connect(self.do_create)
         self.dlg_buttons.rejected.connect(self.close)
-        grid.addWidget(self.dlg_buttons, row, col, 1, n_cols)
+        hbox.addWidget(self.dlg_buttons)
+        grid.addLayout(hbox, row, col, 1, n_cols)
 
         self.setLayout(grid)
 
