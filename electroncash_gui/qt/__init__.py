@@ -133,6 +133,7 @@ class ElectrumGui(QObject, PrintError):
         self._last_active_window = None  # we remember the last activated ElectrumWindow as a Weak.ref
         Address.show_cashaddr(self.is_cashaddr())
         # Dark Theme -- ideally set this before any widgets are created.
+        self.qdarkstyle_is_enabled = False
         self.set_dark_theme_if_needed()
         # /
         # Wallet Password Cache
@@ -341,11 +342,11 @@ class ElectrumGui(QObject, PrintError):
             # On OSX, qdarkstyle is kind of broken (bad UI). We instead rely on Mojave
             # dark mode if (built in to the OS) for this facility, which the
             # user can set outside of this application.
-            use_dark_theme = False
+            self.qdarkstyle_is_enabled = False
         else:
-            use_dark_theme = self.config.get('qt_gui_color_theme', 'default') == 'dark'
+            self.qdarkstyle_is_enabled = self.config.get('qt_gui_color_theme', 'default') == 'dark'
         darkstyle_ver = None
-        if use_dark_theme:
+        if self.qdarkstyle_is_enabled:
             try:
                 import qdarkstyle
                 self.app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
@@ -354,15 +355,15 @@ class ElectrumGui(QObject, PrintError):
                 except (ValueError, IndexError, TypeError, NameError, AttributeError) as e:
                     self.print_error("Warning: Could not determine qdarkstyle version:", repr(e))
             except BaseException as e:
-                use_dark_theme = False
+                self.qdarkstyle_is_enabled = False
                 self.print_error('Error setting dark theme: {}'.format(repr(e)))
         # Apply any necessary stylesheet patches
         from . import style_patcher
-        style_patcher.patch(use_dark_theme=use_dark_theme, darkstyle_ver=darkstyle_ver)
+        style_patcher.patch(use_dark_theme=self.qdarkstyle_is_enabled, darkstyle_ver=darkstyle_ver)
         # Even if we ourselves don't set the dark theme,
         # the OS/window manager/etc might set *a dark theme*.
         # Hence, try to choose colors accordingly:
-        ColorScheme.update_from_widget(QWidget(), force_dark=use_dark_theme)
+        ColorScheme.update_from_widget(QWidget(), force_dark=self.qdarkstyle_is_enabled)
 
     def get_cached_password(self, wallet):
         ''' Passwords in the cache only live for a very short while (10 seconds)

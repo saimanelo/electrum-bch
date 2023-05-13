@@ -115,6 +115,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.icon_baton = QtGui.QIcon(":icons/baton.png")
         self.icon_mutable = QtGui.QIcon(":icons/mutable.png")
         self.form_mode = form_mode
+        self.style_is_qdarkstyle = self.parent.gui_object.qdarkstyle_is_enabled
 
         # Setup data source; iterate over a sorted list of utxos
         def sort_func(u):
