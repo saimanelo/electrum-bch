@@ -28,7 +28,6 @@ import math
 from collections import defaultdict
 from enum import IntEnum
 from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set
-import sys
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
