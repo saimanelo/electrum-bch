@@ -535,7 +535,7 @@ class Network(util.DaemonThread):
 
     def get_status_value(self, key):
         if key == 'status':
-            value = self.connection_status  
+            value = self.connection_status
         elif key == 'banner':
             value = self.banner
         elif key == 'fee':
@@ -798,7 +798,7 @@ class Network(util.DaemonThread):
         result = response.get('result')
         method = response.get('method')
         params = response.get('params')
- 
+
         #print ("DEBUG network 815")
 
         # FIXME:
@@ -1344,8 +1344,8 @@ class Network(util.DaemonThread):
             params = [height, networks.net.VERIFICATION_BLOCK_HEIGHT]
         self.queue_request('blockchain.block.header', params, interface)
         return True
-        
-        
+
+
 
     def on_header(self, interface, request, response):
         """Handle receiving a single block header"""

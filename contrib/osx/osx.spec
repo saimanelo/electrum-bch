@@ -34,6 +34,7 @@ datas = [
     (home+'electroncash/servers_testnet4.json', PYPKG),
     (home+'electroncash/servers_scalenet.json', PYPKG),
     (home+'electroncash/servers_regtest.json', PYPKG),
+    (home+'electroncash/servers_chipnet.json', PYPKG),
     (home+'electroncash/wordlist/english.txt', PYPKG + '/wordlist'),
     (home+'electroncash/locale', PYPKG + '/locale'),
     (home+'electroncash_plugins', PYPKG + '_plugins'),
