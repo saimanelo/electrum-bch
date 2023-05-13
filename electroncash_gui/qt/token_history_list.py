@@ -158,7 +158,10 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 item.setData(0, self.DataRoles.category_id, category_id)
                 item.setData(0, self.DataRoles.editable_label, True)
                 item.setData(0, self.DataRoles.item_key, tl_item_key)
-                item.setToolTip(self.Col.category, category_id)
+                if token_display_name != category_id:
+                    item.setToolTip(self.Col.category, _("Category ID") + ": " + category_id)
+                else:
+                    item.setToolTip(self.Col.category, category_id)
                 item.setToolTip(self.Col.fungible_amount, self.token_meta.format_amount(category_id, fungible_amount,
                                                                                         append_tokentoshis=True))
                 item.setToolTip(self.Col.nft_amount, str(nft_amount))
@@ -323,6 +326,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                             action_text = _("Copy Category ID")
                             if copy_text != category_id:
                                 # User specified a token name, add "Copy Category ID"
+                                menu.actions()[-1].setText(_("Copy Token Name"))
                                 menu.addAction(action_text, lambda: do_copy(category_id))
                             elif column_title == _("Category"):
                                 # Column name *is* the Category ID, rewrite name "Category" -> "Category ID"

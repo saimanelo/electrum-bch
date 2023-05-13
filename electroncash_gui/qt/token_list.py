@@ -518,9 +518,9 @@ class TokenList(MyTreeWidget, util.PrintError):
                     if col == self.Col.category:
                         copy_text = item.data(0, self.DataRoles.token_id)
                         if copy_text != item.text(self.Col.category):
-                            # Prepend "Copy Category" right above "Copy Category ID" in cases where user specified
+                            # Prepend "Copy Token Name" right above "Copy Category ID" in cases where user specified
                             # a token name
-                            insert_cat_title = _("Category")
+                            insert_cat_title = _("Token Name")
                             insert_cat_text = item.text(self.Col.category)
                     elif col == self.Col.output_pt and is_leaf_utxo:
                         copy_text = self.get_outpoint_longname(utxos[0])
