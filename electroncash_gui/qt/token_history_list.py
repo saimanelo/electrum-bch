@@ -332,7 +332,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     tx_hash = item.data(0, self.DataRoles.tx_hash)
                     tx = self.wallet.transactions.get(tx_hash, None)
                     if tx:
-                        menu.addAction(_("Details"), lambda: self.parent.show_transaction(tx))
+                        menu.addAction(_("View Tx") + "...", lambda: self.parent.show_transaction(tx))
 
         menu.addSeparator()
         menu.addAction(QIcon(":icons/tab_token.svg"), _("Create Token..."), self.parent.show_create_new_token_dialog)

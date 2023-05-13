@@ -548,7 +548,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                         def do_show_tx():
                             self.parent.show_transaction(tx, tx_desc=self.wallet.get_label(txid) or None)
                         if tx:
-                            menu.addAction(_("Details"), do_show_tx)
+                            menu.addAction(_("View Tx") + "...", do_show_tx)
             else:
                 # Multi-selection
                 if col > -1:
