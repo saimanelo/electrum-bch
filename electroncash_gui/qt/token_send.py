@@ -599,7 +599,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             td = utxo['token_data']
             assert isinstance(td, token.OutputData)
             commitment = td.commitment
-            item = QtWidgets.QTreeWidgetItem(["", tid, commitment.hex(), token.get_nft_flag_text(td)])
+            commitment_display_str = commitment.hex() if self.form_mode != self.FormMode.edit else ""
+            item = QtWidgets.QTreeWidgetItem(["", tid, commitment_display_str, token.get_nft_flag_text(td)])
             item.setIcon(self.ColsNFT.token_id, self.token_meta.get_icon(tid))
             item.setToolTip(self.ColsNFT.token_id, tid)
             if self.form_mode == self.FormMode.send:
