@@ -306,7 +306,8 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     category_id = item.data(0, self.DataRoles.category_id)
 
                     if category_id:
-                        menu.addAction(_("Category Properties") + "...",
+                        menu.addAction(self.token_meta.get_icon(category_id),
+                                       _("Category Properties") + "...",
                                        lambda: self.parent.show_edit_token_metadata_dialog(category_id))
 
                     copy_text = item.text(col).strip()

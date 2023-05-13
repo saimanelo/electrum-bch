@@ -504,7 +504,8 @@ class TokenList(MyTreeWidget, util.PrintError):
 
             if len(unique_token_ids_selected_that_may_be_frozen_or_unfrozen) == 1:
                 token_id_hex = list(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)[0]
-                menu.addAction(_("Category Properties") + "...", lambda: self.on_edit_metadata(token_id_hex))
+                menu.addAction(self.token_meta.get_icon(token_id_hex),
+                               _("Category Properties") + "...", lambda: self.on_edit_metadata(token_id_hex))
 
             if num_selected == 1:
                 # Single selection
