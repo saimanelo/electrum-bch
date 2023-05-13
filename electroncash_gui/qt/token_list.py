@@ -498,6 +498,11 @@ class TokenList(MyTreeWidget, util.PrintError):
             column_title = _("Cateogry ID")
 
         if num_selected > 0:
+
+            if len(unique_token_ids_selected_that_may_be_frozen_or_unfrozen) == 1:
+                token_id_hex = list(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)[0]
+                menu.addAction(_("Category Properties") + "...", lambda: self.on_edit_metadata(token_id_hex))
+
             if num_selected == 1:
                 # Single selection
                 item = self.itemAt(position)
@@ -585,10 +590,6 @@ class TokenList(MyTreeWidget, util.PrintError):
             if frozen_addresses:
                 menu.addAction(ngettext(_("Unfreeze Address"), _("Unfreeze Addresses"), len(frozen_addresses)),
                                lambda: self.parent.set_frozen_state(frozen_addresses, False))
-
-            if len(unique_token_ids_selected_that_may_be_frozen_or_unfrozen) == 1:
-                token_id_hex = list(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)[0]
-                menu.addAction(_("Category Properties") + "...", lambda: self.on_edit_metadata(token_id_hex))
 
             menu.addSeparator()
             num_utxos = len(non_frozen_utxos)

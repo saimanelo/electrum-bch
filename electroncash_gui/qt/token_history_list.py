@@ -301,6 +301,11 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 item = self.itemAt(position)
                 if item:
                     category_id = item.data(0, self.DataRoles.category_id)
+
+                    if category_id:
+                        menu.addAction(_("Category Properties") + "...",
+                                       lambda: self.parent.show_edit_token_metadata_dialog(category_id))
+
                     copy_text = item.text(col).strip()
                     nft_row = item.data(0, self.DataRoles.nft_row)
                     if nft_row:
@@ -328,10 +333,6 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     tx = self.wallet.transactions.get(tx_hash, None)
                     if tx:
                         menu.addAction(_("Details"), lambda: self.parent.show_transaction(tx))
-
-                    if category_id:
-                        menu.addAction(_("Category Properties") + "...",
-                                       lambda: self.parent.show_edit_token_metadata_dialog(category_id))
 
         menu.addSeparator()
         menu.addAction(QIcon(":icons/tab_token.svg"), _("Create Token..."), self.parent.show_create_new_token_dialog)
