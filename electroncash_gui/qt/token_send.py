@@ -162,12 +162,12 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         tw.setTextElideMode(QtCore.Qt.ElideMiddle)
         if self.form_mode == self.FormMode.mint:
             tw.setHeaderLabels(self.headers_baton)
-            tw.setStyleSheet("QTreeView::item:hover { background: none; }")
             tw.header().setSectionResizeMode(self.ColsBaton.category_id, QtWidgets.QHeaderView.Stretch)
             tw.header().setSectionResizeMode(self.ColsBaton.buttons, QtWidgets.QHeaderView.ResizeToContents)
             tw.header().setStretchLastSection(False)
             tw.header().resizeSection(self.ColsBaton.icon, 42)
             tw.itemDoubleClicked.connect(self.on_mint_mode_top_tree_dbl_click)
+            tw.setMinimumHeight(100)
         else:
             tw.setHeaderLabels(self.headers_tok)
             tw.header().setSectionResizeMode(self.ColsTok.amount_send, QtWidgets.QHeaderView.Stretch)
@@ -192,23 +192,24 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         tw.setAlternatingRowColors(True)
         tw.setSortingEnabled(False)
         tw.setTextElideMode(QtCore.Qt.ElideMiddle)
-        if self.form_mode == self.FormMode.edit:
-            self.headers_nft = [_("Selected")] + self.headers_nft[1:]
-        if self.form_mode == self.FormMode.mint:
-            tw.setHeaderLabels(self.headers_mint)
-            tw.setStyleSheet("QTreeView::item:hover { background: none; }")
-        else:
-            tw.setHeaderLabels(self.headers_nft)
         if self.form_mode == self.FormMode.send:
+            tw.setHeaderLabels(self.headers_nft)
             tw.header().setSectionResizeMode(self.ColsNFT.flags, QtWidgets.QHeaderView.Stretch)
         elif self.form_mode == self.FormMode.edit:
+            self.headers_nft = [_("Selected")] + self.headers_nft[1:]
+            tw.setHeaderLabels(self.headers_nft)
             tw.header().setSectionResizeMode(self.ColsNFT.commitment, QtWidgets.QHeaderView.Stretch)
         elif self.form_mode == self.FormMode.mint:
+            tw.setHeaderLabels(self.headers_mint)
             tw.header().setSectionResizeMode(self.ColsMint.remove, QtWidgets.QHeaderView.Fixed)
             tw.setColumnWidth(self.ColsMint.remove, 50)
             tw.header().setSectionResizeMode(self.ColsMint.commitment, QtWidgets.QHeaderView.Stretch)
             tw.header().setSectionResizeMode(self.ColsMint.capability, QtWidgets.QHeaderView.Fixed)
         gb_nft_vbox.addWidget(tw)
+
+        # Allows the row-hover effect to affect QWidget-containing table columns
+        for _tw in (self.tw_tok, self.tw_nft):
+            _tw.setStyleSheet('QTreeWidget::item > QWidget > QWidget { background-color: transparent; }')
 
         self.rebuild_output_tokens_treewidget()
         self.rebuild_input_tokens_treewidget()
@@ -461,10 +462,18 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             if but:
                 but.clicked.emit()
 
+    @staticmethod
+    def _set_field_margins(hbox, first_row=False, first_column=False, last_column=False):
+        normal = 2
+        left = 0 if first_column else normal
+        right = normal * 2 if last_column else normal
+        top = normal * 2 if first_row else normal
+        hbox.setContentsMargins(left, top, right, normal)
+
     def rebuild_input_tokens_treewidget(self):
         tw = self.tw_tok
         tw.clear()
-
+        first_row = True
         if self.form_mode == self.FormMode.send:
             for tid, amt in self.token_fungible_totals.items():
                 try:
@@ -486,8 +495,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 w = QtWidgets.QWidget()
                 w.setToolTip(_("Specify fungible token amount to be sent in the transaction"))
                 hbox = QtWidgets.QHBoxLayout(w)
-                hbox.setContentsMargins(0, 0, 0, 0)
+                self._set_field_margins(hbox, first_row, last_column=True)
                 le = QtWidgets.QLineEdit()
+                le.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
                 le.setObjectName("le")  # so we can find it later
                 formatted_saved_amt = self.token_meta.format_amount(tid, self.token_fungible_to_spend.get(tid, 0))
                 le.setText(formatted_saved_amt)
@@ -528,6 +538,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 hbox.addWidget(but2)
                 w.setAutoFillBackground(True)
                 tw.setItemWidget(item, self.ColsTok.amount_send, w)
+                first_row = False
         elif self.form_mode == self.FormMode.mint:
             for tid, baton_names in self.token_nfts.items():
                 for baton_name in baton_names:
@@ -550,7 +561,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     w = QtWidgets.QWidget()
                     w.setToolTip(item.toolTip(self.ColsNFT.commitment))
                     hbox = QtWidgets.QHBoxLayout(w)
-                    hbox.setContentsMargins(4, 3, 4, 3)
+                    self._set_field_margins(hbox, first_row, last_column=True)
                     but = QtWidgets.QToolButton()
 
                     def on_clicked(_, _category_id=category_id, _baton_name=baton_name):
@@ -562,6 +573,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     but.setToolTip("Use this Minting token to mint new NFTs")
                     hbox.addWidget(but)
                     tw.setItemWidget(item, self.ColsBaton.buttons, w)
+                    first_row = False
 
         if self.form_mode == self.FormMode.edit or (self.form_mode == self.FormMode.send and not self.have_fts()):
             # Hide the input tokens box in edit mode or if no fungibles in send mode
@@ -579,8 +591,10 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
     def rebuild_output_tokens_treewidget(self):
         tw = self.tw_nft
         tw.clear()
+        row_num = 0
+        first_row = True
 
-        def add_leaf_item(parent: QtWidgets.QTreeWidgetItem, tid, name) -> QtWidgets.QTreeWidgetItem:
+        def add_leaf_item(parent: QtWidgets.QTreeWidgetItem, tid, name, first=False) -> QtWidgets.QTreeWidgetItem:
             utxo = self.get_utxo(name)
             td = utxo['token_data']
             assert isinstance(td, token.OutputData)
@@ -614,8 +628,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 w = QtWidgets.QWidget()
                 w.setToolTip(item.toolTip(self.ColsNFT.commitment))
                 hbox = QtWidgets.QHBoxLayout(w)
-                hbox.setContentsMargins(0, 0, 0, 0)
+                self._set_field_margins(hbox, first)
                 le = QtWidgets.QLineEdit()
+                le.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
                 le.setObjectName("le_" + name)  # so we can find it later
                 le.setText(commitment.hex())
 
@@ -659,7 +674,6 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             return item
 
         if self.form_mode == self.FormMode.mint:
-            row_num = 0
             for row_data in self.nfts_to_mint:
                 category_id = row_data["category_id"]
                 commitment = row_data["commitment"] or b''
@@ -681,7 +695,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 w = QtWidgets.QWidget()
                 w.setToolTip(item.toolTip(self.ColsMint.remove))
                 hbox = QtWidgets.QHBoxLayout(w)
-                hbox.setContentsMargins(0, 2, 2, 2)
+                self._set_field_margins(hbox, first_row, first_column=True)
                 close_button = QtWidgets.QPushButton()
                 close_button.setText("X")
                 close_button.setStyleSheet(ColorScheme.RED.as_stylesheet())
@@ -699,8 +713,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 w = QtWidgets.QWidget()
                 w.setToolTip(item.toolTip(self.ColsMint.commitment))
                 hbox = QtWidgets.QHBoxLayout(w)
-                hbox.setContentsMargins(2, 4, 2, 2)
+                self._set_field_margins(hbox, first_row)
                 commitment_le = QtWidgets.QLineEdit()
+                commitment_le.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
                 commitment_le.setText(row_data.get("last_text_seen") or commitment.hex())
 
                 def on_text_changed(text, no_updaate_ui=False, le=commitment_le, _row_num=row_num):
@@ -726,8 +741,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 w = QtWidgets.QWidget()
                 w.setToolTip(item.toolTip(self.ColsMint.capability))
                 hbox = QtWidgets.QHBoxLayout(w)
-                hbox.setContentsMargins(2, 4, 2, 2)
+                self._set_field_margins(hbox, first_row)
                 capability_cb = QtWidgets.QComboBox()
+                capability_cb.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
                 capability_cb.addItems([_('Immutable'), _('Mutable'), _('Minting')])
                 capability_cb.setItemIcon(1, self.icon_mutable)
                 capability_cb.setItemIcon(2, self.icon_baton)
@@ -755,8 +771,9 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 w = QtWidgets.QWidget()
                 w.setToolTip(item.toolTip(self.ColsMint.multiplier))
                 hbox = QtWidgets.QHBoxLayout(w)
-                hbox.setContentsMargins(2, 2, 2, 2)
+                self._set_field_margins(hbox, first_row, last_column=True)
                 multiplier_sb = QtWidgets.QSpinBox()
+                multiplier_sb.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
                 multiplier_sb.setMinimum(1)
                 multiplier_sb.setMaximum(1000)
                 multiplier_sb.setSuffix(" " + _("copies"))
@@ -769,7 +786,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 hbox.addWidget(multiplier_sb)
                 hbox.addStretch(10)
                 tw.setItemWidget(item, self.ColsMint.multiplier, w)
-
+                first_row = False
                 row_num += 1
         else:
             for tid, names in self.token_nfts.items():
@@ -778,7 +795,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     continue
                 if len(names) == 1:
                     # This group has only 1 item, push to top-level and don't build a sub-item
-                    item = add_leaf_item(tw.invisibleRootItem(), tid, names[0])
+                    item = add_leaf_item(tw.invisibleRootItem(), tid, names[0], first_row)
                     # Subscribe to counts label updates
                     item.setData(0, self.DataRoles.receives_nft_count_updates, True)
                     continue
@@ -803,7 +820,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     parent.setCheckState(0, QtCore.Qt.PartiallyChecked)
                 tw.addTopLevelItem(parent)
                 for name in names:
-                    add_leaf_item(parent, tid, name)
+                    add_leaf_item(parent, tid, name, first_row)
+                    first_row = False
 
             if tw.topLevelItemCount() == 1:
                 # Auto-expand if only 1 item
@@ -835,6 +853,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             self.token_fungible_to_spend[tid] = 0
         for tid in list(self.token_nfts_selected):
             self.token_nfts_selected[tid].clear()
+        self.nfts_to_mint.clear()
         self.rebuild_output_tokens_treewidget()
         self.rebuild_input_tokens_treewidget()
         self.cb_max.setChecked(False)
