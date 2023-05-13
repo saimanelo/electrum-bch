@@ -180,16 +180,15 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         layout.addItem(QtWidgets.QSpacerItem(0, 12, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding))
         hbox = QtWidgets.QHBoxLayout()
         hbox.setContentsMargins(0, 0, 0, 0)
+        clear_but = QtWidgets.QPushButton(_("Clear"))
+        clear_but.setToolTip(_("Clear this form to its initial state"))
+        clear_but.clicked.connect(self.reset_form)
+        hbox.addWidget(clear_but)
         hbox.addStretch(2)
         clz = QtWidgets.QDialogButtonBox
-        buttons = QtWidgets.QDialogButtonBox(clz.Cancel | clz.Ok | clz.Reset)
+        buttons = QtWidgets.QDialogButtonBox(clz.Cancel | clz.Ok)
         buttons.accepted.connect(self.on_ok_button)
         buttons.rejected.connect(self.on_close_button)
-
-        def on_clicked(but: QtWidgets.QAbstractButton):
-            if buttons.buttonRole(but) == buttons.ResetRole:
-                self.reset_form()
-        buttons.clicked.connect(on_clicked)
         hbox.addWidget(buttons, 1, QtCore.Qt.AlignRight)
         layout.addRow(hbox)
 
