@@ -243,7 +243,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         hbox = QtWidgets.QHBoxLayout()
         vbox_bottom.setStretch(vbox.count()-1, 100)
         hbox.setContentsMargins(0, 0, 0, 0)  # No inset
-        # Additional BCH to SendF
+        # Additional BCH to Send
         self._setup_additional_bch_gbox(hbox)
         # Description
         gb_desc = QtWidgets.QGroupBox(_("Description"))
@@ -860,8 +860,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.amount_e.clear()
         if self.form_mode == self.FormMode.send:
             self.te_payto.clear()
-        elif self.form_mode == self.FormMode.mint:
-            self.te_desc.clear()
+        self.te_desc.clear()
         self.nfts_to_mint.clear()
         self.tw_nft.itemChanged.connect(self.on_nft_item_changed)
         self.on_ui_state_changed()
