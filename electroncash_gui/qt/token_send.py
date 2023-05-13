@@ -28,6 +28,7 @@ import math
 from collections import defaultdict
 from enum import IntEnum
 from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set
+import sys
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
@@ -207,10 +208,6 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             tw.header().setSectionResizeMode(self.ColsMint.commitment, QtWidgets.QHeaderView.Stretch)
             tw.header().setSectionResizeMode(self.ColsMint.capability, QtWidgets.QHeaderView.Fixed)
         gb_nft_vbox.addWidget(tw)
-
-        # Allows the row-hover effect to affect QWidget-containing table columns
-        for _tw in (self.tw_tok, self.tw_nft):
-            _tw.setStyleSheet('QTreeWidget::item > QWidget > QWidget { background-color: transparent; }')
 
         self.rebuild_output_tokens_treewidget()
         self.rebuild_input_tokens_treewidget()
@@ -471,6 +468,13 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         top = normal * 2 if first_row else normal
         hbox.setContentsMargins(left, top, right, normal)
 
+    @staticmethod
+    def allow_transparent_background(widget: QtWidgets.QWidget):
+        """QWidgets added to QTreeWidgets by default have fully opaque backgrounds which disrupt the alternate-row
+        styling and row-hover effects.  This function gives the appropriate QWidget a transparent background."""
+        widget.parentWidget().setStyleSheet(
+            'QTreeWidget::item > QWidget > QWidget { background-color: transparent; }')
+
     def rebuild_input_tokens_treewidget(self):
         tw = self.tw_tok
         tw.clear()
@@ -537,8 +541,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 but2.setObjectName("clear")
                 but2.setToolTip("Set to 0")
                 hbox.addWidget(but2)
-                w.setAutoFillBackground(True)
                 tw.setItemWidget(item, self.ColsTok.amount_send, w)
+                self.allow_transparent_background(w)
                 first_row = False
         elif self.form_mode == self.FormMode.mint:
             for tid, baton_names in self.token_nfts.items():
@@ -574,6 +578,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     but.setToolTip("Use this Minting token to mint new NFTs")
                     hbox.addWidget(but)
                     tw.setItemWidget(item, self.ColsBaton.buttons, w)
+                    self.allow_transparent_background(w)
                     first_row = False
 
         if self.form_mode == self.FormMode.edit or (self.form_mode == self.FormMode.send and not self.have_fts()):
@@ -670,8 +675,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 but.setObjectName("reset_" + name)
                 but.setToolTip("Reset to original commitment")
                 hbox.addWidget(but)
-                w.setAutoFillBackground(True)
                 tw.setItemWidget(item, self.ColsNFT.commitment, w)
+                self.allow_transparent_background(w)
 
             return item
 
@@ -738,6 +743,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 commitment_le.textChanged.connect(on_text_changed)
                 hbox.addWidget(commitment_le)
                 tw.setItemWidget(item, self.ColsMint.commitment, w)
+                self.allow_transparent_background(w)
 
                 # Capability field
                 w = QtWidgets.QWidget()
@@ -768,6 +774,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 capability_cb.currentIndexChanged.connect(on_capability_change)
                 hbox.addWidget(capability_cb)
                 tw.setItemWidget(item, self.ColsMint.capability, w)
+                self.allow_transparent_background(w)
 
                 # Multiplier field
                 w = QtWidgets.QWidget()
@@ -788,6 +795,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 hbox.addWidget(multiplier_sb)
                 hbox.addStretch(10)
                 tw.setItemWidget(item, self.ColsMint.multiplier, w)
+                self.allow_transparent_background(w)
                 first_row = False
                 row_num += 1
         else:
