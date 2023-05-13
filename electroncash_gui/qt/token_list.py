@@ -585,7 +585,7 @@ class TokenList(MyTreeWidget, util.PrintError):
 
             if len(unique_token_ids_selected_that_may_be_frozen_or_unfrozen) == 1:
                 token_id_hex = list(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)[0]
-                menu.addAction(_("Edit Token Metadata") + "...", lambda: self.on_edit_metadata(token_id_hex))
+                menu.addAction(_("Token Properties") + "...", lambda: self.on_edit_metadata(token_id_hex))
 
             menu.addSeparator()
             num_utxos = len(non_frozen_utxos)

@@ -231,6 +231,9 @@ def format_fungible_amount(x: int, decimal_point: int, num_zeros=0, precision=No
     assert decimal_point >= 0
     if x is None:
         return _('Unknown')
+    if decimal_point == 0 and not is_diff and not whitespaces:
+        # Short-circuit for the common case of unknown tokens with decimals defaulting to 0
+        return str(x)
     if precision is None:
         precision = decimal_point
     decimal_format = ".0" + str(precision) if precision > 0 else ""
