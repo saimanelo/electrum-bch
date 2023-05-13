@@ -28,7 +28,6 @@ from typing import Optional
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QFont
-from PyQt5.QtCore import pyqtSignal
 
 from electroncash import token, util
 from electroncash.i18n import _
@@ -41,7 +40,6 @@ ICON_BUT_SIZE = 64
 
 
 class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroyedMixin):
-    token_metadata_updated = pyqtSignal(str)
 
     def __init__(self, parent: QtWidgets.QWidget, token_id: str, *,
                  flags=None, window: Optional[ElectrumWindow] = None):
@@ -205,7 +203,7 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         self.token_meta.set_token_decimals(tid, self.sb_token_dec.value() or None)
         self.token_meta.save()
         self.close()
-        self.token_metadata_updated.emit(tid)
+        self.window.gui_object.token_metadata_updated_signal.emit(tid)
 
     def on_close_button(self):
         self.close()

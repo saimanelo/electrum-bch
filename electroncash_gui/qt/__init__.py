@@ -88,6 +88,7 @@ class ElectrumGui(QObject, PrintError):
     cashaddr_status_button_hidden_signal = pyqtSignal(bool)  # app-wide signal for when cashaddr toggle button is hidden from the status bar
     shutdown_signal = pyqtSignal()  # signal for requesting an app-wide full shutdown
     do_in_main_thread_signal = pyqtSignal(object, object, object)
+    token_metadata_updated_signal = pyqtSignal(str)  # Param is: category_id (hex)
 
     instance = None
 

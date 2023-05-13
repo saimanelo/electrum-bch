@@ -289,6 +289,10 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.fully_constructed = True
         self.on_ui_state_changed()
 
+        if self.form_mode == self.FormMode.send:
+            self.parent.gui_object.token_metadata_updated_signal.connect(
+                lambda x: self.rebuild_input_tokens_treewidget())
+
         self.resize(640, 480)
 
     def _adjust_te_payto_size(self):
@@ -459,7 +463,6 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
 
     def rebuild_input_tokens_treewidget(self):
         tw = self.tw_tok
-        saved_amts = self.token_fungible_to_spend
         tw.clear()
 
         if self.form_mode == self.FormMode.send:
@@ -468,7 +471,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     if amt <= 0:
                         # Skip displaying rows in this table for tokens that have no fungibles
                         continue
-                    item = QtWidgets.QTreeWidgetItem([tid, "", str(amt), ""])
+                    formatted_amt = self.token_meta.format_amount(tid, amt)
+                    item = QtWidgets.QTreeWidgetItem([tid, "", formatted_amt, ""])
                     item.setIcon(self.ColsTok.token_id, self.token_meta.get_icon(tid))
                     item.setToolTip(self.ColsTok.token_id, item.text(self.ColsTok.token_id))
                     item.setToolTip(self.ColsTok.amount, item.text(self.ColsTok.amount))
@@ -485,11 +489,12 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 hbox.setContentsMargins(0, 0, 0, 0)
                 le = QtWidgets.QLineEdit()
                 le.setObjectName("le")  # so we can find it later
-                le.setText(str(saved_amts.get(tid, 0)))
+                formatted_saved_amt = self.token_meta.format_amount(tid, self.token_fungible_to_spend.get(tid, 0))
+                le.setText(formatted_saved_amt)
 
                 def on_edit(amt=amt, tid=tid, le=le):
                     try:
-                        val = int(le.text())
+                        val = self.token_meta.parse_amount(tid, le.text())
                         if val < 0:
                             val = 0
                         elif val > amt:
@@ -497,13 +502,13 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                         self.token_fungible_to_spend[tid] = val
                     except ValueError:
                         pass
-                    le.setText(str(self.token_fungible_to_spend[tid]))
+                    le.setText(self.token_meta.format_amount(tid, self.token_fungible_to_spend[tid]))
                     self.on_ui_state_changed()
                 le.editingFinished.connect(on_edit)
                 hbox.addWidget(le)
 
                 def on_max(b, amt=amt, tid=tid, le=le):
-                    le.setText(str(amt))
+                    le.setText(self.token_meta.format_amount(tid, amt))
                     on_edit(amt=amt, tid=tid, le=le)
 
                 def on_clear(b, amt=amt, tid=tid, le=le):

@@ -265,6 +265,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         gui_object.timer.timeout.connect(self.timer_actions)
         self.fetch_alias()
 
+        self.gui_object.token_metadata_updated_signal.connect(lambda x: self.update_tabs())
+
     def new_window_initialized(self):
         if self.wallet.wallet_type == "rpa" and not self.wallet.rpa_pwd and self.wallet.has_password():
             while not self.wallet.rpa_pwd:
@@ -5444,7 +5446,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.edit_token_metadata_dialog.close()
             self.edit_token_metadata_dialog.deleteLater()
         self.edit_token_metadata_dialog = TokenMetaEditorForm(self, token_id_hex, flags=Qt.Window)
-        self.edit_token_metadata_dialog.token_metadata_updated.connect(lambda x: self.update_tabs())
         self.edit_token_metadata_dialog.show()
 
 

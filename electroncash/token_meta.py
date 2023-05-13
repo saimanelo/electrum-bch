@@ -178,21 +178,33 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
                 self.d["decimals"] = dd
         self.dirty = True
 
+    @staticmethod
+    def _normalize_to_token_id_hex(token_or_id: Union[str, token.OutputData, bytes]) -> str:
+        assert isinstance(token_or_id, (str, bytes, bytearray, token.OutputData))
+        if isinstance(token_or_id, str):
+            return token_or_id
+        elif isinstance(token_or_id (bytes, bytearray)):
+            return token_or_id.hex()
+        else:
+            return token_or_id.id_hex
+
     def format_amount(self, token_or_id: Union[str, token.OutputData, bytes], fungible_amount: int,
                       num_zeros=0, is_diff=False, whitespace=False, precision=None,
                       append_tokentoshis=False) -> str:
         """Formats a particular token's amount string, according to that token's metadata spec for decimals.
         If the token is unknown we tread the 'decimals' for that token as '0'."""
-        assert isinstance(token_or_id, (str, bytes, bytearray, token.OutputData))
-        if isinstance(token_or_id, str):
-            token_id_hex = token_or_id
-        elif isinstance(token_or_id (bytes, bytearray)):
-            token_id_hex = token_or_id.hex()
-        else:
-            token_id_hex = token_or_id.id_hex
+        token_id_hex = self._normalize_to_token_id_hex(token_or_id)
         decimals = self.get_token_decimals(token_id_hex)
         if not isinstance(decimals, int):
             decimals = 0
         return token.format_fungible_amount(fungible_amount, decimal_point=decimals, num_zeros=num_zeros,
                                             precision=precision, is_diff=is_diff, whitespaces=whitespace,
                                             append_tokentoshis=append_tokentoshis)
+
+    def parse_amount(self, token_or_id: Union[str, token.OutputData, bytes], val: str) -> int:
+        """Inverse of above"""
+        token_id_hex = self._normalize_to_token_id_hex(token_or_id)
+        decimals = self.get_token_decimals(token_id_hex)
+        if not isinstance(decimals, int):
+            decimals = 0
+        return token.parse_fungible_amount(val, decimal_point=decimals)
