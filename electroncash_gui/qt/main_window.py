@@ -5424,12 +5424,23 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             nonlocal form
             if success and form and self._send_token_form and self._send_token_form is form and form.isVisible():
                 form.accept()
-                form.setParent(None)  # Reparent to None to enforce eventual GC cleanup of loose QObject
-                self._send_token_form = form = None
 
         self._send_token_form = form = SendTokenForm(self, utxos, broadcast_callback=broadcast_done,
                                                      form_mode=form_mode)
         form.open()
+
+        weak_self = weakref.ref(self)
+        def on_close():
+            nonlocal form
+            slf = weak_self and weak_self()
+            if slf and form and slf._send_token_form and slf._send_token_form is form:
+                # Coerce python to GC this now-defunct window
+                if not slf._send_token_form.isVisible():
+                    slf._send_token_form.setParent(None)
+                slf._send_token_form = None
+            form = None
+        form.accepted.connect(on_close)
+        form.rejected.connect(on_close)
 
     def send_tokens(self, utxos: List[Dict[str, Any]]):
         self._send_or_edit_tokens_common(utxos, form_mode=0)
