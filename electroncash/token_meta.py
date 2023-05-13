@@ -208,3 +208,17 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         if not isinstance(decimals, int):
             decimals = 0
         return token.parse_fungible_amount(val, decimal_point=decimals)
+
+    def format_token_display_name(self, token_or_id: Union[str, token.OutputData, bytes],
+                                  format_str="{token_name} ({token_symbol})"):
+        token_id_hex = self._normalize_to_token_id_hex(token_or_id)
+        tn = self.get_token_display_name(token_id_hex)
+        if tn:
+            tn = tn.strip()
+        tn = tn or token_id_hex
+        tsym = self.get_token_ticker_symbol(token_id_hex)
+        if tsym:
+            tsym = tsym.strip()
+        if not tsym:
+            return tn
+        return format_str.format(token_name=tn, token_symbol=tsym)

@@ -208,6 +208,10 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         parent.history_updated_signal.connect(self.update_tx_if_in_wallet)
         parent.labels_updated_signal.connect(self.update_tx_if_in_wallet)
         parent.network_signal.connect(self.got_verified_tx)
+        parent.gui_object.token_metadata_updated_signal.connect(self.on_token_metadata_updated)
+
+    def on_token_metadata_updated(self, tid: str):
+        self.update()
 
     @classmethod
     def _make_freeze_button_text(cls, op: FreezeOp = FreezeOp.Freeze, num_coins: int = 0) -> str:
@@ -337,6 +341,8 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                 try: parent.network_signal.disconnect(self.got_verified_tx)
                 except TypeError: pass
                 try: parent.labels_updated_signal.disconnect(self.update_tx_if_in_wallet)
+                except TypeError: pass
+                try: parent.gui_object.token_metadata_updated_signal.disconnect(self.on_token_metadata_updated)
                 except TypeError: pass
                 for slot in self.cashaddr_signal_slots:
                     try: parent.gui_object.cashaddr_toggled_signal.disconnect(slot)
@@ -629,12 +635,24 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         self.main_window.gui_object.cashaddr_toggled_signal.connect(self.update_io)
         self.update_io()
 
+    def format_token_amount(self, tid, amt, append_tokentoshis=True):
+        return self.token_meta.format_amount(tid, amt, append_tokentoshis=append_tokentoshis)
+
+    def format_token_name(self, tid, append_parenthetical=True):
+        dname = self.token_meta.format_token_display_name(tid, format_str="{token_name} {token_symbol}")
+        if append_parenthetical and dname != tid:
+            # Append actual category id here
+            dname += " (" + tid + ")"
+        return dname
+
     def _tok2str(self, tok: Optional[token.OutputData]) -> str:
         if not tok:
             return repr(tok)
-        ret = f"CashToken - " + _('Category ID') + f": {tok.id_hex}"
+        tid = tok.id_hex
+        dname = self.format_token_name(tid)
+        ret = f"CashToken - " + _('Category') + f": {dname}"
         if tok.has_amount():
-            formatted_amt = self.token_meta.format_amount(tok.id_hex, tok.amount, append_tokentoshis=True)
+            formatted_amt = self.format_token_amount(tid, tok.amount)
             ret += " - " + _('Fungible Amount') + ": " + formatted_amt
         if tok.has_nft():
             ret += f" - NFT"
@@ -868,6 +886,25 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             # target was a txid, open new tx dialog
             self.main_window.do_process_from_txid(txid=target, parent=self)
 
+    def _create_token_specific_context_menu_options(self, token_data, io_text) -> list:
+        ret = []
+        if token_data:
+            id_hex = token_data.id_hex
+            dname = self.format_token_name(id_hex, append_parenthetical=False)
+            if dname != id_hex:
+                ret += [(_("Copy Token Category"), lambda: self._copy_to_clipboard(dname, io_text))]
+            ret += [(_("Copy Token Category ID"), lambda: self._copy_to_clipboard(id_hex, io_text))]
+            if token_data.has_amount():
+                formatted_amt = self.format_token_amount(id_hex, token_data.amount, append_tokentoshis=False)
+                raw_amt = str(token_data.amount)
+                ret += [(_("Copy Token Amount"), lambda: self._copy_to_clipboard(formatted_amt, io_text))]
+                if raw_amt != formatted_amt:
+                    ret += [(_("Copy Token Amount (Raw)"), lambda: self._copy_to_clipboard(raw_amt, io_text))]
+            if token_data.has_commitment_length():
+                ret += [(_("Copy Token Commitment"), lambda: self._copy_to_clipboard(token_data.commitment.hex(),
+                                                                                     io_text))]
+        return ret
+
     def on_context_menu_for_inputs(self, pos):
         i_text = self.i_text
         menu = QMenu()
@@ -906,12 +943,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
                     value_fmtd = self.main_window.format_amount(value)
                     copy_list += [ ( _("Copy Amount"), lambda: self._copy_to_clipboard(value_fmtd, i_text) ) ]
                 token_data = inp.get('token_data')
-                if token_data:
-                    copy_list += [ ( _("Copy Category ID"), lambda: self._copy_to_clipboard(token_data.id_hex, i_text) ) ]
-                    if token_data.has_amount():
-                        copy_list += [(_("Copy Token Amount"), lambda: self._copy_to_clipboard(str(token_data.amount), i_text))]
-                    if token_data.has_commitment_length():
-                        copy_list += [(_("Copy Token Commitment"), lambda: self._copy_to_clipboard(token_data.commitment.hex(), i_text))]
+                copy_list += self._create_token_specific_context_menu_options(token_data, i_text)
 
         except (TypeError, ValueError, IndexError, KeyError, AttributeError) as e:
             self.print_error("Inputs right-click menu exception:", repr(e))
@@ -979,12 +1011,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             if isinstance(value, int):
                 value_fmtd = self.main_window.format_amount(value)
                 copy_list += [ ( _("Copy Amount"), lambda: self._copy_to_clipboard(value_fmtd, o_text) ) ]
-            if token_data:
-                copy_list += [ ( _("Copy Category ID"), lambda: self._copy_to_clipboard(token_data.id_hex, o_text) ) ]
-                if token_data.has_amount():
-                    copy_list += [(_("Copy Token Amount"), lambda: self._copy_to_clipboard(str(token_data.amount), o_text))]
-                if token_data.has_commitment_length():
-                    copy_list += [(_("Copy Token Commitment"), lambda: self._copy_to_clipboard(token_data.commitment.hex(), o_text))]
+            copy_list += self._create_token_specific_context_menu_options(token_data, o_text)
             if ca_script:
                 copy_list += [ ( _("Copy Address (Embedded)"), lambda: self._copy_to_clipboard(ca_script.address.to_ui_string(), o_text) ) ]
                 if ca_script.is_complete() and self.tx_hash:

@@ -2263,8 +2263,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 status = 3
         else:
             status = 3 + min(conf, 6)
-        time_str = format_time(timestamp) if timestamp else _("unknown")
-        status_str = _(TX_STATUS[status]) if status < 4 else time_str
+        if status >= 4:
+            status_str = format_time(timestamp) if timestamp else _("unknown")
+        else:
+            status_str = TX_STATUS[status]
         return status, status_str
 
     def relayfee(self):

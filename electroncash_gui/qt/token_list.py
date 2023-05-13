@@ -38,22 +38,22 @@ from .main_window import ElectrumWindow
 from .util import ColorScheme, MONOSPACE_FONT, MyTreeWidget, rate_limited, SortableTreeWidgetItem
 from .token_meta import TokenMetaQt
 
+
 class TokenList(MyTreeWidget, util.PrintError):
 
     class Col(IntEnum):
         """Column numbers. This is to make code in on_update easier to read.
         If you modify these, make sure to modify the column header names in
         the MyTreeWidget constructor."""
-        token_id = 0
-        label = 1
-        quantity = 2
-        nfts = 3
-        cap_icon_extra = 4
-        cap_icon_main = 5
-        nft_flags = 6
-        num_utxos = 7
-        bch_amount = 8
-        output_pt = 9
+        category = 0
+        quantity = 1
+        nfts = 2
+        cap_icon_extra = 3
+        cap_icon_main = 4
+        nft_flags = 5
+        num_utxos = 6
+        bch_amount = 7
+        output_pt = 8
 
     class DataRoles(IntEnum):
         """Data roles. Again, to make code in on_update easier to read."""
@@ -63,18 +63,17 @@ class TokenList(MyTreeWidget, util.PrintError):
         nft_utxo = QtCore.Qt.UserRole + 3
         frozen_flags = QtCore.Qt.UserRole + 4  # Flags address/coin-level freeze: None or "" or "a" or "c" or "ac"
 
-    filter_columns = [Col.token_id, Col.label]
-    default_sort = MyTreeWidget.SortSpec(Col.token_id, QtCore.Qt.AscendingOrder)  # sort by token_id, ascending
+    filter_columns = [Col.category]
+    default_sort = MyTreeWidget.SortSpec(Col.category, QtCore.Qt.AscendingOrder)  # sort by token_id, ascending
 
     amount_heading = _('Amount ({unit})')
 
     def __init__(self, parent: ElectrumWindow):
         assert isinstance(parent, ElectrumWindow)
-        columns = [_('Category ID'), _('Label'), _('Fungible Amount'), _('NFTs'), '', '', _('NFT Flags'),
-                   _('Num UTXOs'),
+        columns = [_('Category'), _('Fungible Amount'), _('NFTs'), '', '', _('NFT Flags'), _('Num UTXOs'),
                    self.amount_heading.format(unit=parent.base_unit()), _('Output Point')]
         super().__init__(parent=parent, create_menu=self.create_menu, headers=columns,
-                         stretch_column=self.Col.label, deferred_updates=True,
+                         stretch_column=None, deferred_updates=True,
                          save_sort_settings=True)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSortingEnabled(True)
@@ -199,10 +198,11 @@ class TokenList(MyTreeWidget, util.PrintError):
                 tokens_grouped[token_id][td.commitment.hex()].append(utxo)
 
         def set_fonts(item: SortableTreeWidgetItem):
-            for col in (self.Col.token_id, self.Col.quantity, self.Col.bch_amount):
+            for col in (self.Col.category, self.Col.quantity, self.Col.bch_amount):
                 txt = item.text(col)
-                if col == self.Col.token_id and txt.startswith(_("Fungible-Only")):
-                    continue  # Don't set the font for the "Fungible-Only" entries
+                token_id = item.data(0, self.DataRoles.token_id)
+                if col == self.Col.category and txt != token_id and not txt.startswith("NFT: "):
+                    continue  # Don't set the font for the "Fungible-Only" entries, or ones with user-edited names
                 if len(txt) > 64:
                     item.setFont(col, self.fixed_width_smaller)
                 elif len(txt) > 32:
@@ -248,7 +248,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                 num_mutable = 1 if td.is_mutable_nft() else 0
                 set_icons_inner(item, num_minting, num_mutable, toplevel, leaf)
 
-        def add_utxo_item(parent: Optional[SortableTreeWidgetItem], utxo, name, label, item_key):
+        def add_utxo_item(parent: Optional[SortableTreeWidgetItem], utxo, name, item_key):
             td = utxo['token_data']
             tid = td.id_hex
             amt = self.token_meta.format_amount(tid, td.amount)
@@ -257,7 +257,10 @@ class TokenList(MyTreeWidget, util.PrintError):
             num_utxos = "1"
             outpt_shortname = self.get_outpoint_shortname(utxo)
             bch_amt = self.parent.format_amount(utxo['value'], is_diff=False, whitespaces=True)
-            stwi = SortableTreeWidgetItem([name, label, amt, num_nfts, "", "", nft_flags, num_utxos, bch_amt, outpt_shortname])
+            stwi = SortableTreeWidgetItem([name, amt, num_nfts, "", "", nft_flags, num_utxos, bch_amt, outpt_shortname])
+            stwi.setData(0, self.DataRoles.item_key, item_key)
+            stwi.setData(0, self.DataRoles.token_id, tid)
+            stwi.setData(0, self.DataRoles.utxos, [utxo])
             set_fonts(stwi)
             set_icons(stwi, td, toplevel=False, leaf=True)
             tt = self.get_outpoint_longname(utxo) + "\n"
@@ -266,9 +269,6 @@ class TokenList(MyTreeWidget, util.PrintError):
             else:
                 tt += _("Unconfirmed")
             stwi.setToolTip(self.Col.output_pt, tt)
-            stwi.setData(0, self.DataRoles.item_key, item_key)
-            stwi.setData(0, self.DataRoles.token_id, tid)
-            stwi.setData(0, self.DataRoles.utxos, [utxo])
 
             stwi.setData(0, self.DataRoles.nft_utxo, utxo if td.has_nft() else None)
             a_frozen = 'a' if self.wallet.is_frozen(utxo['address']) else ''
@@ -291,9 +291,8 @@ class TokenList(MyTreeWidget, util.PrintError):
             else:
                 tool_tip_misc = ""
 
-            stwi.setToolTip(self.Col.label, label)  # Just in case label got elided
             if tool_tip_misc:
-                stwi.setToolTip(self.Col.token_id, tool_tip_misc)
+                stwi.setToolTip(self.Col.category, tool_tip_misc)
             if parent is not None:
                 parent.addChild(stwi)
             if item_key in item_keys_to_re_select:
@@ -304,7 +303,6 @@ class TokenList(MyTreeWidget, util.PrintError):
             utxo_list = tokens[token_id]
             key_prefix = f'token_{token_id}'
             item_key = key_prefix
-            label = self.wallet.get_label(item_key) or ""
             quantity = self.token_meta.format_amount(token_id, sum(u['token_data'].amount for u in utxo_list))
             num_nfts = sum(1 for u in utxo_list if u['token_data'].has_nft())
             nfts = str(num_nfts)
@@ -317,13 +315,16 @@ class TokenList(MyTreeWidget, util.PrintError):
             num_utxos = str(n_utxos)
             bch_amt = self.parent.format_amount(sum(x['value'] for x in utxo_list), is_diff=False, whitespaces=True)
 
-            item = SortableTreeWidgetItem([token_id, label, quantity, nfts, "", "", nft_flags, num_utxos, bch_amt, ""])
-            set_fonts(item)
-            set_icons_inner(item, num_minting, num_mutable, toplevel=True)
+            token_display_name = self.token_meta.format_token_display_name(token_id)
+            item = SortableTreeWidgetItem([token_display_name, quantity, nfts, "", "", nft_flags, num_utxos, bch_amt, ""])
             item.setData(0, self.DataRoles.item_key, item_key)
             item.setData(0, self.DataRoles.token_id, token_id)
             item.setData(0, self.DataRoles.utxos, utxo_list)
             item.setData(0, self.DataRoles.nft_utxo, None)
+            set_fonts(item)
+            set_icons_inner(item, num_minting, num_mutable, toplevel=True)
+            if token_id != token_display_name:
+                item.setToolTip(self.Col.category, _("Category ID") + ": " + token_id)
             if item_key in item_keys_to_re_select:
                 items_to_re_select.append(item)
 
@@ -342,12 +343,10 @@ class TokenList(MyTreeWidget, util.PrintError):
                     parent_item = None
                 else:
                     parent_item = item
-                sub_item = add_utxo_item(parent_item, utxo, name,
-                                         self.wallet.get_label(item_key) or label,
-                                         item_key)
+                sub_item = add_utxo_item(parent_item, utxo, name, item_key)
                 if put_on_top_level:
                     # Overwrite the "item" with this sub-item in the special case
-                    sub_item.setText(self.Col.token_id, item.text(self.Col.token_id))
+                    sub_item.setText(self.Col.category, item.text(self.Col.category))
                     item = sub_item
                     set_fonts(item)
             elif ft_only_utxo_list:
@@ -355,30 +354,26 @@ class TokenList(MyTreeWidget, util.PrintError):
                 create_subgroup = num_nfts > 0 or dd
                 if create_subgroup:
                     # Create a subgroup called "Fungible-Only" because we have NFTs
-                    ft_parent_label = self.wallet.get_label(item_key) or label
                     ft_amt = self.token_meta.format_amount(token_id,
                                                            sum(u['token_data'].amount for u in ft_only_utxo_list))
                     bch_amt = self.parent.format_amount(sum(x['value'] for x in ft_only_utxo_list), is_diff=False,
                                                         whitespaces=True)
-                    ft_parent = SortableTreeWidgetItem([name, ft_parent_label, ft_amt, "0", "", "", "",
-                                                        str(len(ft_only_utxo_list)), bch_amt, ""])
-                    set_fonts(ft_parent)
+                    ft_parent = SortableTreeWidgetItem([name, ft_amt, "0", "", "", "", str(len(ft_only_utxo_list)),
+                                                        bch_amt, ""])
                     ft_parent.setData(0, self.DataRoles.item_key, item_key)
                     ft_parent.setData(0, self.DataRoles.token_id, token_id)
                     ft_parent.setData(0, self.DataRoles.utxos, ft_only_utxo_list)
                     ft_parent.setData(0, self.DataRoles.nft_utxo, None)
+                    set_fonts(ft_parent)
                     if item_key in item_keys_to_re_select:
                         items_to_re_select.append(ft_parent)
                 else:
                     # Don't create a subgroup: put all fungible UTXOs up right under the item level
                     ft_parent = item
-                    ft_parent_label = label
 
                 for utxo in ft_only_utxo_list:
                     item_key2 = key_prefix + "_" + self.get_outpoint_longname(utxo)
-                    add_utxo_item(ft_parent, utxo, name,
-                                  self.wallet.get_label(item_key2) or ft_parent_label,
-                                  item_key2)
+                    add_utxo_item(ft_parent, utxo, name, item_key2)
 
                 if ft_parent is not item:
                     item.addChild(ft_parent)
@@ -397,9 +392,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                 if len(utxo_list) == 1:
                     utxo = utxo_list[0]
                     item_key = key_prefix + "_" + self.get_outpoint_longname(utxo)
-                    add_utxo_item(item, utxo, name,
-                                  self.wallet.get_label(item_key) or label,
-                                  item_key)
+                    add_utxo_item(item, utxo, name, item_key)
                 else:
                     item_key = key_prefix + "_nft_" + commitment_hex
                     ft_amt = self.token_meta.format_amount(token_id, sum(u['token_data'].amount for u in utxo_list))
@@ -411,29 +404,25 @@ class TokenList(MyTreeWidget, util.PrintError):
                     num_utxos = str(len(utxo_list))
                     bch_amt = self.parent.format_amount(sum(x['value'] for x in utxo_list), is_diff=False,
                                                         whitespaces=True)
-                    parent_label = self.wallet.get_label(item_key) or label
-                    nft_parent = SortableTreeWidgetItem([name, parent_label, ft_amt, nfts, "", "", nft_flags, num_utxos,
-                                                         bch_amt, ""])
-                    set_fonts(nft_parent)
-                    set_icons_inner(nft_parent, num_minting, num_mutable)
+                    nft_parent = SortableTreeWidgetItem([name, ft_amt, nfts, "", "", nft_flags, num_utxos,bch_amt, ""])
                     nft_parent.setData(0, self.DataRoles.item_key, item_key)
                     nft_parent.setData(0, self.DataRoles.token_id, token_id)
                     nft_parent.setData(0, self.DataRoles.utxos, utxo_list)
                     nft_parent.setData(0, self.DataRoles.nft_utxo, None)
+                    set_fonts(nft_parent)
+                    set_icons_inner(nft_parent, num_minting, num_mutable)
                     if item_key in item_keys_to_re_select:
                         items_to_re_select.append(nft_parent)
 
                     for utxo in utxo_list:
                         item_key2 = key_prefix + "_" + self.get_outpoint_longname(utxo)
-                        add_utxo_item(nft_parent, utxo, name,
-                                      self.wallet.get_label(item_key2) or parent_label,
-                                      item_key2)
+                        add_utxo_item(nft_parent, utxo, name, item_key2)
 
                     item.addChild(nft_parent)
 
             # Lastly, grab the token icon. We set it last because above code may have
             # replaced `item` with another instance.
-            item.setIcon(self.Col.token_id, self.token_meta.get_icon(token_id))
+            item.setIcon(self.Col.category, self.token_meta.get_icon(token_id))
             self.addChild(item)
 
         # Now, at the very end, enforce previous UI state with respect to what was expanded or not. See #1042
@@ -503,6 +492,9 @@ class TokenList(MyTreeWidget, util.PrintError):
 
         col = self.currentColumn()
         column_title = self.headerItem().text(col)
+        # Hack to override Category -> CategoryID
+        if col == self.Col.category:
+            column_title = _("Cateogry ID")
 
         if num_selected > 0:
             if num_selected == 1:
@@ -511,17 +503,23 @@ class TokenList(MyTreeWidget, util.PrintError):
                 if item:
                     nft_utxo = item.data(0, self.DataRoles.nft_utxo)
                     alt_column_title, alt_copy_text = None, None
+                    insert_cat_title, insert_cat_text = None, None
                     utxos = item.data(0, self.DataRoles.utxos)
                     is_leaf_utxo = len(utxos) == 1 and item.childCount() == 0
-                    if col == self.Col.token_id:
+                    if col == self.Col.category:
                         copy_text = item.data(0, self.DataRoles.token_id)
+                        if copy_text != item.text(self.Col.category):
+                            # Prepend "Copy Category" right above "Copy Category ID" in cases where user specified
+                            # a token name
+                            insert_cat_title = _("Category")
+                            insert_cat_text = item.text(self.Col.category)
                     elif col == self.Col.output_pt and is_leaf_utxo:
                         copy_text = self.get_outpoint_longname(utxos[0])
                     else:
                         copy_text = item.text(col).strip()
                     if nft_utxo:
                         # NFT child item
-                        if col == self.Col.token_id:
+                        if col == self.Col.category:
                             alt_column_title = _("NFT Hex")
                             alt_copy_text = nft_utxo['token_data'].commitment.hex()
                             copy_text = nft_utxo['token_data'].id_hex
@@ -531,6 +529,8 @@ class TokenList(MyTreeWidget, util.PrintError):
                         # Top-level item
                         pass
 
+                    if insert_cat_title and insert_cat_text:
+                        menu.addAction(_("Copy {}").format(insert_cat_title), lambda: do_copy(insert_cat_text))
                     if copy_text:
                         menu.addAction(_("Copy {}").format(column_title), lambda: do_copy(copy_text))
                     if alt_column_title and alt_copy_text:
@@ -547,7 +547,7 @@ class TokenList(MyTreeWidget, util.PrintError):
                 # Multi-selection
                 if col > -1:
                     texts, alt_copy, alt_copy_text = None, None, None
-                    if col == self.Col.token_id:  # token-id column
+                    if col == self.Col.category:  # token-id or name column
                         texts, seen_token_ids = list(), set()
                         # We do it this way to preserve order, but also to de-duplicate
                         for item in selected:
@@ -569,7 +569,9 @@ class TokenList(MyTreeWidget, util.PrintError):
                         alt_copy_texts = [i.data(0, self.DataRoles.token_id) + ", " + get_text(i)
                                           for i in selected if get_text(i) and get_text(i) != '-']
                         alt_copy_text = "\n".join(alt_copy_texts)
-                        alt_copy = _("Copy {}").format(_('Category ID')) + ", " + column_title + f" ({len(alt_copy_texts)})"
+                        primary_col_text = _("Category ID")
+                        alt_copy = (_("Copy {}").format(primary_col_text)
+                                    + ", " + column_title + f" ({len(alt_copy_texts)})")
                     if texts:
                         copy_text = '\n'.join(texts)
                         menu.addAction(_("Copy {}").format(column_title) + f" ({len(texts)})",
@@ -585,7 +587,7 @@ class TokenList(MyTreeWidget, util.PrintError):
 
             if len(unique_token_ids_selected_that_may_be_frozen_or_unfrozen) == 1:
                 token_id_hex = list(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)[0]
-                menu.addAction(_("Token Properties") + "...", lambda: self.on_edit_metadata(token_id_hex))
+                menu.addAction(_("Category Properties") + "...", lambda: self.on_edit_metadata(token_id_hex))
 
             menu.addSeparator()
             num_utxos = len(non_frozen_utxos)

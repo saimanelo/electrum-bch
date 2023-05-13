@@ -44,25 +44,25 @@ from .util import ColorScheme, HelpLabel, OnDestroyedMixin, PrintError, WindowMo
 class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
 
     class ColsTok(IntEnum):
-        token_id = 0
+        category = 0
         nfts = 1
         amount = 2
         amount_send = 3
 
     class ColsNFT(IntEnum):
         selected = 0
-        token_id = 1
+        category = 1
         commitment = 2
         flags = 3
 
     class ColsBaton(IntEnum):
         icon = 0
-        category_id = 1
+        category = 1
         buttons = 2
 
     class ColsMint(IntEnum):
         remove = 0
-        category_id = 1
+        category = 1
         commitment = 2
         capability = 3
         multiplier = 4
@@ -78,10 +78,10 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         edit = 1
         mint = 2
 
-    headers_tok = [_("Category ID"), _("NFTs to Send"), _("Fungible Amount"), _("Fungible Amount to Send")]
-    headers_nft = [_("Send"), _("Category ID"), _("Commitment"), _("Flags")]
-    headers_baton = ["", _("Category ID"), ""]
-    headers_mint = ["", _("Category ID"), _("Commitment"), _("Capability"), _("Multiplier")]
+    headers_tok = [_("Category"), _("NFTs to Send"), _("Fungible Amount"), _("Fungible Amount to Send")]
+    headers_nft = [_("Send"), _("Category"), _("Commitment"), _("Flags")]
+    headers_baton = ["", _("Category"), ""]
+    headers_mint = ["", _("Category"), _("Commitment"), _("Capability"), _("Multiplier")]
 
     def __init__(self, parent: ElectrumWindow, token_utxos: List[dict],
                  *, broadcast_callback: Optional[Callable[[bool], Any]] = None, form_mode=FormMode.send):
@@ -97,6 +97,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         PrintError.__init__(self)
         OnDestroyedMixin.__init__(self)
         self.fully_constructed = False
+        self._rebuilding_treewidget = False
         util.finalization_print_error(self)
         self.setWindowIcon(QtGui.QIcon(":icons/tab_send.png"))
         self.parent = parent
@@ -162,7 +163,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         tw.setTextElideMode(QtCore.Qt.ElideMiddle)
         if self.form_mode == self.FormMode.mint:
             tw.setHeaderLabels(self.headers_baton)
-            tw.header().setSectionResizeMode(self.ColsBaton.category_id, QtWidgets.QHeaderView.Stretch)
+            tw.header().setSectionResizeMode(self.ColsBaton.category, QtWidgets.QHeaderView.Stretch)
             tw.header().setSectionResizeMode(self.ColsBaton.buttons, QtWidgets.QHeaderView.ResizeToContents)
             tw.header().setStretchLastSection(False)
             tw.header().resizeSection(self.ColsBaton.icon, 42)
@@ -286,11 +287,27 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self.fully_constructed = True
         self.on_ui_state_changed()
 
-        if self.form_mode == self.FormMode.send:
-            self.parent.gui_object.token_metadata_updated_signal.connect(
-                lambda x: self.rebuild_input_tokens_treewidget())
-
         self.resize(640, 480)
+
+    def showEvent(self, evt: QtGui.QShowEvent):
+        super().showEvent(evt)
+        if evt.isAccepted():
+            # Subscribe to signals when metadata is updated in another window to redraw UI with proper metadata
+            self.parent.gui_object.token_metadata_updated_signal.connect(self._on_token_metadata_updated)
+
+    def hideEvent(self, evt: QtGui.QHideEvent):
+        super().hideEvent(evt)
+        if evt.isAccepted():
+            try:
+                self.parent.gui_object.token_metadata_updated_signal.disconnect(self._on_token_metadata_updated)
+            except TypeError:
+                pass
+
+    def _on_token_metadata_updated(self, tid):
+        if self.fully_constructed and tid in self.token_utxos:
+            self.rebuild_output_tokens_treewidget()
+            self.rebuild_input_tokens_treewidget()
+            self.on_ui_state_changed()
 
     def _adjust_te_payto_size(self):
         te = self.te_payto
@@ -383,6 +400,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         return f"{nfts_selected}/{nft_total}"
 
     def on_nft_item_changed(self, item: QtWidgets.QTreeWidgetItem, column: int):
+        if self._rebuilding_treewidget:
+            return
         tid = item.data(0, self.DataRoles.token_id)
         name = item.data(0, self.DataRoles.output_point)
         # Update NFTs selected set and counts in UI
@@ -473,7 +492,29 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         widget.parentWidget().setStyleSheet(
             'QTreeWidget::item > QWidget > QWidget { background-color: transparent; }')
 
+    def _set_category_col(self, item, tid: str, category_col: int):
+        # Params: tid: token_id (category id), category_col: the column that corresponds to the category column
+        assert category_col in {self.ColsNFT.category, self.ColsTok.category, self.ColsMint.category,
+                                self.ColsBaton.category}
+        item.setIcon(category_col, self.token_meta.get_icon(tid))
+        formatted_category = self.token_meta.format_token_display_name(tid)
+        item.setText(category_col, formatted_category)
+        tt = formatted_category
+        if formatted_category != tid:
+            tt += " " + _("Category ID") + ": " + tid
+        item.setToolTip(category_col, tt)
+        f = item.font(category_col)
+        f.setStretch(f.SemiCondensed)
+        item.setFont(category_col, f)
+
     def rebuild_input_tokens_treewidget(self):
+        try:
+            self._rebuilding_treewidget = True
+            self._rebuild_input_tokens_treewidget()
+        finally:
+            self._rebuilding_treewidget = False
+
+    def _rebuild_input_tokens_treewidget(self):
         tw = self.tw_tok
         tw.clear()
         first_row = True
@@ -484,12 +525,11 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                         # Skip displaying rows in this table for tokens that have no fungibles
                         continue
                     formatted_amt = self.token_meta.format_amount(tid, amt)
-                    item = QtWidgets.QTreeWidgetItem([tid, "", formatted_amt, ""])
-                    item.setIcon(self.ColsTok.token_id, self.token_meta.get_icon(tid))
-                    item.setToolTip(self.ColsTok.token_id, item.text(self.ColsTok.token_id))
-                    item.setToolTip(self.ColsTok.amount, item.text(self.ColsTok.amount))
+                    item = QtWidgets.QTreeWidgetItem(["", "", formatted_amt, ""])
                     item.setData(0, self.DataRoles.token_id, tid)
                     item.setData(0, self.DataRoles.receives_nft_count_updates, True)
+                    self._set_category_col(item, tid, self.ColsTok.category)
+                    item.setToolTip(self.ColsTok.amount, item.text(self.ColsTok.amount))
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
                     tw.addTopLevelItem(item)
                 finally:
@@ -549,17 +589,14 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     td = utxo['token_data']
                     assert isinstance(td, token.OutputData)
                     category_id = td.id_hex
-                    item = QtWidgets.QTreeWidgetItem(["", category_id, ""])
-                    item.setToolTip(self.ColsBaton.icon, _("Minting NFT"))
-                    item.setToolTip(self.ColsBaton.category_id, category_id)
-                    f = item.font(self.ColsBaton.category_id)
-                    f.setStretch(f.SemiCondensed)
-                    item.setFont(self.ColsBaton.category_id, f)
-                    item.setFlags((item.flags() | QtCore.Qt.ItemIsUserCheckable) & ~QtCore.Qt.ItemIsSelectable)
+                    assert category_id == tid
+                    item = QtWidgets.QTreeWidgetItem(["", "", ""])
                     item.setData(0, self.DataRoles.token_id, tid)
                     item.setData(0, self.DataRoles.output_point, baton_name)
+                    self._set_category_col(item, category_id, self.ColsBaton.category)
+                    item.setToolTip(self.ColsBaton.icon, _("Minting NFT"))
+                    item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
                     item.setIcon(self.ColsBaton.icon, self.icon_baton)
-                    item.setIcon(self.ColsBaton.category_id, self.token_meta.get_icon(category_id))
                     tw.addTopLevelItem(item)
                     w = QtWidgets.QWidget()
                     w.setToolTip(item.toolTip(self.ColsNFT.commitment))
@@ -593,90 +630,17 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             return False, b''
 
     def rebuild_output_tokens_treewidget(self):
+        try:
+            self._rebuilding_treewidget = True
+            self._rebuild_output_tokens_treewidget()
+        finally:
+            self._rebuilding_treewidget = False
+
+    def _rebuild_output_tokens_treewidget(self):
         tw = self.tw_nft
         tw.clear()
         row_num = 0
         first_row = True
-
-        def add_leaf_item(parent: QtWidgets.QTreeWidgetItem, tid, name, first=False) -> QtWidgets.QTreeWidgetItem:
-            utxo = self.get_utxo(name)
-            td = utxo['token_data']
-            assert isinstance(td, token.OutputData)
-            commitment = td.commitment
-            commitment_display_str = commitment.hex() if self.form_mode != self.FormMode.edit else ""
-            item = QtWidgets.QTreeWidgetItem(["", tid, commitment_display_str, token.get_nft_flag_text(td)])
-            item.setIcon(self.ColsNFT.token_id, self.token_meta.get_icon(tid))
-            item.setToolTip(self.ColsNFT.token_id, tid)
-            if self.form_mode == self.FormMode.send:
-                item.setToolTip(self.ColsNFT.selected, _("Check to send this NFT"))
-                item.setToolTip(self.ColsNFT.commitment, commitment.hex()
-                                if commitment.hex() else _("zero-length commitment"))
-            elif self.form_mode == self.FormMode.edit:
-                item.setToolTip(self.ColsNFT.selected, _("Check to edit this NFT"))
-                max_chars = token.MAX_CONSENSUS_COMMITMENT_LENGTH * 2
-                item.setToolTip(self.ColsNFT.commitment,
-                                _("Enter an even number of up to {max_chars} hexadecimal characters")
-                                .format(max_chars=max_chars))
-            item.setFlags((item.flags() | QtCore.Qt.ItemIsUserCheckable) & ~QtCore.Qt.ItemIsSelectable)
-            item.setData(0, self.DataRoles.token_id, tid)
-            item.setData(0, self.DataRoles.output_point, name)
-            if td.is_minting_nft():
-                item.setIcon(self.ColsNFT.flags, self.icon_baton)
-            elif td.is_mutable_nft():
-                item.setIcon(self.ColsNFT.flags, self.icon_mutable)
-            parent.addChild(item)
-            item.setCheckState(self.ColsNFT.selected, QtCore.Qt.Checked)  # Need to call this at least once to make checkbox appear
-            if name not in self.token_nfts_selected.get(tid, set()):
-                item.setCheckState(self.ColsNFT.selected, QtCore.Qt.Unchecked)
-
-            if self.form_mode == self.FormMode.edit:
-                w = QtWidgets.QWidget()
-                w.setToolTip(item.toolTip(self.ColsNFT.commitment))
-                hbox = QtWidgets.QHBoxLayout(w)
-                self._set_field_margins(hbox, first)
-                le = QtWidgets.QLineEdit()
-                le.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-                le.setObjectName("le_" + name)  # so we can find it later
-                le.setText(commitment.hex())
-
-                def on_commitment_changed(text, _item=item, _le=le, _commitment=commitment, _name=name):
-                    color = ColorScheme.DEFAULT
-                    valid, new_commitment = self.is_commitment_valid(text)
-                    if valid:
-                        if text == _commitment.hex():
-                            _item.setCheckState(self.ColsNFT.selected, QtCore.Qt.Unchecked)
-                            self.nfts_to_edit.pop(_name, None)
-                        else:
-                            color = ColorScheme.BLUE
-                            _item.setCheckState(self.ColsNFT.selected, QtCore.Qt.Checked)
-                            self.nfts_to_edit[_name] = new_commitment
-                    else:
-                        color = ColorScheme.RED
-                        _item.setCheckState(self.ColsNFT.selected, QtCore.Qt.Unchecked)
-                        self.nfts_to_edit[_name] = None  # Indicate that we have an error
-                    _le.setStyleSheet(color.as_stylesheet())
-                    self.on_ui_state_changed()
-                le.textChanged.connect(on_commitment_changed)
-                hbox.addWidget(le)
-
-                def on_reset(b, commitment_hex=commitment.hex(), _le=le):
-                    is_same = _le.text() == commitment_hex
-                    if is_same:
-                        # If same, above slot won't fire when calling setText(), so we force it to fire
-                        on_commitment_changed(commitment_hex)
-                    else:
-                        # Otherwise modify text and slot fires
-                        _le.setText(commitment_hex)
-                but = QtWidgets.QToolButton()
-                but.clicked.connect(on_reset)
-                but.setText(_("Reset"))
-                but.setObjectName("reset_" + name)
-                but.setToolTip("Reset to original commitment")
-                hbox.addWidget(but)
-                tw.setItemWidget(item, self.ColsNFT.commitment, w)
-                self.allow_transparent_background(w)
-
-            return item
 
         if self.form_mode == self.FormMode.mint:
             for row_data in self.nfts_to_mint:
@@ -684,16 +648,13 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 commitment = row_data["commitment"] or b''
                 capability = row_data["capability"]
                 copies = row_data["copies"]
-                item = QtWidgets.QTreeWidgetItem(["", category_id, "", "", ""])
-                f = item.font(self.ColsMint.category_id)
-                f.setStretch(f.SemiCondensed)
-                item.setFont(self.ColsMint.category_id, f)
-                item.setToolTip(self.ColsMint.category_id, category_id)
+                item = QtWidgets.QTreeWidgetItem(["", "", "", "", ""])
+                self._set_category_col(item, category_id, self.ColsMint.category)
                 max_chars = token.MAX_CONSENSUS_COMMITMENT_LENGTH * 2
                 item.setToolTip(self.ColsNFT.commitment,
                                 _("Enter an even number of up to {max_chars} hexadecimal characters")
                                 .format(max_chars=max_chars))
-                item.setFlags((item.flags() | QtCore.Qt.ItemIsUserCheckable) & ~QtCore.Qt.ItemIsSelectable)
+                item.setFlags(item.flags() & ~QtCore.Qt.ItemIsSelectable)
                 tw.addTopLevelItem(item)
 
                 # Delete button field
@@ -710,9 +671,6 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 close_button.clicked.connect(on_button_click)
                 hbox.addWidget(close_button)
                 tw.setItemWidget(item, self.ColsMint.remove, w)
-
-                # Category ID field
-                item.setIcon(self.ColsBaton.category_id, self.token_meta.get_icon(category_id))
 
                 # Commitment field
                 w = QtWidgets.QWidget()
@@ -796,7 +754,89 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                 self.allow_transparent_background(w)
                 first_row = False
                 row_num += 1
-        else:
+        else:  # form_mode edit or send
+            def add_leaf_item(parent: QtWidgets.QTreeWidgetItem, tid, name, first=False) -> QtWidgets.QTreeWidgetItem:
+                utxo = self.get_utxo(name)
+                td = utxo['token_data']
+                assert isinstance(td, token.OutputData)
+                commitment = td.commitment
+                commitment_display_str = commitment.hex() if self.form_mode != self.FormMode.edit else ""
+                item = QtWidgets.QTreeWidgetItem(["", "", commitment_display_str, token.get_nft_flag_text(td)])
+                item.setData(0, self.DataRoles.token_id, tid)
+                item.setData(0, self.DataRoles.output_point, name)
+                self._set_category_col(item, tid, self.ColsNFT.category)
+                if self.form_mode == self.FormMode.send:
+                    item.setToolTip(self.ColsNFT.selected, _("Check to send this NFT"))
+                    item.setToolTip(self.ColsNFT.commitment, commitment.hex()
+                    if commitment.hex() else _("zero-length commitment"))
+                elif self.form_mode == self.FormMode.edit:
+                    item.setToolTip(self.ColsNFT.selected, _("Check to edit this NFT"))
+                    max_chars = token.MAX_CONSENSUS_COMMITMENT_LENGTH * 2
+                    item.setToolTip(self.ColsNFT.commitment,
+                                    _("Enter an even number of up to {max_chars} hexadecimal characters")
+                                    .format(max_chars=max_chars))
+                item.setFlags((item.flags() | QtCore.Qt.ItemIsUserCheckable) & ~QtCore.Qt.ItemIsSelectable)
+                if td.is_minting_nft():
+                    item.setIcon(self.ColsNFT.flags, self.icon_baton)
+                elif td.is_mutable_nft():
+                    item.setIcon(self.ColsNFT.flags, self.icon_mutable)
+                parent.addChild(item)
+                item.setCheckState(self.ColsNFT.selected,
+                                   QtCore.Qt.Checked)  # Need to call this at least once to make checkbox appear
+                if name not in self.token_nfts_selected.get(tid, set()):
+                    item.setCheckState(self.ColsNFT.selected, QtCore.Qt.Unchecked)
+
+                if self.form_mode == self.FormMode.edit:
+                    w = QtWidgets.QWidget()
+                    w.setToolTip(item.toolTip(self.ColsNFT.commitment))
+                    hbox = QtWidgets.QHBoxLayout(w)
+                    self._set_field_margins(hbox, first)
+                    le = QtWidgets.QLineEdit()
+                    le.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+                    le.setObjectName("le_" + name)  # so we can find it later
+                    le.setText(commitment.hex())
+
+                    def on_commitment_changed(text, _item=item, _le=le, _commitment=commitment, _name=name):
+                        color = ColorScheme.DEFAULT
+                        valid, new_commitment = self.is_commitment_valid(text)
+                        if valid:
+                            if text == _commitment.hex():
+                                _item.setCheckState(self.ColsNFT.selected, QtCore.Qt.Unchecked)
+                                self.nfts_to_edit.pop(_name, None)
+                            else:
+                                color = ColorScheme.BLUE
+                                _item.setCheckState(self.ColsNFT.selected, QtCore.Qt.Checked)
+                                self.nfts_to_edit[_name] = new_commitment
+                        else:
+                            color = ColorScheme.RED
+                            _item.setCheckState(self.ColsNFT.selected, QtCore.Qt.Unchecked)
+                            self.nfts_to_edit[_name] = None  # Indicate that we have an error
+                        _le.setStyleSheet(color.as_stylesheet())
+                        self.on_ui_state_changed()
+
+                    le.textChanged.connect(on_commitment_changed)
+                    hbox.addWidget(le)
+
+                    def on_reset(b, commitment_hex=commitment.hex(), _le=le):
+                        is_same = _le.text() == commitment_hex
+                        if is_same:
+                            # If same, above slot won't fire when calling setText(), so we force it to fire
+                            on_commitment_changed(commitment_hex)
+                        else:
+                            # Otherwise modify text and slot fires
+                            _le.setText(commitment_hex)
+
+                    but = QtWidgets.QToolButton()
+                    but.clicked.connect(on_reset)
+                    but.setText(_("Reset"))
+                    but.setObjectName("reset_" + name)
+                    but.setToolTip("Reset to original commitment")
+                    hbox.addWidget(but)
+                    tw.setItemWidget(item, self.ColsNFT.commitment, w)
+                    self.allow_transparent_background(w)
+
+                return item
+
             for tid, names in self.token_nfts.items():
                 if not names:
                     # Defensive programming: should never happen
@@ -808,9 +848,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
                     item.setData(0, self.DataRoles.receives_nft_count_updates, True)
                     continue
                 # This group has more than 1 item, build a subgrouping
-                parent = QtWidgets.QTreeWidgetItem(["", tid, "", ""])
-                parent.setIcon(self.ColsNFT.token_id, self.token_meta.get_icon(tid))
-                parent.setToolTip(self.ColsNFT.token_id, tid)
+                parent = QtWidgets.QTreeWidgetItem(["", "", "", ""])
+                self._set_category_col(parent, tid, self.ColsNFT.category)
                 parent.setFlags((parent.flags() | QtCore.Qt.ItemIsAutoTristate | QtCore.Qt.ItemIsUserCheckable)
                                 & ~QtCore.Qt.ItemIsSelectable)
                 parent.setData(0, self.DataRoles.token_id, tid)

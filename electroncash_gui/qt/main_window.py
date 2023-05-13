@@ -5424,7 +5424,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             nonlocal form
             if success and form and self._send_token_form and self._send_token_form is form and form.isVisible():
                 form.accept()
-                form.deleteLater()
+                form.setParent(None)  # Reparent to None to enforce eventual GC cleanup of loose QObject
                 self._send_token_form = form = None
 
         self._send_token_form = form = SendTokenForm(self, utxos, broadcast_callback=broadcast_done,
@@ -5444,7 +5444,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         from .token_meta_edit import TokenMetaEditorForm
         if self.edit_token_metadata_dialog:
             self.edit_token_metadata_dialog.close()
-            self.edit_token_metadata_dialog.deleteLater()
+            self.edit_token_metadata_dialog.setParent(None)  # For Python GC
+            self.edit_token_metadata_dialog = None
         self.edit_token_metadata_dialog = TokenMetaEditorForm(self, token_id_hex, flags=Qt.Window)
         self.edit_token_metadata_dialog.show()
 

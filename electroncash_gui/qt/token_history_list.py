@@ -24,7 +24,6 @@
 # SOFTWARE.
 
 from enum import IntEnum
-from typing import Optional
 
 from PyQt5 import QtCore
 from PyQt5.QtGui import QBrush, QColor, QIcon, QFont
@@ -45,22 +44,22 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         """Column numbers. This is to make code in on_update easier to read.
         If you modify these, make sure to modify the column header names in
         the MyTreeWidget constructor."""
-        status = 1
-        date = 2
-        description = 3
-        cap_icon_extra = 4
-        cap_icon_main = 5
-        category_id = 6
-        fungible_amount = 7
-        nft_amount = 8
-        fungible_balance = 9
-        nft_balance = 10
+        status_icon = 0
+        date = 1
+        description = 2
+        cap_icon_extra = 3
+        cap_icon_main = 4
+        category = 5
+        fungible_amount = 6
+        nft_amount = 7
+        fungible_balance = 8
+        nft_balance = 9
 
     class DataRoles(IntEnum):
         """Data roles. Again, to make code in on_update easier to read."""
         tx_hash = QtCore.Qt.UserRole  # This must be this value so that superclass on_edited() picks up the label change
         status = QtCore.Qt.UserRole + 1
-        category = QtCore.Qt.UserRole + 2
+        category_id = QtCore.Qt.UserRole + 2
         outpoint = QtCore.Qt.UserRole + 3
         nft_row = QtCore.Qt.UserRole + 4
         commitment = QtCore.Qt.UserRole + 5
@@ -70,14 +69,15 @@ class TokenHistoryList(MyTreeWidget, PrintError):
 
     statusIcons = {}
 
-    def __init__(self, parent=None):
+    def __init__(self, parent):
+        from .main_window import ElectrumWindow
+        assert isinstance(parent, ElectrumWindow)
         MyTreeWidget.__init__(self, parent, self.create_menu, [], self.Col.description, deferred_updates=True)
         PrintError.__init__(self)
 
-        headers = ['', '', _('Date'), _('Description'), '', '', _('Category ID'), _('Fungible Amount'),
+        headers = ['', _('Date'), _('Description'), '', '', _('Category'), _('Fungible Amount'),
                    _('NFT Amount'), _('Fungible Balance'), _('NFT Balance')]
         self.update_headers(headers)
-        self.setColumnHidden(1, True)
         self.setSortingEnabled(True)
         self.sortByColumn(0, QtCore.Qt.AscendingOrder)
         self.setAlternatingRowColors(True)
@@ -96,8 +96,9 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         for col in (self.Col.cap_icon_main, self.Col.cap_icon_extra):
             self.header().setSectionResizeMode(col, QHeaderView.Fixed)
             self.header().resizeSection(col, 21)
-        for col in range(self.Col.category_id, len(headers)):
+        for col in range(self.Col.category, len(headers)):
             self.header().setSectionResizeMode(col, QHeaderView.Interactive)
+        self.header().resizeSection(self.Col.category, 100)  # Start out with 100 width for this column
         for col in range(self.Col.fungible_amount, len(headers)):
             self.header().resizeSection(col, 100)
 
@@ -145,7 +146,8 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 bal_fts_str = self.token_meta.format_amount(category_id, bal_fts)
                 bal_nfts = tokens_balances.get(category_id, {}).get("nfts", 0)
                 nft_amount = len(cat_nfts_in) - len(cat_nfts_out)
-                entry = ['', tx_hash, status_str, label, '', '', category_id, fungible_amount_str, str(nft_amount),
+                token_display_name = self.token_meta.format_token_display_name(category_id)
+                entry = ['', status_str, label, '', '', token_display_name, fungible_amount_str, str(nft_amount),
                          bal_fts_str, str(bal_nfts)]
                 item = SortableTreeWidgetItem(entry)
                 has_minting_ctr = 0
@@ -153,27 +155,34 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                 item.setData(0, self.DataRoles.status, (status, conf))
                 item.setData(0, self.DataRoles.tx_hash, tx_hash)
                 item.setData(0, self.DataRoles.nft_row, False)
-                item.setData(0, self.DataRoles.category, category_id)
+                item.setData(0, self.DataRoles.category_id, category_id)
                 item.setData(0, self.DataRoles.editable_label, True)
                 item.setData(0, self.DataRoles.item_key, tl_item_key)
-                item.setToolTip(self.Col.category_id, category_id)
+                item.setToolTip(self.Col.category, category_id)
                 item.setToolTip(self.Col.fungible_amount, self.token_meta.format_amount(category_id, fungible_amount,
                                                                                         append_tokentoshis=True))
                 item.setToolTip(self.Col.nft_amount, str(nft_amount))
                 item.setToolTip(self.Col.fungible_balance, self.token_meta.format_amount(category_id, bal_fts,
                                                                                         append_tokentoshis=True))
                 item.setToolTip(self.Col.nft_balance, str(bal_nfts))
-                item.setIcon(self.Col.category_id, self.token_meta.get_icon(category_id))
+                item.setIcon(self.Col.category, self.token_meta.get_icon(category_id))
                 if icon:
                     item.setIcon(0, icon)
                 conf_suffix = ngettext("confirmation", "confirmations", conf)
                 item.setToolTip(0, str(conf) + " " + conf_suffix)
-                for col in (self.Col.category_id, self.Col.fungible_amount, self.Col.nft_amount,
+                for col in (self.Col.category, self.Col.fungible_amount, self.Col.nft_amount,
                             self.Col.fungible_balance, self.Col.nft_balance):
-                    item.setTextAlignment(col, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-                    font = self.monospaceFont if col != self.Col.category_id else self.monospaceFontCondensed
+                    if col == self.Col.category:
+                        # Category id's and/or names get a more compact font
+                        font = self.monospaceFontCondensed
+                        align = QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter
+                    else:
+                        font = self.monospaceFont
+                        align = QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter
+                    item.setTextAlignment(col, align)
                     item.setFont(col, font)
-                item.setFont(self.Col.date, self.monospaceFont)
+                # Make the date column compact to save horizontal space
+                item.setFont(self.Col.date, self.monospaceFontCondensed)
                 if fungible_amount < 0 or nft_amount < 0:
                     item.setForeground(self.Col.description, self.withdrawalBrush)
                 if fungible_amount < 0:
@@ -203,7 +212,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     capability_str = f"{capability} " if len(capability) else ""
                     commitment_suffix = f": {commitment}" if commitment else ""
                     name = f"{direction} {capability_str}NFT{commitment_suffix}"
-                    nft_item = SortableTreeWidgetItem(['', tx_hash, '', name, '', '', '', '', '', ''])
+                    nft_item = SortableTreeWidgetItem(['', '', name, '', '', '', '', '', ''])
                     nft_item.setFont(self.Col.description, self.monospaceFont)
                     nft_item.setData(0, self.DataRoles.nft_row, True)
                     nft_item.setData(0, self.DataRoles.outpoint, outpoint_str)
@@ -291,6 +300,7 @@ class TokenHistoryList(MyTreeWidget, PrintError):
             if num_selected == 1:
                 item = self.itemAt(position)
                 if item:
+                    category_id = item.data(0, self.DataRoles.category_id)
                     copy_text = item.text(col).strip()
                     nft_row = item.data(0, self.DataRoles.nft_row)
                     if nft_row:
@@ -304,11 +314,24 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                         menu.addAction(_("Copy Outpoint").format(_("Outpoint")), lambda: do_copy(outpoint))
                     elif copy_text:
                         menu.addAction(_("Copy {}").format(column_title), lambda: do_copy(copy_text))
+                        if col == self.Col.category and category_id:
+                            action_text = _("Copy Category ID")
+                            if copy_text != category_id:
+                                # User specified a token name, add "Copy Category ID"
+                                menu.addAction(action_text, lambda: do_copy(category_id))
+                            elif column_title == _("Category"):
+                                # Column name *is* the Category ID, rewrite name "Category" -> "Category ID"
+                                menu.actions()[-1].setText(action_text)
+
 
                     tx_hash = item.data(0, self.DataRoles.tx_hash)
                     tx = self.wallet.transactions.get(tx_hash, None)
                     if tx:
                         menu.addAction(_("Details"), lambda: self.parent.show_transaction(tx))
+
+                    if category_id:
+                        menu.addAction(_("Category Properties") + "...",
+                                       lambda: self.parent.show_edit_token_metadata_dialog(category_id))
 
         menu.addSeparator()
         menu.addAction(QIcon(":icons/tab_token.svg"), _("Create Token..."), self.parent.show_create_new_token_dialog)
