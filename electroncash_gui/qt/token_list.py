@@ -101,6 +101,9 @@ class TokenList(MyTreeWidget, util.PrintError):
         for col in (self.Col.cap_icon_main, self.Col.cap_icon_extra):
             self.header().setSectionResizeMode(col, QtWidgets.QHeaderView.Fixed)
             self.header().resizeSection(col, 21)
+        for col in (self.Col.nft_flags,):
+            self.header().setSectionResizeMode(col, QtWidgets.QHeaderView.Interactive)
+        self.setTextElideMode(QtCore.Qt.ElideRight)
 
     def clean_up(self):
         self.cleaned_up = True
