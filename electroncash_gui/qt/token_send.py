@@ -853,6 +853,7 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             self.token_fungible_to_spend[tid] = 0
         for tid in list(self.token_nfts_selected):
             self.token_nfts_selected[tid].clear()
+        self.nfts_to_mint.clear()
         self.rebuild_output_tokens_treewidget()
         self.rebuild_input_tokens_treewidget()
         self.cb_max.setChecked(False)
@@ -861,7 +862,6 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         if self.form_mode == self.FormMode.send:
             self.te_payto.clear()
         self.te_desc.clear()
-        self.nfts_to_mint.clear()
         self.tw_nft.itemChanged.connect(self.on_nft_item_changed)
         self.on_ui_state_changed()
 
