@@ -3227,7 +3227,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             return [addr for addr in domain
                     if not self.get_address_history(addr)
                     and addr not in self.receive_requests
-                    and (frozen_ok or addr not in self.frozen_addresses)]
+                    and (frozen_ok or addr not in self.frozen_addresses)
+                    and (not for_change or not self.is_retired_change_addr(addr))]
 
     def get_unused_address(self, *, for_change=False, frozen_ok=True):
         addrs = self.get_unused_addresses(for_change=for_change, frozen_ok=frozen_ok)
@@ -3235,8 +3236,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             return addrs[0]
 
     def get_receiving_address(self, *, frozen_ok=True):
-        '''Returns a receiving address or None.'''
-        domain = self.get_unused_addresses(frozen_ok=frozen_ok)
+        """Returns a receiving address or None."""
+        domain = self.get_unused_addresses(for_change=False, frozen_ok=frozen_ok)
         if not domain:
                 domain = [a for a in self.get_receiving_addresses()
                           if frozen_ok or a not in self.frozen_addresses]
