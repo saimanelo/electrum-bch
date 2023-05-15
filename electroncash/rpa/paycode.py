@@ -339,7 +339,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
         grind_count += 1
 
     # Sort the inputs and outputs deterministically
-    tx.BIP_LI01_sort()
+    tx.BIP69_sort()
 
     # Re-seriliaze the transaction.
     tx.raw = tx.serialize()
@@ -351,7 +351,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
 
 def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
     # Initialize return value.  Will return empty list if no private key can be found.
-    retval = [] 
+    retval = []
 
     # Deserialize the raw transaction
     unpacked_tx = Transaction.deserialize(Transaction(raw_tx))
@@ -446,7 +446,7 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
         # Check the address matches
         if destination in output_addresses:
             retval.append(privkey_wif)
-            
+
         # Increment the input
         input_index += 1
 

@@ -36,7 +36,7 @@ import traceback
 from decimal import Decimal as PyDecimal  # Qt 5.12 also exports Decimal
 from functools import partial
 from collections import OrderedDict
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
@@ -55,7 +55,7 @@ from electroncash.util import (format_time, format_satoshis, PrintError,
                                print_error)
 import electroncash.web as web
 from electroncash import Transaction
-from electroncash import util, bitcoin, commands, cashacct
+from electroncash import util, bitcoin, commands, cashacct, token
 from electroncash import paymentrequest
 from electroncash.transaction import OPReturn
 from electroncash.wallet import Multisig_Wallet, sweep_preparations
@@ -75,6 +75,7 @@ from .fee_slider import FeeSlider
 from .popup_widget import ShowPopupLabel, KillPopupLabel
 from . import cashacctqt
 from .util import *
+from .token_meta import TokenMetaQt
 
 try:
     # pre-load QtMultimedia at app start, if possible
@@ -133,6 +134,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         QMainWindow.__init__(self)
 
         self.gui_object = gui_object
+        self.token_meta: TokenMetaQt = self.gui_object.token_meta
         self.wallet = wallet
         assert not self.wallet.weak_window
         self.wallet.weak_window = Weak.ref(self)  # This enables plugins such as CashFusion to keep just a reference to the wallet, but eventually be able to find the window it belongs to.
@@ -165,6 +167,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.is_schnorr_enabled = self.wallet.is_schnorr_enabled  # This is a function -- Support for plugins that may be using the 4.0.3 & 4.0.4 API -- this function used to live in this class, before being moved to Abstract_Wallet.
         self.send_tab_opreturn_widgets, self.receive_tab_opreturn_widgets = [], []  # defaults to empty list
         self._shortcuts = Weak.Set()  # keep track of shortcuts and disable them on close
+        self.create_new_token_dialog = None  # Gets lazy-initted by self.show_create_new_token_dialog()
+        self.edit_token_metadata_dialog = None  # Also gets lazy-initted on-demand
+        self._send_token_form: Optional[WindowModalDialog] = None
 
         self.create_status_bar()
         self.need_update = threading.Event()
@@ -181,6 +186,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_tab = self.create_receive_tab()
         self.addresses_tab = self.create_addresses_tab()
         self.utxo_tab = self.create_utxo_tab()
+        self.token_tab = self.create_token_tab()
+        self.token_history_tab = self.create_token_history_tab()
         self.console_tab = self.create_console_tab()
         self.contacts_tab = self.create_contacts_tab()
         self.converter_tab = self.create_converter_tab()
@@ -200,6 +207,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         add_optional_tab(tabs, self.addresses_tab, QIcon(":icons/tab_addresses.png"), _("&Addresses"), "addresses")
         add_optional_tab(tabs, self.utxo_tab, QIcon(":icons/tab_coins.png"), _("Co&ins"), "utxo")
+        add_optional_tab(tabs, self.token_tab, QIcon(":icons/tab_token.svg"), _("Cash&Tokens"), "token", False)
+        add_optional_tab(tabs, self.token_history_tab, QIcon(":icons/tab_token.svg"), _("Token History"), "token_history", False)
         add_optional_tab(tabs, self.contacts_tab, QIcon(":icons/tab_contacts.png"), _("Con&tacts"), "contacts")
         add_optional_tab(tabs, self.converter_tab, QIcon(":icons/tab_converter.svg"), _("Address Converter"), "converter")
         add_optional_tab(tabs, self.console_tab, QIcon(":icons/tab_console.png"), _("Con&sole"), "console", False)
@@ -255,6 +264,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         gui_object.timer.timeout.connect(self.timer_actions)
         self.fetch_alias()
+
+        self.gui_object.token_metadata_updated_signal.connect(lambda x: self.update_tabs())
 
     def new_window_initialized(self):
         if self.wallet.wallet_type == "rpa" and not self.wallet.rpa_pwd and self.wallet.has_password():
@@ -473,6 +484,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.history_list.update()
         self.address_list.update()
         self.utxo_list.update()
+        self.token_list.update()
+        self.token_history_list.update()
         self.need_update.set()
         # update menus
         self.seed_menu.setEnabled(self.wallet.has_seed())
@@ -688,7 +701,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         wallet_menu.addAction(_("&Find"), self.toggle_search, QKeySequence("Ctrl+F"))
         wallet_menu.addAction(_("Refresh GUI"), self.update_wallet, QKeySequence("Ctrl+R"))
 
-
         def add_toggle_action(view_menu, tab):
             is_shown = self.tabs.indexOf(tab) > -1
             item_format = _("Hide {tab_description}") if is_shown else _("Show {tab_description}")
@@ -698,6 +710,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         view_menu = menubar.addMenu(_("&View"))
         add_toggle_action(view_menu, self.addresses_tab)
         add_toggle_action(view_menu, self.utxo_tab)
+        add_toggle_action(view_menu, self.token_tab)
+        add_toggle_action(view_menu, self.token_history_tab)
         add_toggle_action(view_menu, self.contacts_tab)
         add_toggle_action(view_menu, self.converter_tab)
         add_toggle_action(view_menu, self.console_tab)
@@ -744,6 +758,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             icon = QIcon(":icons/cashacct-logo.png")
         tools_menu.addAction(icon, _("Lookup &Cash Account..."), self.lookup_cash_account_dialog, QKeySequence("Ctrl+L"))
         tools_menu.addAction(icon, _("&Register Cash Account..."), lambda: self.register_new_cash_account(addr='pick'), QKeySequence("Ctrl+G"))
+        tools_menu.addSeparator()
+        tools_menu.addAction(QIcon(":icons/tab_token.svg"), _("Create Cash&Token") + "...",
+                             self.show_create_new_token_dialog, QKeySequence("Ctrl+Shift+T"))
         run_hook('init_menubar_tools', self, tools_menu)
 
         help_menu = menubar.addMenu(_("&Help"))
@@ -987,7 +1004,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     icon = icon_dict["status_lagging_fork"]
                     status_tip = status_tip_dict["status_lagging_fork"] + "; " + text
             else:
-                c, u, x = self.wallet.get_balance()
+                c, u, x, cash_toks = self.wallet.get_balance(tokens=True)
 
                 text_items = [
                     _("Balance: {amount_and_unit}").format(
@@ -1000,6 +1017,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 if x:
                     text_items.append(_("[{amount} unmatured]").format(
                         amount=self.format_amount(x, True).strip()))
+                if cash_toks:
+                    text_items.append(_("[{amount} on CashToken UTXOs]").format(
+                        amount=self.format_amount(cash_toks, False).strip()))
 
                 extra = run_hook("balance_label_extra", self)
                 if isinstance(extra, str) and extra:
@@ -1055,6 +1075,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.request_list.update()
         self.address_list.update()
         self.utxo_list.update()
+        self.token_list.update()
+        self.token_history_list.update()
         self.contact_list.update()
         self.invoice_list.update()
         self.update_completions()
@@ -1075,6 +1097,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.history_list.update_labels()
         self.address_list.update_labels()
         self.utxo_list.update_labels()
+        self.token_list.update_labels()
+        self.token_history_list.update_labels()
         self.update_completions()
         self.labels_updated_signal.emit()
         self.labels_need_update.clear() # clear flag
@@ -1085,15 +1109,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         l.searchable_list = l
         return l
 
+    def create_token_history_tab(self):
+        from .token_history_list import TokenHistoryList
+        self.token_history_list = l = TokenHistoryList(self)
+        return self.create_list_tab(l)
+
     def show_address(self, addr, *, parent=None):
         parent = parent or self.top_level_window()
         from . import address_dialog
         d = address_dialog.AddressDialog(self,  addr, windowParent=parent)
         d.exec_()
 
-    def show_transaction(self, tx, tx_desc = None):
+    def show_transaction(self, tx, tx_desc=None, *, broadcast_callback=None):
         '''tx_desc is set only for txs created in the Send tab'''
-        d = show_transaction(tx, self, tx_desc)
+        d = show_transaction(tx, self, tx_desc, broadcast_callback=broadcast_callback)
         self._tx_dialogs.add(d)
 
     def on_toggled_opreturn(self, b):
@@ -1122,28 +1151,43 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_address_e = ButtonsLineEdit()
         self.receive_address_e.addCopyButton()
         self.receive_address_e.setReadOnly(True)
-        msg = _('Bitcoin Cash address where the payment should be received. Note that each payment request uses a different Bitcoin Cash address.')
+        self.receive_token_address_e = ButtonsLineEdit()
+        self.receive_token_address_e.addCopyButton()
+        self.receive_token_address_e.setReadOnly(True)
+        msg = _('Bitcoin Cash address where the payment should be received. Note that each payment request uses a'
+                ' different Bitcoin Cash address.')
+        msg2 = _("This a token-aware synonym for the above address where CashTokens should be received.")
         label = HelpLabel(_('&Receiving address'), msg)
         label.setBuddy(self.receive_address_e)
         self.receive_address_e.textChanged.connect(self.update_receive_qr)
         self.gui_object.cashaddr_toggled_signal.connect(self.update_receive_address_widget)
 
+        row = 0
+
         if self.wallet.wallet_type == 'rpa':
             self.receive_paycode_e = ButtonsLineEdit()
             self.receive_paycode_e.addCopyButton()
-            grid.addWidget(self.receive_paycode_e, 0, 1, 1, -1)
+            grid.addWidget(self.receive_paycode_e, row, 1, 1, -1)
             self.receive_paycode_e.setText(self.wallet.get_receiving_paycode())
             self.receive_paycode_e.setReadOnly(True)
             self.receive_paycode_e.setStyleSheet(
                 "QLineEdit { qproperty-cursorPosition: 0; }")
             label = HelpLabel(_('&Receiving paycode'), msg)
             label.setBuddy(self.receive_paycode_e)
+            grid.addWidget(label, row, 0)
+            row += 1
         else:
-            grid.addWidget(self.receive_address_e, 0, 1, 1, -1)
+            grid.addWidget(self.receive_address_e, row, 1, 1, -1)
             label = HelpLabel(_('&Receiving address'), msg)
             label.setBuddy(self.receive_address_e)
+            grid.addWidget(label, row, 0)
+            row += 1
+            grid.addWidget(self.receive_token_address_e, row, 1, 1, -1)
+            label = HelpLabel(_('&Token address'), msg2)
+            label.setBuddy(self.receive_token_address_e)
+            grid.addWidget(label, row, 0)
+            row += 1
 
-        grid.addWidget(label, 0, 0)
 
         # Cash Account for this address (if any)
         msg = _("The Cash Account (if any) associated with this address. It doesn't get saved with the request, but it is shown here for your convenience.\n\nYou may use the Cash Accounts button to register a new Cash Account for this address.")
@@ -1210,15 +1254,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     slf.set_cash_acct()
         self.cash_account_e = CashAcctE()
         label.setBuddy(self.cash_account_e)
-        grid.addWidget(label, 1, 0)
-        grid.addWidget(self.cash_account_e, 1, 1, 1, -1)
+        grid.addWidget(label, row, 0)
+        grid.addWidget(self.cash_account_e, row, 1, 1, -1)
+        row += 1
 
 
         self.receive_message_e = QLineEdit()
         label = QLabel(_('&Description'))
         label.setBuddy(self.receive_message_e)
-        grid.addWidget(label, 2, 0)
-        grid.addWidget(self.receive_message_e, 2, 1, 1, -1)
+        grid.addWidget(label, row, 0)
+        grid.addWidget(self.receive_message_e, row, 1, 1, -1)
+        row += 1
         self.receive_message_e.textChanged.connect(self.update_receive_qr)
 
         # OP_RETURN requests
@@ -1228,9 +1274,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         label.setBuddy(self.receive_opreturn_e)
         self.receive_opreturn_rawhex_cb = QCheckBox(_('Raw &hex script'))
         self.receive_opreturn_rawhex_cb.setToolTip(_('If unchecked, the textbox contents are UTF8-encoded into a single-push script: <tt>OP_RETURN PUSH &lt;text&gt;</tt>. If checked, the text contents will be interpreted as a raw hexadecimal script to be appended after the OP_RETURN opcode: <tt>OP_RETURN &lt;script&gt;</tt>.'))
-        grid.addWidget(label, 3, 0)
-        grid.addWidget(self.receive_opreturn_e, 3, 1, 1, 3)
-        grid.addWidget(self.receive_opreturn_rawhex_cb, 3, 4, Qt.AlignLeft)
+        grid.addWidget(label, row, 0)
+        grid.addWidget(self.receive_opreturn_e, row, 1, 1, 3)
+        grid.addWidget(self.receive_opreturn_rawhex_cb, row, 4, Qt.AlignLeft)
+        row += 1
         self.receive_opreturn_e.textChanged.connect(self.update_receive_qr)
         self.receive_opreturn_rawhex_cb.clicked.connect(self.update_receive_qr)
         self.receive_tab_opreturn_widgets = [
@@ -1242,15 +1289,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.receive_amount_e = BTCAmountEdit(self.get_decimal_point)
         label = QLabel(_('Requested &amount'))
         label.setBuddy(self.receive_amount_e)
-        grid.addWidget(label, 4, 0)
-        grid.addWidget(self.receive_amount_e, 4, 1)
+        grid.addWidget(label, row, 0)
+        grid.addWidget(self.receive_amount_e, row, 1)
         self.receive_amount_e.textChanged.connect(self.update_receive_qr)
 
         self.fiat_receive_e = AmountEdit(self.fx.get_currency if self.fx else '')
         if not self.fx or not self.fx.is_enabled():
             self.fiat_receive_e.setVisible(False)
-        grid.addWidget(self.fiat_receive_e, 4, 2, Qt.AlignLeft)
+        grid.addWidget(self.fiat_receive_e, row, 2, Qt.AlignLeft)
         self.connect_fields(self, self.receive_amount_e, self.fiat_receive_e, None)
+        row += 1
+
 
         self.expires_combo = QComboBox()
         self.expires_combo.addItems([_(i[0]) for i in expiration_values])
@@ -1264,12 +1313,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         ])
         label = HelpLabel(_('Request &expires'), msg)
         label.setBuddy(self.expires_combo)
-        grid.addWidget(label, 5, 0)
-        grid.addWidget(self.expires_combo, 5, 1)
+        grid.addWidget(label, row, 0)
+        grid.addWidget(self.expires_combo, row, 1)
         self.expires_label = QLineEdit('')
         self.expires_label.setReadOnly(1)
         self.expires_label.hide()
-        grid.addWidget(self.expires_label, 5, 1)
+        grid.addWidget(self.expires_label, row, 1)
+        row += 1
 
         self.save_request_button = QPushButton(_('&Save'))
         self.save_request_button.clicked.connect(self.save_payment_request)
@@ -1291,7 +1341,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         buttons.addWidget(self.save_request_button)
         buttons.addWidget(self.new_request_button)
         buttons.addStretch(1)
-        grid.addLayout(buttons, 6, 2, 1, -1)
+        grid.addLayout(buttons, row, 2, 1, -1)
+        row += 1
 
         self.receive_requests_label = QLabel(_('Re&quests'))
 
@@ -1495,9 +1546,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def update_receive_address_widget(self):
         text = ''
+        text_token = ''
         if self.receive_address:
             text = self.receive_address.to_full_ui_string()
+            text_token = self.receive_address.to_full_token_string()
         self.receive_address_e.setText(text)
+        self.receive_token_address_e.setText(text_token)
         self.cash_account_e.set_cash_acct()
 
     @rate_limited(0.250, ts_after=True)  # this function potentially re-computes the QR widget, so it's rate limited to once every 250ms
@@ -1607,6 +1661,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
               _("You may enter:"
                 "<ul>"
                 "<li> Bitcoin Cash <b>Address</b> <b>★</b>"
+                "<li> Bitcoin Cash <b>Token Address</b> <b>★</b>"
                 "<li> Bitcoin Legacy <b>Address</b> <b>★</b>"
                 "<li> <b>Cash Account</b> <b>★</b> e.g. <i>satoshi#123</i>"
                 "<li> <b>Contact name</b> <b>★</b> from the Contacts tab"
@@ -2459,6 +2514,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         self.copy_to_clipboard(copy_link, _("Block explorer link copied to clipboard"), self.top_level_window())
                     self.invoice_list.update()
                     self.do_clear()
+
                 else:
                     if msg.startswith("error: "):
                         msg = msg.split(" ", 1)[-1] # take the last part, sans the "error: " prefix
@@ -2665,11 +2721,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.wallet.set_frozen_state(addrs, freeze)
         self.address_list.update()
         self.utxo_list.update()
+        self.token_list.update()
         self.update_fee()
 
     def set_frozen_coin_state(self, utxos, freeze):
         self.wallet.set_frozen_coin_state(utxos, freeze)
         self.utxo_list.update()
+        self.token_list.update()
         self.update_fee()
 
     def create_converter_tab(self):
@@ -2681,10 +2739,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         legacy_address = ButtonsLineEdit()
         legacy_address.addCopyButton()
         legacy_address.setReadOnly(True)
+        token_address = ButtonsLineEdit()
+        token_address.addCopyButton()
+        token_address.setReadOnly(True)
 
         widgets = [
             (cash_address, Address.FMT_CASHADDR),
             (legacy_address, Address.FMT_LEGACY),
+            (token_address, Address.FMT_TOKEN)
         ]
 
         def convert_address():
@@ -2694,7 +2756,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 addr = None
             for widget, fmt in widgets:
                 if addr:
-                    widget.setText(addr.to_full_string(fmt))
+                    text = addr.to_full_string(fmt)
+                    widget.setText(text)
                 else:
                     widget.setText('')
 
@@ -2721,12 +2784,18 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         grid.addWidget(label, 2, 0)
         grid.addWidget(legacy_address, 2, 1)
 
+        label = QLabel(_('&Token address'))
+        label.setBuddy(token_address)
+        grid.addWidget(label, 3, 0)
+        grid.addWidget(token_address, 3, 1)
+
         w.setLayout(grid)
 
         label = WWLabel(_(
-            "This tool helps convert between address formats for Bitcoin "
-            "Cash addresses.\nYou are encouraged to use the 'Cash address' "
-            "format."
+            "<h1>Address Converter</h1>"
+            "<p>This tool helps convert between address formats for Bitcoin Cash addresses.</p>"
+            "You are encouraged to use the <b>Cash address</b> format for BCH.<br>"
+            "The <b>Token address</b> format is for receiving CashTokens."
         ))
 
         vbox = QVBoxLayout()
@@ -2764,6 +2833,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         from .utxo_list import UTXOList
         self.utxo_list = l = UTXOList(self)
         return self.create_list_tab(l)
+
+    def create_token_tab(self):
+        from .token_list import TokenList
+        self.token_list = TokenList(self)
+        return self.create_list_tab(self.token_list)
 
     def create_contacts_tab(self):
         from .contact_list import ContactList
@@ -3827,7 +3901,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         self.address_list.update()
         self.history_list.update()
         self.utxo_list.update()
-        self.history_updated_signal.emit() # inform things like address_dialog that there's a new history
+        self.token_list.update()
+        self.token_history_list.update()
+        self.history_updated_signal.emit()  # inform things like address_dialog that there's a new history
 
     def do_export_labels(self):
         labels = self.wallet.labels
@@ -4963,9 +5039,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.wallet.thread.stop()
             self.wallet.thread.wait() # Join the thread to make sure it's really dead.
 
-        for w in [self.address_list, self.history_list, self.utxo_list, self.cash_account_e, self.contact_list,
-                  self.tx_update_mgr]:
-            if w: w.clean_up()  # tell relevant object to clean itself up, unregister callbacks, disconnect signals, etc
+        for w in [self.address_list, self.history_list, self.utxo_list, self.token_list, self.token_history_list,
+                  self.cash_account_e, self.contact_list, self.tx_update_mgr]:
+            if w:
+                # tell relevant object to clean itself up, unregister callbacks, disconnect signals, etc
+                w.clean_up()
 
         # We catch these errors with the understanding that there is no recovery at
         # this point, given user has likely performed an action we cannot recover
@@ -4994,6 +5072,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             d.close()
         self._close_wallet()
 
+        # Save any dirty token meta keys to disk
+        self.token_meta.save()
 
         try: self.gui_object.timer.timeout.disconnect(self.timer_actions)
         except TypeError: pass # defensive programming: this can happen if we got an exception before the timer action was connected
@@ -5323,7 +5403,63 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 # never ask checked
                 self.config.set_key('cashaccounts_never_show_send_tab_hint', True)
 
+    def show_create_new_token_dialog(self):
+        from . import token_create
+        if not self.create_new_token_dialog:
+            self.create_new_token_dialog = token_create.CreateTokenForm(self)
+        self.create_new_token_dialog.show()
+        self.create_new_token_dialog.activateWindow()
+        self.create_new_token_dialog.raise_()
 
+    def _send_or_edit_tokens_common(self, utxos: List[Dict[str, Any]], form_mode: int):
+        from .token_send import SendTokenForm
+        assert all(isinstance(u['token_data'], token.OutputData) for u in utxos)
+        modes = {0: SendTokenForm.FormMode.send, 1: SendTokenForm.FormMode.edit, 2: SendTokenForm.FormMode.mint}
+        assert form_mode in modes, "Bad form_mode argument"
+        form_mode = modes[form_mode]
+
+        form = None
+
+        def broadcast_done(success):
+            """On success, if the send token form is up, close it"""
+            nonlocal form
+            if success and form and self._send_token_form and self._send_token_form is form and form.isVisible():
+                form.accept()
+
+        self._send_token_form = form = SendTokenForm(self, utxos, broadcast_callback=broadcast_done,
+                                                     form_mode=form_mode)
+        form.open()
+
+        weak_self = weakref.ref(self)
+        def on_close():
+            nonlocal form
+            slf = weak_self and weak_self()
+            if slf and form and slf._send_token_form and slf._send_token_form is form:
+                # Coerce python to GC this now-defunct window
+                if not slf._send_token_form.isVisible():
+                    slf._send_token_form.setParent(None)
+                slf._send_token_form = None
+            form = None
+        form.accepted.connect(on_close)
+        form.rejected.connect(on_close)
+
+    def send_tokens(self, utxos: List[Dict[str, Any]]):
+        self._send_or_edit_tokens_common(utxos, form_mode=0)
+
+    def edit_tokens(self, utxos: List[Dict[str, Any]]):
+        self._send_or_edit_tokens_common(utxos, form_mode=1)
+
+    def mint_tokens(self, utxos: List[Dict[str, Any]]):
+        self._send_or_edit_tokens_common(utxos, form_mode=2)
+
+    def show_edit_token_metadata_dialog(self, token_id_hex: str):
+        from .token_meta_edit import TokenMetaEditorForm
+        if self.edit_token_metadata_dialog:
+            self.edit_token_metadata_dialog.close()
+            self.edit_token_metadata_dialog.setParent(None)  # For Python GC
+            self.edit_token_metadata_dialog = None
+        self.edit_token_metadata_dialog = TokenMetaEditorForm(self, token_id_hex, flags=Qt.Window)
+        self.edit_token_metadata_dialog.show()
 
 
 class TxUpdateMgr(QObject, PrintError):
@@ -5478,9 +5614,13 @@ class TxUpdateMgr(QObject, PrintError):
                 n_ok, n_cashacct, total_amount = 0, 0, 0
                 last_seen_ca_name = ''
                 ca_txs = dict()  # 'txid' -> ('name', address)  -- will be given to contacts_list for "unconfirmed registrations" display
+                token_category_ids: Set[bytes] = set()
+                n_nfts_in, n_nfts_out = 0, 0
                 for tx in txns:
                     if tx:
-                        is_relevant, is_mine, v, fee = parent.wallet.get_wallet_delta(tx)
+
+                        wallet_delta, txinfo3 = parent.wallet.get_tx_extended_info(tx, ver=3)
+                        is_relevant, is_mine, v, fee = wallet_delta[:4]
                         for _typ, addr, val in tx.outputs():
                             # Find Cash Account registrations that are for addresses *in* this wallet
                             if isinstance(addr, cashacct.ScriptOutput) and parent.wallet.is_mine(addr.address):
@@ -5490,6 +5630,20 @@ class TxUpdateMgr(QObject, PrintError):
                                 if txid: ca_txs[txid] = (addr.name, addr.address)
                         if not is_relevant:
                             continue
+                        for (_typ, addr, val), token_data in tx.outputs(tokens=True):
+                            if (isinstance(token_data, token.OutputData) and isinstance(addr, Address)
+                                    and parent.wallet.is_mine(addr)):
+                                token_category_ids.add(token_data.id)
+                                n_nfts_in += token_data.has_nft()
+                        input_token_datas = txinfo3.token_data
+                        for i, token_data in enumerate(input_token_datas):
+                            if token_data is None:
+                                continue
+                            addr = tx.inputs()[i].get('address')
+                            if (isinstance(token_data, token.OutputData) and isinstance(addr, Address)
+                                    and parent.wallet.is_mine(addr)):
+                                token_category_ids.add(token_data.id)
+                                n_nfts_out += token_data.has_nft()
                         total_amount += v
                         n_ok += 1
                 if n_cashacct:
@@ -5511,24 +5665,36 @@ class TxUpdateMgr(QObject, PrintError):
                         parent.contact_list.ca_update_potentially_unconfirmed_registrations(ca_txs)
                 if parent.wallet.storage.get('gui_notify_tx', True):
                     ca_text = ''
+                    tok_text = ''
                     if n_cashacct > 1:
                         # plural
                         ca_text = " + " + _("{number_of_cashaccounts} Cash Accounts registrations").format(number_of_cashaccounts = n_cashacct)
                     elif n_cashacct == 1:
                         # singular
                         ca_text = " + " + _("1 Cash Accounts registration ({cash_accounts_name})").format(cash_accounts_name = last_seen_ca_name)
-                    if total_amount > 0:
+                    if token_category_ids:
+                        n_cats = len(token_category_ids)
+                        tok_text = " | " + ngettext("{n_cats} CashToken category", "{n_cats} CashToken categories",
+                                                    n_cats).format(n_cats=n_cats)
+                        n_nft_net = n_nfts_in - n_nfts_out
+                        if n_nft_net > 0:
+                            tok_text += " " + ngettext("with {n_in} NFT in", "with {n_in} NFTs in",
+                                                       n_nft_net).format(n_in=n_nft_net)
+                        elif n_nft_net < 0:
+                            tok_text += " " + ngettext("with {n_out} NFT out", "with {n_out} NFTs out",
+                                                       abs(n_nft_net)).format(n_out=abs(n_nft_net))
+                    if total_amount > 0 or token_category_ids:
                         self.print_error("Notifying GUI %d tx"%(max(n_ok, n_cashacct)))
                         if max(n_ok, n_cashacct) > 1:
                             parent.notify(_("{} new transactions: {}")
-                                          .format(n_ok, parent.format_amount_and_units(total_amount, is_diff=True)) + ca_text)
+                                          .format(n_ok, parent.format_amount_and_units(total_amount, is_diff=True)) + ca_text + tok_text)
                         else:
-                            parent.notify(_("New transaction: {}").format(parent.format_amount_and_units(total_amount, is_diff=True)) + ca_text)
+                            parent.notify(_("New transaction: {}").format(parent.format_amount_and_units(total_amount, is_diff=True)) + ca_text + tok_text)
                     elif n_cashacct:
                         # No total amount (was just a cashacct reg tx)
                         ca_text = ca_text[3:]  # pop off the " + "
                         if n_cashacct > 1:
                             parent.notify(_("{} new transactions: {}")
-                                          .format(n_cashacct, ca_text))
+                                          .format(n_cashacct, ca_text) + tok_text)
                         else:
-                            parent.notify(_("New transaction: {}").format(ca_text))
+                            parent.notify(_("New transaction: {}").format(ca_text) + tok_text)
