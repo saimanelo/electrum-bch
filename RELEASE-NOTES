@@ -1368,3 +1368,15 @@ and there is no warning message.
 - Remove references to Travis CI + Enforce python >= 3.7 in setup.py #2537, #2538 (Jonas Lundqvist)
 - Only archive GH Actions artifacts once + Split regtest in separate files #2539, #2540 (Jonas Lundqvist)
 - Fixes to get auto-build to work (cculianu)
+
+# RELEASE NOTES 4.3.0
+
+- Added support for CashTokens, incuding token-aware addresses and creating/sending/receiving/managing
+  tokens in-wallet. Thank you to all that contributed in the Flipstarter that made this happen!
+  #2612 (cculianu, Andrew-128)
+- Explorer: Add 3XPL explorer #2546 (Axel Gembe)
+- Bump various dependencies #2547, #2553 (Jonas Lundqvist)
+- Various build-related dev-facing additions (Jonas Lundqvist)
+- Remove LNS and web3 dependencies LNS Related to smartBCH #2559, #2560 (cculianu)
+- Fusion on android; android Cash FusionCash Fusion enhancements and features #2563 (OPReturnCode)
+- add fulcrum.criptolayer.net to servers.json #2564 (molecular)
