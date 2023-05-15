@@ -233,7 +233,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
         self._adjust_te_payto_size()
         if self.form_mode in (self.FormMode.edit, self.FormMode.mint):
             gb_payto.setHidden(True)
-            self.te_payto.setText(self.wallet.get_unused_address(for_change=True).to_token_string())
+            an_addr = self.wallet.get_unused_address(for_change=True) or self.wallet.dummy_address()
+            self.te_payto.setText(an_addr.to_token_string())
 
         vbox_bottom.addWidget(gb_payto)
         vbox_bottom.setStretch(vbox_bottom.count()-1, 1)
@@ -1019,7 +1020,8 @@ class SendTokenForm(WindowModalDialog, PrintError, OnDestroyedMixin):
             spec.payto_addr = self.wallet.dummy_address()
         else:
             spec.payto_addr = address.Address.from_string(self.te_payto.text().strip())
-        spec.change_addr = self.wallet.get_unused_address(for_change=True, frozen_ok=False)
+        spec.change_addr = (self.wallet.get_unused_address(for_change=True, frozen_ok=False)
+                            or self.wallet.dummy_address())
         spec.feerate = self.fee_rate
         if dummy:
             spec.send_satoshis = wallet.dust_threshold(self.wallet.network)
