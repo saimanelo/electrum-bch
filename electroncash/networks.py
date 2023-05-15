@@ -76,8 +76,8 @@ class MainNet(AbstractNet):
     #    network.synchronous_get(("blockchain.block.header", [height, height]))
     #
     # Consult the ElectrumX documentation for more details.
-    VERIFICATION_BLOCK_MERKLE_ROOT = "291e31f6613c6a5d7fa28b527adf33b3733ce0f1a64987e791f2f81907b1daf9"
-    VERIFICATION_BLOCK_HEIGHT = 775000
+    VERIFICATION_BLOCK_MERKLE_ROOT = "57df4f7554f68c091f278ccdfa48fe01e45b3ffb9c2fabaeede2c6d2c5784820"
+    VERIFICATION_BLOCK_HEIGHT = 792773
     asert_daa = ASERTDaa(is_testnet=False)
     # Note: We *must* specify the anchor if the checkpoint is after the anchor, due to the way
     # blockchain.py skips headers after the checkpoint.  So all instances that have a checkpoint
