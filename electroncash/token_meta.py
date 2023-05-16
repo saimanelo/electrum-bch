@@ -273,9 +273,8 @@ def try_to_find_genesis_tx(wallet, token_id_hex, timeout=30) -> Optional[Transac
         return None
 
     # Examine all txns that are >= the height of the pre-genesis
-    unconf = confirmed_height <= 0
     for tx_hash, height in h:
-        is_candidate = height <= 0 if unconf else height >= confirmed_height
+        is_candidate = height <= 0 or height >= confirmed_height  # Pick up mempool + anything >= confirmed_height
         if is_candidate and tx_hash != token_id_hex:
             try:
                 tx2 = wallet.try_to_get_tx(tx_hash, allow_network_lookup=True, timeout=timeout)
