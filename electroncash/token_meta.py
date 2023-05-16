@@ -374,7 +374,7 @@ def try_to_download_metadata(wallet, token_id_hex, timeout=30) -> Optional[Downl
             sha = hashlib.sha256()
             sha.update(bytes(r.content))
             digest = sha.digest()
-            if sha.digest() != shasum and digest[::-1] != shasum:
+            if digest != shasum and digest[::-1] != shasum:
                 util.print_error(f"Warning: hash mismatch for json document at {url}, proceeding anyway...")
             try:
                 jdoc = json.loads(r.content.decode("utf-8"))
