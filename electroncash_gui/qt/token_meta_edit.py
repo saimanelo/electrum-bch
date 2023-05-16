@@ -23,6 +23,7 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
 import threading
 import weakref
 
@@ -228,7 +229,9 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
             self.sb_token_dec.setValue(min(self.sb_token_dec.maximum(),
                                            max(self.sb_token_dec.minimum(), self.bcmr_downloaded.decimals)))
             if self.bcmr_downloaded.icon:
-                f = QtCore.QTemporaryFile(QtCore.QDir.tempPath() + "/XXXXXX" + (self.bcmr_downloaded.icon_ext or ''))
+                # e.g.: /path/to/tmp/XXXXXX.svg
+                f = QtCore.QTemporaryFile(os.path.join(QtCore.QDir.tempPath(), "XXXXXX")
+                                          + (self.bcmr_downloaded.icon_ext or ''))
                 if f.open():
                     f.write(self.bcmr_downloaded.icon)
                     f.flush()
