@@ -3128,7 +3128,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         while len(self._tx_cache) > self._tx_cache_max:
             self._tx_cache.popitem(last=False)
 
-    def try_to_get_tx(self, tx_hash, *, allow_network_lookup=True) -> Optional[Transaction]:
+    def try_to_get_tx(self, tx_hash, *, allow_network_lookup=True, timeout=30) -> Optional[Transaction]:
         # Try and find it in the wallet cache
         tx = self._get_tx_from_cache(tx_hash)
         if tx:
@@ -3150,7 +3150,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 # Not cached. Resort to network lookup.
                 request = ('blockchain.transaction.get', [tx_hash])
                 try:
-                    tx = Transaction(self.network.synchronous_get(request))
+                    raw = self.network.synchronous_get(request, timeout=timeout)
+                    tx = Transaction(raw) if raw else None
                 except util.ServerError:
                     return None
         if tx:

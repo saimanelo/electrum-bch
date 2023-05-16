@@ -297,6 +297,14 @@ class ScriptOutput(namedtuple("ScriptAddressTuple", "script")):
         the OP_RETURN byte) """
         return bool(self.script and self.script[0] == OpCodes.OP_RETURN)
 
+    def to_scripthash(self):
+        """Returns the hash of the script in binary."""
+        return sha256(self.to_script())
+
+    def to_scripthash_hex(self):
+        """Like other bitcoin hashes this is reversed when written in hex."""
+        return hash_to_hex_str(self.to_scripthash())
+
     def __str__(self):
         return self.to_ui_string(True)
 

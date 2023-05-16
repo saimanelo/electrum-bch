@@ -23,6 +23,9 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import threading
+import weakref
+
 from collections import namedtuple
 from typing import Optional
 
@@ -31,6 +34,7 @@ from PyQt5.QtGui import QFont
 
 from electroncash import token, util
 from electroncash.i18n import _
+from electroncash.token_meta import DownloadedMetaData, try_to_download_metadata
 from .main_window import ElectrumWindow
 from .util import HelpLabel, MessageBoxMixin, MONOSPACE_FONT, OnDestroyedMixin, PrintError
 from .token_meta import TokenMetaQt
@@ -40,6 +44,8 @@ ICON_BUT_SIZE = 64
 
 
 class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDestroyedMixin):
+    sig_got_bcmr = QtCore.pyqtSignal(object)
+    sig_error_bcmr = QtCore.pyqtSignal()
 
     def __init__(self, parent: QtWidgets.QWidget, token_id: str, *,
                  flags=None, window: Optional[ElectrumWindow] = None):
@@ -56,6 +62,7 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         self.window: ElectrumWindow = window
         self.token_meta: TokenMetaQt = self.window.token_meta
         self.token_id = token_id
+        self.bcmr_downloaded: Optional[DownloadedMetaData] = None
 
         self.setWindowTitle(_("Edit Token Properties") + f" - {self.token_id}")
         self.setWindowIcon(self.token_meta.get_icon(self.token_id))
@@ -79,7 +86,7 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
                       " fixed forever and cannot be edited.")
         l = HelpLabel(_("Category ID") + ":", help_text)
         l.setToolTip(tt)
-        l2 = QtWidgets.QLabel(self.token_id)
+        self.lbl_category_id = l2 = QtWidgets.QLabel(self.token_id)
         l2.setToolTip(tt)
         f = QFont(MONOSPACE_FONT)
         f.setBold(True)
@@ -176,12 +183,22 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         # Formats label with whatever is in settings
         layout.addRow(l, hbox)
 
+        # BCMR auto-downloder
+        help_text = _("BCMR Metadata comes from the OP_RETURN of the token's genesis tx. If found, Electron Cash"
+                      " will download this data, and you can apply it as metadata for this category ID"
+                      " in this window.")
+        tt = _("Metadata from the network")
+        l = HelpLabel(_("BCMR Metadata") + ":", help_text)
+        self.lbl_dl_bcmr = l2 = QtWidgets.QLabel()
+        l2.linkActivated.connect(self.on_apply_bcmr)
+        layout.addRow(l, l2)
+
         # Bottom buttons
         layout.addItem(QtWidgets.QSpacerItem(0, 12, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding))
         hbox = QtWidgets.QHBoxLayout()
         hbox.setContentsMargins(0, 0, 0, 0)
-        clear_but = QtWidgets.QPushButton(_("Clear"))
-        clear_but.setToolTip(_("Clear this form to its initial state"))
+        clear_but = QtWidgets.QPushButton(_("Reset"))
+        clear_but.setToolTip(_("Reset this form to its initial state"))
         clear_but.clicked.connect(self.reset_form)
         hbox.addWidget(clear_but)
         hbox.addStretch(2)
@@ -192,7 +209,61 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         hbox.addWidget(buttons, 1, QtCore.Qt.AlignRight)
         layout.addRow(hbox)
 
+        self.sig_got_bcmr.connect(self.on_bcmr)
+        self.sig_error_bcmr.connect(self.on_bcmr_error)
+
         self.reset_form()
+
+    def on_bcmr(self, bcmr: DownloadedMetaData):
+        self.lbl_dl_bcmr.setText(_("Downloaded BCMR data for this token from the network."
+                                   "  <a href='apply'>Click here to apply it...</a>"))
+        self.bcmr_downloaded = bcmr
+
+    def on_apply_bcmr(self):
+        assert threading.current_thread() is threading.main_thread()
+        if self.bcmr_downloaded:
+            self.lbl_category_id.setFocus()
+            self.le_token_name.setText(self.bcmr_downloaded.name)
+            self.le_token_sym.setText(self.bcmr_downloaded.symbol)
+            self.sb_token_dec.setValue(min(self.sb_token_dec.maximum(),
+                                           max(self.sb_token_dec.minimum(), self.bcmr_downloaded.decimals)))
+            if self.bcmr_downloaded.icon:
+                f = QtCore.QTemporaryFile(QtCore.QDir.tempPath() + "/XXXXXX" + (self.bcmr_downloaded.icon_ext or ''))
+                if f.open():
+                    f.write(self.bcmr_downloaded.icon)
+                    f.flush()
+                    icon = QtGui.QIcon(f.fileName())
+                    self.but_icon.setIcon(icon)
+                    self.selected_icon = icon
+
+    def on_bcmr_error(self):
+        assert threading.current_thread() is threading.main_thread()
+        self.lbl_dl_bcmr.setText(_("BCMR data not available for this category ID."))
+
+    def do_bcmr_data_download(self):
+        self.lbl_dl_bcmr.setText(_("Checking for BCMR data from the network ..."))
+        weak_self = weakref.ref(self)
+
+        def threadfunc(wallet, token_id):
+            try:
+                bcmr = try_to_download_metadata(wallet, token_id)
+            except Exception as e:
+                util.print_error(repr(e))
+                bcmr = None
+            slf = weak_self and weak_self()
+            if slf and slf.isVisible():
+                if bcmr:
+                    slf.sig_got_bcmr.emit(bcmr)
+                else:
+                    slf.sig_error_bcmr.emit()
+
+        t = threading.Thread(target=threadfunc, daemon=True, args=(self.window.wallet, self.token_id,))
+        t.start()
+
+    def showEvent(self, evt: QtGui.QShowEvent):
+        super().showEvent(evt)
+        if evt.isAccepted():
+            self.do_bcmr_data_download()
 
     def on_ok_button(self):
         tid = self.token_id
