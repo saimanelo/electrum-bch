@@ -236,7 +236,7 @@ def format_fungible_amount(x: int, decimal_point: int, num_zeros=0, precision=No
         return str(x)
     if precision is None:
         precision = decimal_point
-    decimal_format = ".0" + str(precision) if precision > 0 else ""
+    decimal_format = "." + str(precision) if precision > 0 else ""
     if is_diff:
         decimal_format = '+' + decimal_format
     try:
