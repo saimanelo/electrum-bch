@@ -502,7 +502,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         tx_list = self.storage.get('transactions', {})
         self.transactions = {}
         txid_hasher = hashlib.sha256() if not bad_ct_entry_ctr else None
-        for tx_hash, raw in tx_list.items():
+        for tx_hash, raw in sorted(tx_list.items(), key=lambda x: x[0]):
             if txid_hasher:
                 txid_hasher.update(bytes.fromhex(tx_hash))
             tx = Transaction(raw)
@@ -694,7 +694,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         with self.lock:
             txid_hasher = hashlib.sha256()
             tx = {}
-            for tx_hash, txn in self.transactions.items():
+            for tx_hash, txn in sorted(self.transactions.items(), key=lambda x: x[0]):
                 txid_hasher.update(bytes.fromhex(tx_hash))
                 tx[tx_hash] = str(txn)
             self.storage.put('transactions', tx)
