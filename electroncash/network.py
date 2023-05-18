@@ -799,8 +799,6 @@ class Network(util.DaemonThread):
         method = response.get('method')
         params = response.get('params')
 
-        #print ("DEBUG network 815")
-
         # FIXME:
         # Do more to enforce result correctness, has the right data type, etc.
         # This code as it stands has been superficially audited for that but I
@@ -1842,7 +1840,6 @@ class Network(util.DaemonThread):
         txid = str(txid).strip()
         try:
             r = self.synchronous_get(('blockchain.transaction.get',[txid]), timeout=timeout)
-            print ("DEBUG network 1803 r is ",r)
             return True, r
         except BaseException as e:
             self.print_error("Exception retrieving transaction for '{}': {}".format(txid, repr(e)))
