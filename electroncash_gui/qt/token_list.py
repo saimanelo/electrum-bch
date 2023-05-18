@@ -498,7 +498,7 @@ class TokenList(MyTreeWidget, util.PrintError):
         column_title = self.headerItem().text(col)
         # Hack to override Category -> CategoryID
         if col == self.Col.category:
-            column_title = _("Cateogry ID")
+            column_title = _("Category ID")
 
         if num_selected > 0:
 
