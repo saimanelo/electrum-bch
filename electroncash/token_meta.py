@@ -358,7 +358,8 @@ def try_to_download_metadata(wallet, token_id_hex, timeout=30) -> Optional[Downl
             if u.lower().startswith("ipfs://"):
                 parts = u[7:].split('/', 1)
                 last_part = '/' + '/'.join(parts[1:]) if len(parts) >= 2 else ''
-                ret = "https://" + parts[0] + ".ipfs.dweb.link" + last_part
+                cid = parts[0]
+                ret = f"https://dweb.link/ipfs/{cid}{last_part}"
                 util.print_error(f"Rewrote \"{u}\" -> \"{ret}\"")
                 return ret
             else:
