@@ -245,6 +245,7 @@ def parse_input(vds):
             else:
                 # Legacy format
                 d['value'] = val
+                d['token_data'] = None
     return d
 
 
