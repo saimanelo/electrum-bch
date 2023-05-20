@@ -141,6 +141,7 @@ def tx_from_components(all_components, session_hash):
                                x_pubkeys = [inp.pubkey.hex()],
                                pubkeys = [inp.pubkey.hex()],
                                sequence = 0xffffffff,
+                               token_data = None,  # Program defensively, in case something does inp['token_data']
                                value = inp.amount))
             input_indices.append(i)
         elif ctype == 'output':
