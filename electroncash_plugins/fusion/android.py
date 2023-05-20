@@ -56,6 +56,7 @@ class Plugin(FusionPlugin):
                     if (name not in fuz_coins_seen
                             and not adr_coin['is_frozen_coin']
                             and adr_coin.get('slp_token') is None
+                            and not adr_coin.get('token_data')
                             and not adr_coin.get('coinbase')):
                         coins.append(adr_coin)
                         fuz_coins_seen.add(name)

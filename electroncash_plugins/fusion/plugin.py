@@ -132,6 +132,7 @@ def select_coins(wallet):
             # ineligible if not already flagged as such.
             good = good and (
                 i < 3  # must not have too many coins on the same address*
+                and not c['token_data']  # must not have a CashToken on it
                 and not c['slp_token']  # must not be SLP
                 and not c['is_frozen_coin']  # must not be frozen
                 and (not c['coinbase'] or c['height'] <= mincbheight)  # if coinbase -> must be mature coinbase
@@ -726,6 +727,10 @@ class FusionPlugin(BasePlugin):
                 return None
             inputs = tx.inputs()
             outputs = tx.outputs()
+            token_datas = tx.token_datas()
+            if any(td is not None for td in token_datas):
+                # A CashToken-containing txn can never be CashFusion
+                return False
             # We expect: OP_RETURN (4) FUZ\x00
             fuz_prefix = bytes((OpCodes.OP_RETURN, len(Protocol.FUSE_ID))) + Protocol.FUSE_ID
             # Step 1 - does it have the proper OP_RETURN lokad prefix?

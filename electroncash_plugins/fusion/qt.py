@@ -135,7 +135,8 @@ class Plugin(FusionPlugin, QObject):
             # that's a bug... all wallets should have this
             return
 
-        coins = wallet.get_utxos(addrs, exclude_frozen=True, mature=True, confirmed_only=True, exclude_slp=True)
+        coins = wallet.get_utxos(addrs, exclude_frozen=True, mature=True, confirmed_only=True, exclude_slp=True,
+                                 exclude_tokens=True)
 
         def start_fusion():
             def do_it(password):
@@ -303,12 +304,15 @@ class Plugin(FusionPlugin, QObject):
         fuse_depth = Conf(wallet).fuse_depth
         frozenstring = item.data(0, utxo_list.DataRoles.frozen_flags) or ""
         is_slp = 's' in frozenstring
+        is_cashtoken = 't' in frozenstring
         is_fused = self.is_fuz_coin(wallet, utxo, require_depth=fuse_depth-1)
         is_partially_fused = is_fused if fuse_depth <= 1 else self.is_fuz_coin(wallet, utxo)
 
         item.setIcon(col, QIcon())
         if is_slp:
             item.setText(col, _("SLP Token"))
+        elif is_cashtoken:
+            item.setText(col, _("CashToken"))
         elif is_fused:
             item.setText(col, _("Fused"))
             item.setIcon(col, icon_fusion_logo)
@@ -371,6 +375,7 @@ class Plugin(FusionPlugin, QObject):
                 for name, adr_coin in adr_coins.items():
                     if (name not in fuz_coins_seen
                             and not adr_coin['is_frozen_coin']
+                            and adr_coin.get('token_data') is None
                             and adr_coin.get('slp_token') is None
                             and not adr_coin.get('coinbase')):
                         coins.append(adr_coin)
@@ -385,7 +390,7 @@ class Plugin(FusionPlugin, QObject):
         conf = Conf(wallet)
         if not conf.spend_only_fused_coins:
             return
-        needs_fuz = [coin for coin in wallet.get_utxos(exclude_frozen=True, mature=True,
+        needs_fuz = [coin for coin in wallet.get_utxos(exclude_frozen=True, mature=True, exclude_tokens=True,
                                                        confirmed_only=bool(window.config.get('confirmed_only', False)))
                      if not self.is_fuz_coin(wallet, coin, require_depth=conf.fuse_depth-1)]
         total = sum(c['value'] for c in needs_fuz)
