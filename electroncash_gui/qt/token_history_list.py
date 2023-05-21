@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # Electron Cash - lightweight Bitcoin Cash client
-# Copyright (C) 2022 The Electron Cash Developers
+# Copyright (C) 2023 The Electron Cash Developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files

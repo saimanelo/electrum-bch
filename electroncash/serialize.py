@@ -2,7 +2,7 @@
 #
 # Electron Cash - lightweight Bitcoin Cash client
 # Based on Electrum Copyright (C) 2011 Thomas Voegtlin
-# Copyright (C) 2022 The Electron Cash Developers
+# Copyright (C) 2023 The Electron Cash Developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files

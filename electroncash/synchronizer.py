@@ -4,7 +4,7 @@
 # Copyright (C) 2014 Thomas Voegtlin
 #
 # Electron Cash - Bitcoin Cash thin client
-# Copyright (C) 2017-2022 The Electron Cash Developers
+# Copyright (C) 2017-2023 The Electron Cash Developers
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
