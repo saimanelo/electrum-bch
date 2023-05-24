@@ -144,5 +144,10 @@
         "s": "50002",
         "t": "50001",
         "version": "1.5.0"
+    },
+    "fulcrum.jettscythe.xyz": {
+        "pruning": "-",
+        "s": "50002"
+        "version": "1.5.0"
     }
 }
