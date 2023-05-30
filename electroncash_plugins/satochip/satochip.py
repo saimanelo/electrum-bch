@@ -360,6 +360,8 @@ class Satochip_KeyStore(Hardware_KeyStore):
         self.print_error('sign_transaction(): tx: '+ str(tx)) #debugSatochip
 
         client = self.get_client()
+        if (client.cc.needs_2FA==None):
+            (response, sw1, sw2, d)=client.cc.card_get_status()
 
         # outputs
         txOutputs= ''.join(tx.serialize_output(o) for o in tx.outputs())
@@ -402,22 +404,31 @@ class Satochip_KeyStore(Hardware_KeyStore):
                     pre_hash_hex= pre_hash.hex()
                     self.print_error('sign_transaction(): pre_tx_hex=', pre_tx_hex) #debugSatochip
                     self.print_error('sign_transaction(): pre_hash=', pre_hash_hex) #debugSatochip
-                    #(response, sw1, sw2) = client.cc.card_parse_transaction(pre_tx, True) # use 'True' since BCH use BIP143 as in Segwit...
-                    #print_error('[satochip] sign_transaction(): response= '+str(response)) #debugSatochip
-                    #(tx_hash, needs_2fa) = client.parser.parse_parse_transaction(response)
-                    (response, sw1, sw2, tx_hash, needs_2fa) = client.cc.card_parse_transaction(pre_tx, True) # use 'True' since BCH use BIP143 as in Segwit...
-                    tx_hash_hex= bytearray(tx_hash).hex()
-                    if pre_hash_hex!= tx_hash_hex:
-                        raise RuntimeError(f"[Satochip_KeyStore] Tx preimage mismatch: {pre_hash_hex} vs {tx_hash_hex}")
+                    
+                    # check whether the input i has cashtoken
+                    is_cashtoken = False
+                    if tx.token_datas()[i] is not None:
+                        is_cashtoken = (pre_tx[104] == 0xEF)
+
+                    if not is_cashtoken:     
+                        (response, sw1, sw2, tx_hash, needs_2fa) = client.cc.card_parse_transaction(pre_tx, True) # use 'True' since BCH use BIP143 as in Segwit...
+                        tx_hash_hex= bytearray(tx_hash).hex()
+                        if pre_hash_hex!= tx_hash_hex:
+                            raise RuntimeError(f"[Satochip_KeyStore] Tx preimage mismatch: {pre_hash_hex} vs {tx_hash_hex}")
 
                     # sign tx
                     keynbr= 0xFF #for extended key
-                    if needs_2fa:
+                    if client.cc.needs_2FA:
                         # format & encrypt msg
                         import json
                         coin_type= 145 #see https://github.com/satoshilabs/slips/blob/master/slip-0044.md
                         test_net= networks.net.TESTNET
-                        msg= {'action':"sign_tx", 'tx':pre_tx_hex, 'ct':coin_type, 'sw':True, 'tn':test_net, 'txo':txOutputs, 'ty':txin['type']}
+
+                        if not is_cashtoken:  
+                            msg= {'action':"sign_tx", 'tx':pre_tx_hex, 'ct':coin_type, 'sw':True, 'tn':test_net, 'txo':txOutputs, 'ty':txin['type']}
+                        else:
+                            msg= {'action':"sign_tx_hash", 'tx':pre_tx_hex, 'ct':coin_type, 'sw':True, 'tn':test_net, 'txo':txOutputs, 'ty':txin['type'], 'hash':pre_hash_hex, 'is_cashtoken':is_cashtoken}
+
                         msg=  json.dumps(msg)
                         (id_2FA, msg_out)= client.cc.card_crypt_transaction_2FA(msg, True)
                         d={}
@@ -458,9 +469,15 @@ class Satochip_KeyStore(Hardware_KeyStore):
                         chalresponse= list(bytes.fromhex(chalresponse))
                     else:
                         chalresponse= None
-                    (tx_sig, sw1, sw2) = client.cc.card_sign_transaction(keynbr, tx_hash, chalresponse)
-                    #self.print_error('sign_transaction(): sig=', bytes(tx_sig).hex()) #debugSatochip
-                    #todo: check sw1sw2 for error (0x9c0b if wrong challenge-response)
+
+                    if not is_cashtoken:    
+                        (tx_sig, sw1, sw2) = client.cc.card_sign_transaction(keynbr, tx_hash, chalresponse)
+                    else:
+                        (tx_sig, sw1, sw2) = client.cc.card_sign_transaction_hash(keynbr, list(pre_hash), chalresponse)
+
+                    # check sw1sw2 for error (0x9c0b if wrong challenge-response)
+                    if sw1 != 0x90 or sw2 != 0x00:
+                        self.give_error(f"Satochip failed to sign transaction with code {hex(256*sw1+sw2)}")
                     # enforce low-S signature (BIP 62)
                     tx_sig = bytearray(tx_sig)
                     r,s= get_r_and_s_from_der_sig(tx_sig)
