@@ -434,7 +434,8 @@ class Console(QtWidgets.QWidget):
 
     def completions(self):
         cmd = self.getCommand()
-        lastword = re.split(' |\(|\)',cmd)[-1]
+        # note for regex: new words start after ' ' or '(' or ')'
+        lastword = re.split(r'[ ()]', cmd)[-1]
         beginning = cmd[0:-len(lastword)]
 
         path = lastword.split('.')
