@@ -143,5 +143,10 @@
         "pruning": "-",
         "s": "50002",
         "version": "1.5.0"
+    },
+    "fulcrum.aglauck.com": {
+        "pruning": "-",
+        "s": "50002",
+        "version": "1.5.0"
     }
 }
