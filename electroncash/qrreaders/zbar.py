@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # Electron Cash - lightweight Bitcoin client
-# Copyright (C) 2019 Axel Gembe <derago@gmail.com>
+# Copyright (C) 2019, 2023 Axel Gembe <derago@gmail.com>
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
@@ -30,6 +30,7 @@ from typing import List
 from enum import IntEnum
 
 from . import MissingLib
+from .utils import find_center
 from ..util import print_error, is_verbose, _
 
 from .abstract_base import AbstractQrCodeReader, QrCodeResult
@@ -119,6 +120,10 @@ class ZbarQrCodeReader(AbstractQrCodeReader):
     Reader that uses libzbar
     """
 
+    @classmethod
+    def reader_name(cls) -> str:
+        return "ZBar"
+
     def __init__(self):
         if not LIBZBAR:
             raise MissingLib('Zbar library not found')
@@ -167,10 +172,7 @@ class ZbarQrCodeReader(AbstractQrCodeReader):
                 symbol_loc_y = LIBZBAR.zbar_symbol_get_loc_y(symbol, i)
                 symbol_loc.append((symbol_loc_x, symbol_loc_y))
 
-            # Find the center by getting the average values of the corners x and y coordinates
-            symbol_loc_sum_x = sum([l[0] for l in symbol_loc])
-            symbol_loc_sum_y = sum([l[1] for l in symbol_loc])
-            symbol_loc_center = (int(symbol_loc_sum_x / symbol_loc_len), int(symbol_loc_sum_y / symbol_loc_len))
+            symbol_loc_center = find_center(symbol_loc)
 
             res.append(QrCodeResult(symbol_data, symbol_loc_center, symbol_loc))
 

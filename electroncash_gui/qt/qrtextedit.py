@@ -2,10 +2,10 @@ import sys
 
 from electroncash.i18n import _
 from electroncash.plugins import run_hook
-from electroncash import util
+from electroncash import util, get_config
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
-from PyQt5.QtWidgets import QFileDialog, QAbstractButton, QWidget, QApplication, QMenu
+from PyQt5.QtWidgets import QFileDialog, QAbstractButton, QApplication, QMenu
 
 from .util import ButtonsTextEdit, MessageBoxMixin, ColorScheme
 
@@ -62,6 +62,7 @@ class ScanQRTextEdit(_QrCodeTextEdit, MessageBoxMixin):
         self.qr_button.setMenu(qr_menu)
         self.addButton(":icons/file.png", self.file_input, _("Read text or image file"))
         run_hook('scan_text_edit', self)
+        self.config = get_config()
 
     def file_input(self):
         fileName, __ = QFileDialog.getOpenFileName(self, _('Load a text file or scan an image for QR codes'))
@@ -106,7 +107,7 @@ class ScanQRTextEdit(_QrCodeTextEdit, MessageBoxMixin):
 
     def scan_qr_from_image(self, image):
         from electroncash.qrreaders import get_qr_reader
-        qr_reader = get_qr_reader()
+        qr_reader = get_qr_reader(self.config.get("qr_reader", None))
         if not qr_reader:
             self.show_error(_("Unable to scan image.") + "\n" +
                             _("The platform QR detection library is not available."))
