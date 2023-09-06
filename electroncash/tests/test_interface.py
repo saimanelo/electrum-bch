@@ -13,7 +13,10 @@ class TestInterfaceSSLVerify(unittest.TestCase):
             try:
                 i = interface.TcpConnection(server=server, queue=None, config_path=None)
                 s = i._get_socket_and_verify_ca_cert()
-                s.close()
+                if s is not None:
+                    s.close()
+                else:
+                    self.skipTest("This test requires an internet connection.")
                 return bool(s)
             except TimeoutError:
                 retries += 1
