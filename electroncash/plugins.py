@@ -265,7 +265,10 @@ class Plugins(DaemonThread):
             raise RuntimeError("%s implementation for %s plugin not found"
                                % (self.gui_name, name))
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        if sys.version_info >= (3, 10):
+            spec.loader.exec_module(module)
+        else:
+            module = spec.loader.load_module(full_name)
         plugin = module.Plugin(self, self.config, name)
         plugin.set_enabled_prefix(EXTERNAL_USE_PREFIX)
         self.add_jobs(plugin.thread_jobs())

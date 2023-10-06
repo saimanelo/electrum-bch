@@ -5152,7 +5152,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 run_hook('init_qt', gui_object)
 
         for i, descr in enumerate(plugins.internal_plugin_metadata.values()):
-            name = descr['__name__']
+            # descr["__name__"] is the fully qualified package name
+            # (electroncash_plugins.name)
+            name = descr["__name__"].split(".")[-1]
             p = plugins.get_internal_plugin(name)
             if descr.get('registers_keystore'):
                 continue
