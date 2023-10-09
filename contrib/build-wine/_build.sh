@@ -229,7 +229,11 @@ build_the_app() {
         # Install frozen dependencies
         info "Installing frozen dependencies ..."
         $PYTHON -m pip install --no-deps --no-warn-script-location -r "$here"/../deterministic-build/requirements.txt || fail "Failed to install requirements"
-        $PYTHON -m pip install --no-deps --no-warn-script-location -r "$here"/../deterministic-build/requirements-hw.txt || fail "Failed to install requirements-hw"
+        # Temporary fix for hidapi incompatibility with Cython 3
+        # See https://github.com/trezor/cython-hidapi/issues/155
+        # We use PIP_CONSTRAINT as an environment variable instead of command line flag because it gets passed to subprocesses
+        # like the isolated build environment pip uses for dependencies.
+        PIP_CONSTRAINT="$here/../requirements/build-constraint.txt" $PYTHON -m pip install --no-deps --no-warn-script-location -r "$here"/../deterministic-build/requirements-hw.txt || fail "Failed to install requirements-hw"
 
         pushd "$WINEPREFIX"/drive_c/electroncash
         $PYTHON setup.py install || fail "Failed setup.py install"
