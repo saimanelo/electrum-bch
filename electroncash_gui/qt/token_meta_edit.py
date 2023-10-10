@@ -282,7 +282,7 @@ class TokenMetaEditorForm(QtWidgets.QWidget, MessageBoxMixin, PrintError, OnDest
         self.close()
 
     def on_but_icon(self):
-        fn, filt = QtWidgets.QFileDialog.getOpenFileName(self, _("Open File"), "",
+        fn, filt = QtWidgets.QFileDialog.getOpenFileName(self, _("Open icon file"), "",
                                                          "Images (*.png *.svg *.jpg *.jpeg *.ico)")
         if not fn:
             return
