@@ -1677,7 +1677,7 @@ class ElectrumGui(PrintError):
         path = os.path.join(wallets.WalletsMgr.wallets_dir(), wallet_name)
         storage = WalletStorage(path, manual_upgrades=True)
         if not storage.file_exists():
-            onFailure("Wallet File Not Found")
+            onFailure(_("Wallet file not found"))
             return
 
         def DoSwicheroo(pw = None) -> None:
@@ -1740,7 +1740,7 @@ class ElectrumGui(PrintError):
     def show_wallet_share_actions(self, info : wallets.WalletsMgr.Info, vc : UIViewController = None, ipadAnchor : object = None, warnIfUnsafe : bool = True) -> None:
         if vc is None: vc = self.get_presented_viewcontroller()
         if not os.path.exists(info.full_path):
-            self.show_error("Wallet file not found", vc = vc)
+            self.show_error(_("Wallet file not found"), vc = vc)
             return
         if warnIfUnsafe:
             try:
@@ -1770,7 +1770,7 @@ class ElectrumGui(PrintError):
                     utils.show_share_actions(vc = waitDlg, fileName = fn, ipadAnchor = ipadAnchor, objectName = _('Wallet file'),
                                              finishedCompletion = lambda x: Dismiss())
                 else:
-                    def MyCompl() -> None: self.show_error("Could not copy wallet file", vc = vc)
+                    def MyCompl() -> None: self.show_error(_("Could not copy wallet file"), vc = vc)
                     Dismiss(MyCompl, False)
             except:
                 err = str(sys.exc_info()[1])
@@ -1862,7 +1862,7 @@ class ElectrumGui(PrintError):
             if not isinstance(storage, WalletStorage):
                 raise ValueError('usingStorage parameter needs to be a WalletStorage instance or a string path!')
             if not storage.file_exists():
-                raise WalletFileNotFound('Wallet File Not Found')
+                raise WalletFileNotFound(_('Wallet file not found'))
             wallet_name = os.path.split(storage.path)[-1]
             if not storage.is_encrypted():
                 callBack(None)

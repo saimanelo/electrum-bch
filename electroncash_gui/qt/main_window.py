@@ -583,7 +583,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             return
         if not os.path.exists(wallet_folder):
             wallet_folder = None
-        filename, __ = QFileDialog.getOpenFileName(self, "Select your wallet file", wallet_folder)
+        filename, __ = QFileDialog.getOpenFileName(self, _("Select your wallet file"), wallet_folder)
         if not filename:
             return
         if filename.lower().endswith('.txn'):
