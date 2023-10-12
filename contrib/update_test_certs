@@ -54,7 +54,7 @@ DOMAINNAME="selfsigned.$BASEDOMAIN"
 openssl genpkey -algorithm RSA -out "$FILENAME.key"
 openssl req -x509 -new -key "$FILENAME.key" -sha256 -out "$FILENAME.crt" -subj "/CN=$DOMAINNAME" -days $CERT_VALIDITY
 
-# Create a self-signed certificate / X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN
+# Create a certificate signed by the untrusted root and include the root in the bundle / X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN
 FILENAME="$OUTDIR/badchain.$BASEDOMAIN"
 DOMAINNAME="badchain.$BASEDOMAIN"
 openssl genpkey -algorithm RSA -out "$FILENAME.key"
