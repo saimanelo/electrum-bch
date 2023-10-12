@@ -1,4 +1,4 @@
-from .util import poll_for_answer, bitcoind_rpc_connection, EC_DAEMON_RPC_URL, docker_compose_file, fulcrum_service, SUPPORTED_PLATFORM
+from .util import poll_for_answer, get_bitcoind_rpc_connection, EC_DAEMON_RPC_URL, docker_compose_file, fulcrum_service, SUPPORTED_PLATFORM
 
 import pytest
 from typing import Any
@@ -9,7 +9,7 @@ from jsonrpcclient import request
 def test_addrequest(fulcrum_service: Any) -> None:
     """ Verify the `addrequest` RPC by creating a request, pay it and remove it """
 
-    bitcoind = bitcoind_rpc_connection()
+    bitcoind = get_bitcoind_rpc_connection()
 
     result = poll_for_answer(EC_DAEMON_RPC_URL, request('listrequests'))
     assert len(result) == 0
