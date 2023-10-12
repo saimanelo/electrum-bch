@@ -59,6 +59,7 @@ def poll_for_answer(url: Any, json_req: Any = None, expected_answer: Any = None,
             pass
         time.sleep(poll_interval)
         current = time.time()
+    raise TimeoutError("Timed out waiting for an answer")
 
 def get_bitcoind_rpc_connection() -> AuthServiceProxy:
     if _bitcoind is not None:
