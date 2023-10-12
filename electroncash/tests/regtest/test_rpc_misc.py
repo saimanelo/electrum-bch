@@ -1,4 +1,4 @@
-from .util import poll_for_answer, bitcoind_rpc_connection, EC_DAEMON_RPC_URL, docker_compose_file, fulcrum_service, SUPPORTED_PLATFORM
+from .util import poll_for_answer, get_bitcoind_rpc_connection, EC_DAEMON_RPC_URL, docker_compose_file, fulcrum_service, SUPPORTED_PLATFORM
 
 import pytest
 from typing import Any
@@ -30,7 +30,7 @@ def test_balance(fulcrum_service: Any) -> None:
     """ Verify the `getbalance` RPC """
     addr = poll_for_answer(EC_DAEMON_RPC_URL, request('getunusedaddress'))
 
-    bitcoind = bitcoind_rpc_connection()
+    bitcoind = get_bitcoind_rpc_connection()
 
     bitcoind.generatetoaddress(1, addr)
     result = poll_for_answer(EC_DAEMON_RPC_URL, request('getbalance'), expected_answer=('unmatured', '50'))

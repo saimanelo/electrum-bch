@@ -8,16 +8,16 @@ services:
     networks:
       - bitcoin
     ports:
-      - 18333:18334
+      - 18443
   fulcrum:
     image: cculianu/fulcrum:v1.9.0
     command: "Fulcrum /conf/fulcrum.conf"
     networks:
      - bitcoin
     ports:
-      - 51001:51001
-      - 51002:51002
-      - 8081:8080
+      - 51001
+      - 51002
+      - 8080
     depends_on:
     - bitcoind
     volumes:
