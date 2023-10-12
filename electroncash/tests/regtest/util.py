@@ -12,7 +12,7 @@ import pytest_docker
 import requests
 
 from bitcoinrpc.authproxy import AuthServiceProxy
-from jsonrpcclient import parse as rpc_parse, request
+from jsonrpcclient import parse as rpc_parse, request, Error as rpc_Error, Ok as rpc_Ok
 from jsonpath_ng import parse as path_parse
 
 _datadir = None
@@ -39,7 +39,11 @@ def poll_for_answer(url: Any, json_req: Any = None, expected_answer: Any = None,
                 if resp.status_code == 500:
                     retry = True
                 else:
-                    json_result = rpc_parse(resp.json()).result
+                    parsed = rpc_parse(resp.json())
+                    if isinstance(parsed, rpc_Ok):
+                        json_result = parsed.result
+                    else:
+                        raise RuntimeError(f"Unable to parse JSON-RPC: {parsed.message}")
 
             if expected_answer is not None and not retry:
                 path, answer = expected_answer
