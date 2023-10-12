@@ -131,6 +131,12 @@ class Plugins(DaemonThread):
                 d[key] = val  # rewrite translated string
                 d[ut_key] = ut_val # save untranslated metadata for later so that this function may be called again from GUI
 
+    @staticmethod
+    def _register_module(spec, module):
+        # sys.modules needs to be modified for relative imports to work
+        # see https://stackoverflow.com/a/50395128
+        sys.modules[spec.name] = module
+
     def load_internal_plugins(self):
         for loader, name, ispkg in pkgutil.iter_modules([self.internal_plugins_pkgpath]):
             # do not load deprecated plugins
@@ -142,9 +148,7 @@ class Plugins(DaemonThread):
                 raise Exception(f"Error pre-loading {full_name}: no spec")
             try:
                 module = importlib.util.module_from_spec(spec)
-                # sys.modules needs to be modified for relative imports to work
-                # see https://stackoverflow.com/a/50395128
-                sys.modules[spec.name] = module
+                self._register_module(spec, module)
                 spec.loader.exec_module(module)
             except Exception as e:
                 raise Exception(f"Error pre-loading {full_name}: {repr(e)}") from e
@@ -226,6 +230,7 @@ class Plugins(DaemonThread):
             raise RuntimeError("%s implementation for %s plugin not found"
                                % (self.gui_name, name))
         module = importlib.util.module_from_spec(spec)
+        self._register_module(spec, module)
         spec.loader.exec_module(module)
         plugin = module.Plugin(self, self.config, name)
         plugin.set_enabled_prefix(INTERNAL_USE_PREFIX)
@@ -265,6 +270,7 @@ class Plugins(DaemonThread):
             raise RuntimeError("%s implementation for %s plugin not found"
                                % (self.gui_name, name))
         module = importlib.util.module_from_spec(spec)
+        self._register_module(spec, module)
         if sys.version_info >= (3, 10):
             spec.loader.exec_module(module)
         else:
