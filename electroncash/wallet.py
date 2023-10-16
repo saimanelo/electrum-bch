@@ -1952,6 +1952,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     # Returned by get_history iff include_tokens arg is True
     TxHistory2 = namedtuple("TxHistory", TxHistory._fields + ("tokens_deltas", "tokens_balances"))
 
+    @profiler
     def get_history(self, domain=None, *, reverse=False, receives_before_sends=False,
                     include_tokens=False, include_tokens_balances=False) -> List[Union[TxHistory, TxHistory2]]:
         """Iff include_tokens=True, returns a list of TxHistory2, otherwise returns a list of TxHistory
@@ -2927,6 +2928,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 self.storage.put('frozen_coins', list(self.frozen_coins))
             return ok
 
+    @profiler
     def prepare_for_verifier(self):
         # review transactions that are in the history
         for addr, hist in self._history.items():
@@ -2936,11 +2938,14 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
         # if we are on a pruning server, remove unverified transactions
         with self.lock:
-            vr = list(self.verified_tx.keys()) + list(self.unverified_tx.keys())
-        for tx_hash in list(self.transactions):
+            vr = set(self.verified_tx.keys()) | set(self.unverified_tx.keys())
+        to_pop = []
+        for tx_hash in self.transactions.keys():
             if tx_hash not in vr:
-                self.print_error("removing transaction", tx_hash)
-                self.transactions.pop(tx_hash)
+                to_pop.append(tx_hash)
+        for tx_hash in to_pop:
+            self.print_error("removing transaction", tx_hash)
+            self.transactions.pop(tx_hash)
 
     def start_threads(self, network):
         self.network = network

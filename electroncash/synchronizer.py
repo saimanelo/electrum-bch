@@ -36,7 +36,7 @@ import warnings
 
 from .address import Address
 from .transaction import Transaction
-from .util import ThreadJob, bh2u, Monotonic
+from .util import ThreadJob, bh2u, Monotonic, profiler
 from . import networks
 from .bitcoin import InvalidXKeyFormat
 
@@ -356,6 +356,7 @@ class Synchronizer(ThreadJob):
             return True
         return False
 
+    @profiler
     def _initialize(self):
         """ Check the initial state of the wallet.  Subscribe to all its
         addresses, and request any transactions in its address history
