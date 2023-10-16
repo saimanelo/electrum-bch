@@ -1838,26 +1838,31 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # self.transactions, but instead rely on the unreferenced tx being
             # removed the next time the wallet is loaded in self.load_transactions()
 
-            for ser, hh in list(self.pruned_txo.items()):
+            to_pop = []
+            for ser, hh in self.pruned_txo.items():
                 if hh == tx_hash:
-                    self.pruned_txo.pop(ser)
+                    to_pop.append(ser)
                     self.pruned_txo_values.discard(hh)
+            for ser in to_pop:
+                self.pruned_txo.pop(ser, None)
             # add tx to pruned_txo, and undo the txi addition
             for next_tx, dd in self.txi.items():
-                for addr, l in list(dd.items()):
-                    ll = l[:]
-                    for item in ll:
-                        ser, v = item
+                to_pop = []
+                for addr, l in dd.items():
+                    del_idx = []
+                    for idx, (ser, v) in enumerate(l):
                         prev_hash, prev_n = ser.split(':')
                         if prev_hash == tx_hash:
                             self._addr_bal_cache.pop(addr, None)  # invalidate cache entry
-                            l.remove(item)
+                            del_idx.append(idx)
                             self.pruned_txo[ser] = next_tx
                             self.pruned_txo_values.add(next_tx)
+                    for ctr, idx in enumerate(del_idx):
+                        del l[idx - ctr]
                     if len(l) == 0:
-                        dd.pop(addr)
-                    else:
-                        dd[addr] = l
+                        to_pop.append(addr)
+                for addr in to_pop:
+                    dd.pop(addr, None)
             # undo the self.ct_txi addition
             empties = []
             for next_tx, addrmap in self.ct_txi.items():
