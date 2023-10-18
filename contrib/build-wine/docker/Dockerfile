@@ -53,7 +53,7 @@ RUN echo "78b185fabdb323971d13bd329fefc8038e08559aa51c4996de18db0639a51df6 /tmp/
         # xvfb is needed to launch the Visual Studio installer
         xvfb=2:21.1.4-2ubuntu1.7~22.04.1 \
         # winbind is needed for the Visual Studio installer and cl.exe PDB generation
-        winbind=2:4.15.13+dfsg-0ubuntu1.2
+        winbind=2:4.15.13+dfsg-0ubuntu1.4
 
 RUN rm -rf /var/lib/apt/lists/* && \
     apt-get autoremove -y && \
@@ -92,8 +92,8 @@ RUN wineboot && \
 ENV DBUS_FATAL_WARNINGS=0
 
 RUN wget https://aka.ms/vs/16/release/installer -O /tmp/vs_installer.opc && \
-    # As of 2023-07-20 the checksum has changed and is not the same as in winetricks anymore
-    echo "db8a3398c8acdfcc76618298b7fcc7493687649e2825d6684e2a030c222c1a1d /tmp/vs_installer.opc" | sha256sum -c - && \
+    # As of 2023-10-09 the checksum has changed and is not the same as in winetricks anymore
+    echo "0f0cc11f000593a064d419462a8467b529fed8075b21a605a40785baa3d2f611 /tmp/vs_installer.opc" | sha256sum -c - && \
     7z x -oopc /tmp/vs_installer.opc && rm /tmp/vs_installer.opc && \
     xvfb-run wine opc/Contents/vs_installer.exe install --quiet \
         --channelId VisualStudio.16.Release --channelUri "https://aka.ms/vs/16/release/channel" \
