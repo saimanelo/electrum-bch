@@ -1656,7 +1656,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         with self.lock:
             # HELPER FUNCTIONS
             def add_to_self_txi(tx_hash, addr, ser, v, token_data):
-                ''' addr must be 'is_mine' '''
+                """ addr must be 'is_mine' """
                 d = self.txi.get(tx_hash)
                 if d is None:
                     self.txi[tx_hash] = d = {}
@@ -1681,8 +1681,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     self.print_error(f"Adding CashTokens txi: {tx_hash} -> {addr} -> {prevout_hash} -> {n} -> {token_data!r}")
 
             def find_in_self_txo(prevout_hash: str, prevout_n: int) -> tuple:
-                """Returns a tuple of the (Address,value) for a given
-                prevout_hash:prevout_n, or (None, None) if not found. If valid
+                """Returns a tuple of the (Address, value, tokenData) for a given
+                prevout_hash:prevout_n, or (None, None, None) if not found. If valid
                 return, the Address object is found by scanning self.txo. The
                 lookup below is relatively fast in practice even on pathological
                 wallets."""
@@ -1692,7 +1692,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         if n == prevout_n:
                             token_data = self.ct_txo.get(prevout_hash, {}).get(addr2, {}).get(prevout_n)
                             return addr2, v, token_data
-                return (None, None, None)
+                return None, None, None
             def txin_get_info(txi):
                 prevout_hash = txi['prevout_hash']
                 prevout_n = txi['prevout_n']
