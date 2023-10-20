@@ -930,7 +930,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     def add_unverified_tx(self, tx_hash, tx_height):
         with self.lock:
-            if tx_height == 0 and tx_hash in self.verified_tx:
+            if tx_height <= 0 and tx_hash in self.verified_tx:
                 self.verified_tx.pop(tx_hash)
                 if self.verifier:
                     self.verifier.merkle_roots.pop(tx_hash, None)
@@ -1911,13 +1911,22 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     status = status[0]  # unpack status from tuple
                     self.network.trigger_callback('payment_received', self, addr, status)
 
+    @profiler
     def receive_history_callback(self, addr, hist, tx_fees):
+        hist_dict = {tx_hash: height for tx_hash, height in hist}
         hist_set = frozenset((tx_hash, height) for tx_hash, height in hist)
+        newly_confirmed_ct = 0
+        removed_ct = 0
         with self.lock:
             # First, find txns that are in the old history but no longer in the current history
             old_hist = self.get_address_history(addr)
             old_hist_set = frozenset((tx_hash, height) for tx_hash, height in old_hist)
             for tx_hash, height in old_hist_set - hist_set:
+                new_height = hist_dict.get(tx_hash)
+                if new_height is not None and height <= 0 < new_height:
+                    # This was a previously-known txn that just confirmed, skip removal
+                    newly_confirmed_ct += 1
+                    continue
                 s = self.tx_addr_hist.get(tx_hash)  # tx_hash -> Set[Address]
                 if s:
                     s.discard(addr)
@@ -1931,6 +1940,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     # storage, it merely removes it from the self.txi
                     # and self.txo dicts
                     self.remove_transaction(tx_hash)
+                    removed_ct += 1
             self._addr_bal_cache.pop(addr, None)  # unconditionally invalidate cache entry
             self._history[addr] = hist
 
@@ -1946,6 +1956,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
             # Store fees
             self.tx_fees.update(tx_fees)
+
+        if newly_confirmed_ct + removed_ct > 0:
+            self.print_error(f"tx history for {addr}, size: {len(hist)}, newly confirmed: {newly_confirmed_ct}, "
+                             f"removed: {removed_ct}")
 
         if self.network:
             self.network.trigger_callback('on_history', self)
