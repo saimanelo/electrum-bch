@@ -26,7 +26,7 @@
 from .util import *
 import electroncash.web as web
 from electroncash.i18n import _, ngettext
-from electroncash.util import timestamp_to_datetime, profiler, Weak
+from electroncash.util import timestamp_to_datetime, PrintError, profiler, Weak
 from electroncash.plugins import run_hook
 
 
@@ -43,7 +43,8 @@ TX_ICONS = [
     "confirmed.svg",
 ]
 
-class HistoryList(MyTreeWidget):
+
+class HistoryList(MyTreeWidget, PrintError):
     filter_columns = [2, 3, 4]  # Date, Description, Amount
     filter_data_columns = [0]  # Allow search on tx_hash (string)
     statusIcons = {}
@@ -65,6 +66,9 @@ class HistoryList(MyTreeWidget):
         self.itemChanged.connect(self.item_changed)
 
         self.has_unknown_balances = False
+
+    def diagnostic_name(self):
+        return f"{super().diagnostic_name()}/{self.wallet.diagnostic_name()}"
 
     def clean_up(self):
         self.cleaned_up = True

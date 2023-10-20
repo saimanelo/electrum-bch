@@ -105,6 +105,9 @@ class TokenList(MyTreeWidget, util.PrintError):
             self.header().setSectionResizeMode(col, QtWidgets.QHeaderView.Interactive)
         self.setTextElideMode(QtCore.Qt.ElideRight)
 
+    def diagnostic_name(self):
+        return f"{super().diagnostic_name()}/{self.wallet.diagnostic_name()}"
+
     def clean_up(self):
         self.cleaned_up = True
 

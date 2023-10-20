@@ -73,18 +73,26 @@ class WalletStorage(PrintError):
         self.modified = False
         self.pubkey = None
         self.raw = None
-        self._in_memory_only=in_memory_only
+        self._in_memory_only = in_memory_only
         if self.file_exists() and not self._in_memory_only:
             try:
                 with open(self.path, "r", encoding='utf-8') as f:
                     self.raw = f.read()
             except UnicodeDecodeError as e:
-                raise IOError("Error reading file: "+ str(e))
+                raise IOError("Error reading file: " + str(e))
             if not self.is_encrypted():
                 self.load_data(self.raw)
         else:
             # avoid new wallets getting 'upgraded'
             self.put('seed_version', FINAL_SEED_VERSION)
+
+    def diagnostic_name(self):
+        dname = super().diagnostic_name()
+        if not self.path:
+            bname = f"memory:{id(self)}"
+        else:
+            bname = os.path.basename(self.path)
+        return f"{dname}/{bname}"
 
     def load_data(self, s):
         try:

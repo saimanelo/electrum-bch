@@ -102,6 +102,9 @@ class TokenHistoryList(MyTreeWidget, PrintError):
         for col in range(self.Col.fungible_amount, len(headers)):
             self.header().resizeSection(col, 100)
 
+    def diagnostic_name(self):
+        return f"{super().diagnostic_name()}/{self.wallet.diagnostic_name()}"
+
     def clean_up(self):
         self.cleaned_up = True
 

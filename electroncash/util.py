@@ -349,10 +349,17 @@ def constant_time_compare(val1, val2):
 # decorator that prints execution time
 def profiler(func):
     def do_profile(args, kw_args):
+        dname = ""
+        if len(args) > 0:
+            slf = args[0]
+            # Attach args[0].diagnostic_name() to the log line if we are bound to a method of a PrintError subclass
+            if isinstance(slf, PrintError):
+                dname = slf.diagnostic_name()
         t0 = time.time()
         o = func(*args, **kw_args)
         t = time.time() - t0
-        print_error("[profiler]", func.__qualname__, "%.4f"%t)
+        dname = f" [{dname}]" if dname else dname
+        print_error(f"[profiler]{dname} {func.__qualname__} {t:.4f}")
         return o
     return lambda *args, **kw_args: do_profile(args, kw_args)
 

@@ -34,12 +34,13 @@ from electroncash.i18n import _
 from electroncash.address import Address
 from electroncash.plugins import run_hook
 import electroncash.web as web
-from electroncash.util import profiler
+from electroncash.util import PrintError, profiler
 from electroncash import networks
 from enum import IntEnum
 from . import cashacctqt
 
-class AddressList(MyTreeWidget):
+
+class AddressList(MyTreeWidget, PrintError):
     filter_columns = [0, 1, 2]  # Address, Label, Balance
 
     _ca_minimal_chash_updated_signal = pyqtSignal(object, str)
@@ -75,6 +76,9 @@ class AddressList(MyTreeWidget):
         if not __class__._cashacct_icon:
             # lazy init the icon
             __class__._cashacct_icon = QIcon(":icons/cashacct-logo.png")  # TODO: make this an SVG
+
+    def diagnostic_name(self):
+        return f"{super().diagnostic_name()}/{self.wallet.diagnostic_name()}"
 
     def clean_up(self):
         self.cleaned_up = True

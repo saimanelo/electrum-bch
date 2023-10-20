@@ -781,7 +781,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.cashacct.save()
 
     def basename(self):
-        return os.path.basename(self.storage.path) if self.storage.path else "memory"
+        return os.path.basename(self.storage.path) if self.storage.path else f"memory:{id(self.storage)}"
 
     def save_addresses(self):
         addr_dict = {
@@ -1839,14 +1839,15 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             # removed the next time the wallet is loaded in self.load_transactions()
 
             to_pop = []
-            for ser, hh in self.pruned_txo.items():
+            for ser, hh in self.pruned_txo.items():  # "prevout_hash:n" (ser) -> tx_hash
                 if hh == tx_hash:
                     to_pop.append(ser)
                     self.pruned_txo_values.discard(hh)
             for ser in to_pop:
                 self.pruned_txo.pop(ser, None)
             # add tx to pruned_txo, and undo the txi addition
-            for next_tx, dd in self.txi.items():
+            empties = []
+            for next_tx, dd in self.txi.items():  # "next_tx_hash" -> Address > List[Tuple[ser, value]]
                 to_pop = []
                 for addr, l in dd.items():
                     del_idx = []
@@ -1863,9 +1864,13 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         to_pop.append(addr)
                 for addr in to_pop:
                     dd.pop(addr, None)
+                if not dd:
+                    empties.append(next_tx)
+            for next_tx in empties:
+                self.txi.pop(next_tx, None)
             # undo the self.ct_txi addition
             empties = []
-            for next_tx, addrmap in self.ct_txi.items():
+            for next_tx, addrmap in self.ct_txi.items():  # next_tx_hash -> Address -> tx_hash -> n -> tokenOutput
                 addrmap.pop(tx_hash, None)
                 if not addrmap:
                     empties.append(next_tx)
@@ -1873,7 +1878,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 self.ct_txi.pop(next_tx, None)
 
             # invalidate addr_bal_cache for outputs involving this tx
-            d = self.txo.get(tx_hash, {})
+            d = self.txo.get(tx_hash, {})  # tx_hash -> Address -> List[Tuple[N, value, is_cb]]
             for addr in d:
                 self._addr_bal_cache.pop(addr, None)  # invalidate cache entry
 
@@ -1912,7 +1917,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             old_hist = self.get_address_history(addr)
             old_hist_set = frozenset((tx_hash, height) for tx_hash, height in old_hist)
             for tx_hash, height in old_hist_set - hist_set:
-                s = self.tx_addr_hist.get(tx_hash)
+                s = self.tx_addr_hist.get(tx_hash)  # tx_hash -> Set[Address]
                 if s:
                     s.discard(addr)
                 if not s:
