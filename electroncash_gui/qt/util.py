@@ -934,6 +934,7 @@ class ButtonsTextEdit(OverlayControlMixin, QPlainTextEdit):
         self.setText = self.setPlainText
         self.text = self.toPlainText
 
+
 class TaskThread(PrintError, QThread):
     '''Thread that runs background tasks.  Callbacks are guaranteed
     to happen in the context of its parent.'''

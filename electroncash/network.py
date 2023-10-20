@@ -221,7 +221,7 @@ class Network(util.DaemonThread):
           is_connected(), set_parameters(), stop()
     """
 
-    INSTANCE = None # Only 1 Network instance is ever alive during app lifetime (it's a singleton)
+    INSTANCE = None  # Only 1 Network instance is ever alive during app lifetime (it's a singleton)
 
     # These defaults are decent for the desktop app. Other platforms may
     # override these at any time (iOS sets these to lower values).
@@ -235,6 +235,7 @@ class Network(util.DaemonThread):
         if config is None:
             config = {}  # Do not use mutables as default values!
         util.DaemonThread.__init__(self)
+        self.name = "Net" + self.name
         self.config = SimpleConfig(config) if isinstance(config, dict) else config
         self.num_server = 10 if not self.config.get('oneserver') else 0
         self.blockchains = blockchain.read_blockchains(self.config)
@@ -307,7 +308,7 @@ class Network(util.DaemonThread):
         if Network.INSTANCE:
             # This happens on iOS which kills and restarts the daemon on app sleep/wake
             self.print_error("A new instance has started and is replacing the old one.")
-        Network.INSTANCE = self # This implicitly should force stale instances to eventually del
+        Network.INSTANCE = self  # This implicitly should force stale instances to eventually del
         self.start_network(deserialize_server(self.default_server)[2], deserialize_proxy(self.config.get('proxy')))
 
     def on_tor_port_changed(self, controller: TorController):
@@ -329,8 +330,8 @@ class Network(util.DaemonThread):
             this code isn't normally reached, except for in the iOS
             implementation, which kills the daemon and the network before app
             sleep, and creates a new daemon and netwok on app awake. """
-        if Network.INSTANCE is self: # This check is important for iOS
-            Network.INSTANCE = None # <--- Not normally reached, but here for completeness.
+        if Network.INSTANCE is self:  # This check is important for iOS
+            Network.INSTANCE = None  # <--- Not normally reached, but here for completeness.
         else:
             self.print_error("Stale instance deallocated")
         if hasattr(super(), '__del__'):

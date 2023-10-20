@@ -1505,7 +1505,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return self._history.get(address, [])
 
     def _clean_pruned_txo_thread(self):
-        ''' Runs in the thread self.pruned_txo_cleaner_thread which is only
+        """ Runs in the thread self.pruned_txo_cleaner_thread which is only
         active if self.network. Cleans the self.pruned_txo dict and the
         self.pruned_txo_values set of spends that are not relevant to the
         wallet. The processing below is needed because as of 9/16/2019, Electron
@@ -1513,7 +1513,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         have an unparseable address (txi['address'] is None) into the dict
         self.pruned_txo. This is necessary for handling tx's with esoteric p2sh
         scriptSigs and detecting balance changes properly for txins
-        containing such scriptSigs. See #895. '''
+        containing such scriptSigs. See #895. """
+        me = threading.current_thread()
+        fname = "clean_pruned_txo"
         def deser(ser):
             prevout_hash, prevout_n = ser.split(':')
             prevout_n = int(prevout_n)
@@ -1538,12 +1540,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         def can_do_work():
             return bool(txid_n and self.is_up_to_date())
         debug = False  # set this to true here to get more verbose output
-        me = threading.current_thread()
         q = me.q
         me.txid_n = txid_n = defaultdict(set)  # dict of prevout_hash -> set of prevout_n (int)
         last = time.time()
         try:
-            self.print_error(f"{me.name}: thread started")
+            self.print_error(f"{fname}: thread started")
             with self.lock:
                 # Setup -- grab whatever was already in pruned_txo at thread
                 # start
@@ -1578,12 +1579,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         with self.lock:
                             defunct = ser not in self.pruned_txo
                         if defunct:
-                            #self.print_error(f"{me.name}: skipping already-cleaned", ser)
+                            #self.print_error(f"{fname}: skipping already-cleaned", ser)
                             rm(ser, False, tup=(prevout_hash, prevout_n))
                             defunct_ct += 1
                             continue
                 if defunct_ct and debug:
-                    self.print_error(f"{me.name}: DEBUG", defunct_ct, "defunct txos removed in", time.time()-t0, "secs")
+                    self.print_error(f"{fname}: DEBUG", defunct_ct, "defunct txos removed in", time.time()-t0, "secs")
                 ct = 0
                 for prevout_hash, s in txid_n.copy().items():
                     try:
@@ -1594,10 +1595,10 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         if isinstance(tx, Transaction):
                             tx = Transaction(tx.raw)  # take a copy
                         else:
-                            if debug: self.print_error(f"{me.name}: DEBUG retrieving txid", prevout_hash, "...")
+                            if debug: self.print_error(f"{fname}: DEBUG retrieving txid", prevout_hash, "...")
                             t1 = time.time()
                             tx = Transaction(self.network.synchronous_get(('blockchain.transaction.get', [prevout_hash])))
-                            if debug: self.print_error(f"{me.name}: DEBUG network retrieve took", time.time()-t1, "secs")
+                            if debug: self.print_error(f"{fname}: DEBUG network retrieve took", time.time()-t1, "secs")
                             # Paranoia; intended side effect of the below assert
                             # is to also deserialize the tx (by calling the slow
                             # .txid()) which ensures the tx from the server
@@ -1605,7 +1606,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             assert prevout_hash == tx.txid(), "txid mismatch"
                             Transaction.tx_cache_put(tx, prevout_hash)  # will cache a copy
                     except Exception as e:
-                        self.print_error(f"{me.name}: Error retrieving txid", prevout_hash, ":", repr(e))
+                        self.print_error(f"{fname}: Error retrieving txid", prevout_hash, ":", repr(e))
                         if not keep_running():  # in case we got a network timeout *and* the wallet was closed
                             return
                         continue
@@ -1616,7 +1617,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         try:
                             txo = tx.outputs()[prevout_n]
                         except IndexError:
-                            self.print_error(f"{me.name}: ERROR -- could not find output", ser)
+                            self.print_error(f"{fname}: ERROR -- could not find output", ser)
                             rm(ser, True, tup=(prevout_hash, prevout_n))
                             continue
                         _typ, addr, v = txo
@@ -1628,7 +1629,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                                 rm_pruned_too = True
                         rm(ser, rm_pruned_too, tup=(prevout_hash, prevout_n))
                         if rm_pruned_too and debug:
-                            self.print_error(f"{me.name}: DEBUG removed", ser)
+                            self.print_error(f"{fname}: DEBUG removed", ser)
                 if ct:
                     with self.lock:
                         # Save changes to storage -- this is cheap and doesn't
@@ -1636,15 +1637,15 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         # 'dirty' for when wallet.storage.write() is called
                         # later.
                         self.storage.put('pruned_txo', self.pruned_txo)
-                    self.print_error(f"{me.name}: removed", ct,
+                    self.print_error(f"{fname}: removed", ct,
                                      "(non-relevant) pruned_txo's in",
                                      f'{time.time()-t0:3.2f}', "seconds")
         except:
             import traceback
-            self.print_error(f"{me.name}:", traceback.format_exc())
+            self.print_error(f"{fname}:", traceback.format_exc())
             raise
         finally:
-            self.print_error(f"{me.name}: thread exiting")
+            self.print_error(f"{fname}: thread exiting")
 
     def add_transaction(self, tx_hash, tx):
         if not tx.inputs():
@@ -3016,7 +3017,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             self.storage.write()
 
     def start_pruned_txo_cleaner_thread(self):
-        self.pruned_txo_cleaner_thread = threading.Thread(target=self._clean_pruned_txo_thread, daemon=True, name='clean_pruned_txo_thread')
+        self.pruned_txo_cleaner_thread = threading.Thread(target=self._clean_pruned_txo_thread, daemon=True)
         self.pruned_txo_cleaner_thread.q = queue.Queue()
         self.pruned_txo_cleaner_thread.start()
 

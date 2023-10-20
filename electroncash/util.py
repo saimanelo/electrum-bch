@@ -173,6 +173,7 @@ class DebugMem(ThreadJob):
             self.mem_stats()
             self.next_time = time.time() + self.interval
 
+
 class DaemonThread(threading.Thread, PrintError):
     """ daemon thread that terminates cleanly """
 
@@ -296,16 +297,13 @@ class Monotonic:
                 with lock: return incr()
             self.__call__ = incr_with_lock
 
-_human_readable_thread_ids = defaultdict(Monotonic(locking=False))  # locking not needed on Monotonic instance as we lock the dict anyway
-_human_readable_thread_ids_lock = threading.Lock()
 _t0 = time.time()
 def print_error(*args):
     if not is_verbose: return
     if verbose_thread_id:
-        with _human_readable_thread_ids_lock:
-            args = ("|%02d|"%_human_readable_thread_ids[threading.get_ident()], *args)
+        args = (f"|{threading.current_thread().name}|", *args)
     if verbose_timestamps:
-        args = ("|%7.3f|"%(time.time() - _t0), *args)
+        args = (f"|{time.time() - _t0:7.3f}|", *args)
     print_stderr(*args)
 
 _print_lock = threading.RLock()  # use a recursive lock in extremely rare case a signal handler does a print_error while lock held by same thread as sighandler invocation's thread
