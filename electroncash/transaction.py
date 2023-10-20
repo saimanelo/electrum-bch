@@ -1383,6 +1383,8 @@ class OPReturn:
     class TooLarge(Error):
         """ thrown when the OP_RETURN for a tx is >220 bytes """
 
+    no_length_check = False
+
     @staticmethod
     def output_for_stringdata(op_return):
         from .i18n import _
@@ -1390,7 +1392,7 @@ class OPReturn:
             raise OPReturn.Error('OP_RETURN parameter needs to be of type str!')
         op_return_code = "OP_RETURN "
         op_return_encoded = op_return.encode('utf-8')
-        if len(op_return_encoded) > 220:
+        if not OPReturn.no_length_check and len(op_return_encoded) > 220:
             raise OPReturn.TooLarge(_("OP_RETURN message too large, needs to be no longer than 220 bytes"))
         op_return_payload = op_return_encoded.hex()
         script = op_return_code + op_return_payload
