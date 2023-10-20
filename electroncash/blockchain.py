@@ -45,10 +45,10 @@ CHUNK_ACCEPTED = 0
 
 HEADER_SIZE = 80  # bytes
 MAX_BITS = 0x1d00ffff
+MAX_BITS_REGTEST = 0x207fffff
 # see https://gitlab.com/bitcoin-cash-node/bitcoin-cash-node/-/blob/v24.0.0/src/chainparams.cpp#L98
 # Note: If we decide to support REGTEST this will need to come from regtest's networks.py params!
 MAX_TARGET = 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff  # compact: 0x1d00ffff
-MAX_BITS_REGTEST = 0x207fffff # FIXME: if it is always constant, move to network constants
 # indicates no header in data file
 NULL_HEADER = bytes([0]) * HEADER_SIZE
 NULL_HASH_BYTES = bytes([0]) * 32
@@ -308,9 +308,14 @@ class Blockchain(util.PrintError):
         # We do not need to check the block difficulty if the chain of linked header hashes was proven correct against our checkpoint.
         if bits is not None:
             # checkpoint BitcoinCash fork block
-            if (header.get('block_height') == networks.net.BITCOIN_CASH_FORK_BLOCK_HEIGHT and hash_header(header) != networks.net.BITCOIN_CASH_FORK_BLOCK_HASH):
-                err_str = "block at height %i is not cash chain fork block. hash %s" % (header.get('block_height'), hash_header(header))
+            block_height = header.get('block_height')
+            if (block_height == networks.net.BITCOIN_CASH_FORK_BLOCK_HEIGHT
+                    and hash_header(header) != networks.net.BITCOIN_CASH_FORK_BLOCK_HASH):
+                err_str = f"block at height {block_height} is not cash chain fork block. hash {hash_header(header)}"
                 raise VerifyError(err_str)
+            if networks.net.REGTEST:
+                # Accept any header on regtest
+                return
             if bits != header.get('bits'):
                 raise VerifyError("bits mismatch: %s vs %s" % (bits, header.get('bits')))
             target = bits_to_target(bits)
@@ -503,7 +508,10 @@ class Blockchain(util.PrintError):
             anchor = prev
 
     def get_bits(self, header, chunk=None):
-        '''Return bits for the given height.'''
+        """Return bits for the given height."""
+        if networks.net.REGTEST:
+            # Regtest always has constant low-diff
+            return MAX_BITS_REGTEST
         # Difficulty adjustment interval?
         height = header['block_height']
         # Genesis
@@ -587,8 +595,6 @@ class Blockchain(util.PrintError):
                 return MAX_BITS
             # special case for a newly started testnet (such as testnet4)
             if height < N_BLOCKS:
-                if networks.net.REGTEST:
-                    return MAX_BITS_REGTEST
                 return MAX_BITS
             return self.read_header(height // N_BLOCKS * N_BLOCKS, chunk)['bits']
 
