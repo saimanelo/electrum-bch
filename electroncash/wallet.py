@@ -1970,7 +1970,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
         if newly_confirmed_ct + removed_ct > 0:
             self.print_error(f"tx history for {addr}, size: {len(hist)}, newly confirmed: {newly_confirmed_ct}, "
-                             f"no longer has unconf. parents: {no_longer_has_unconf_ancestors_status_ct}, "
+                             f"unconf parent status upgraded: {no_longer_has_unconf_ancestors_status_ct}, "
                              f"removed: {removed_ct}")
 
         if self.network:
