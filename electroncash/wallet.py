@@ -1916,6 +1916,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         hist_dict = {tx_hash: height for tx_hash, height in hist}
         hist_set = frozenset((tx_hash, height) for tx_hash, height in hist)
         newly_confirmed_ct = 0
+        no_longer_has_unconf_ancestors_status_ct = 0
         removed_ct = 0
         with self.lock:
             # First, find txns that are in the old history but no longer in the current history
@@ -1923,10 +1924,20 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             old_hist_set = frozenset((tx_hash, height) for tx_hash, height in old_hist)
             for tx_hash, height in old_hist_set - hist_set:
                 new_height = hist_dict.get(tx_hash)
-                if new_height is not None and height <= 0 < new_height:
-                    # This was a previously-known txn that just confirmed, skip removal
-                    newly_confirmed_ct += 1
+                if new_height is not None and height <= 0 <= new_height:
+                    if new_height > 0:
+                        # This was a previously-known mempool txn that confirmed
+                        newly_confirmed_ct += 1
+                    else:
+                        # This was a previously-known txn that had height -1 and now has height 0;
+                        # in other words: ancestor unconfirmed status for this txn has been upgraded
+                        # to "no unconf. ancestors".
+                        no_longer_has_unconf_ancestors_status_ct += 1
+                    # In either case, skip removal if confirmed or if unconf parent status changes
                     continue
+                # If we get here the txn in question either disappeared we reorged in some way
+                # such that height associated with the txn has changed. Best thing to do is remove
+                # (and add it again if need be later).
                 s = self.tx_addr_hist.get(tx_hash)  # tx_hash -> Set[Address]
                 if s:
                     s.discard(addr)
@@ -1959,6 +1970,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
         if newly_confirmed_ct + removed_ct > 0:
             self.print_error(f"tx history for {addr}, size: {len(hist)}, newly confirmed: {newly_confirmed_ct}, "
+                             f"no longer has unconf. parents: {no_longer_has_unconf_ancestors_status_ct}, "
                              f"removed: {removed_ct}")
 
         if self.network:

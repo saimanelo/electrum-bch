@@ -314,7 +314,7 @@ class Blockchain(util.PrintError):
                 err_str = f"block at height {block_height} is not cash chain fork block. hash {hash_header(header)}"
                 raise VerifyError(err_str)
             if networks.net.REGTEST:
-                # Accept any header on regtest
+                # No PoW check for regtest, accept header at this point.
                 return
             if bits != header.get('bits'):
                 raise VerifyError("bits mismatch: %s vs %s" % (bits, header.get('bits')))
