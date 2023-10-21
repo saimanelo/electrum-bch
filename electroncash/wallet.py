@@ -1913,8 +1913,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
     @profiler
     def receive_history_callback(self, addr, hist, tx_fees):
-        hist_dict = {tx_hash: height for tx_hash, height in hist}
         hist_set = frozenset((tx_hash, height) for tx_hash, height in hist)
+        hist_dict: Optional[Dict[str, int]] = None
         newly_confirmed_ct = 0
         no_longer_has_unconf_ancestors_status_ct = 0
         removed_ct = 0
@@ -1923,6 +1923,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             old_hist = self.get_address_history(addr)
             old_hist_set = frozenset((tx_hash, height) for tx_hash, height in old_hist)
             for tx_hash, height in old_hist_set - hist_set:
+                if hist_dict is None:
+                    # Lazily init the hist_dict only if we need it
+                    hist_dict = {tx_hash: height for tx_hash, height in hist}
                 new_height = hist_dict.get(tx_hash)
                 if new_height is not None and height <= 0 <= new_height:
                     if new_height > 0:
