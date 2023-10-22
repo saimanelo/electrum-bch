@@ -47,7 +47,7 @@ class App : Application() {
         if (ACRA.isACRASenderServiceProcess()) return
 
         if (BuildConfig.testnet) {
-            libNetworks.callAttr("set_testnet")
+            libNetworks.callAttr("set_testnet4")
         }
 
         val config = initSettings()

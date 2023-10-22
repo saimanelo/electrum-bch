@@ -2,18 +2,36 @@ package org.electroncash.electroncash3
 
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.content.res.AppCompatResources
 import com.chaquo.python.PyObject
-import kotlinx.android.synthetic.main.fusion.*
-import kotlinx.android.synthetic.main.transaction_detail.*
-import kotlinx.android.synthetic.main.transactions.*
+import org.electroncash.electroncash3.databinding.RequestListBinding
+import org.electroncash.electroncash3.databinding.TransactionDetailBinding
+import org.electroncash.electroncash3.databinding.TransactionsBinding
 import kotlin.math.roundToInt
 
 
 class TransactionsFragment : ListFragment(R.layout.transactions, R.id.rvTransactions) {
+    private var _binding: TransactionsBinding? = null
+    private val binding get() = _binding!!
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        _binding = TransactionsBinding.inflate(inflater, container, false)
+        val view = binding.root
+        return view
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
 
     override fun onListModelCreated(listModel: ListModel) {
         with (listModel) {
@@ -25,13 +43,13 @@ class TransactionsFragment : ListFragment(R.layout.transactions, R.id.rvTransact
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        btnSend.setOnClickListener {
+        binding.btnSend.setOnClickListener {
             try {
                 showDialog(this, SendDialog())
             } catch (e: ToastException) { e.show() }
         }
-        btnRequest.setOnClickListener { showDialog(this, NewRequestDialog()) }
-        btnFusion.setOnClickListener {
+        binding.btnRequest.setOnClickListener { showDialog(this, NewRequestDialog()) }
+        binding.btnFusion.setOnClickListener {
             showFusionFragment()
         }
     }
@@ -85,6 +103,9 @@ class TransactionModel(wallet: PyObject, val txHistory: PyObject) : ListItemMode
 
 
 class TransactionDialog : DetailDialog() {
+    private var _binding: TransactionDetailBinding? = null
+    private val binding get() = _binding!!
+
     val txid by lazy { arguments!!.getString("txid")!! }
     val tx by lazy {
         // Transaction lookup sometimes fails during sync.
@@ -94,40 +115,41 @@ class TransactionDialog : DetailDialog() {
     val txInfo by lazy { wallet.callAttr("get_tx_info", tx)!! }
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
-        builder.setView(R.layout.transaction_detail)
+        _binding = TransactionDetailBinding.inflate(LayoutInflater.from(context))
+        builder.setView(binding.root)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok, {_, _ ->
-                setDescription(wallet, txid, etDescription.text.toString())
+                setDescription(wallet, txid, binding.etDescription.text.toString())
             })
     }
 
     override fun onShowDialog() {
-        btnExplore.setOnClickListener { exploreTransaction(activity!!, txid) }
-        btnCopy.setOnClickListener { copyToClipboard(txid, R.string.transaction_id) }
+        binding.btnExplore.setOnClickListener { exploreTransaction(activity!!, txid) }
+        binding.btnCopy.setOnClickListener { copyToClipboard(txid, R.string.transaction_id) }
 
-        tvTxid.text = txid
+        binding.tvTxid.text = txid
 
         // For outgoing transactions, the list view includes the fee in the amount, but the
         // detail view does not.
-        tvAmount.text = ltr(formatSatoshisAndUnit(txInfo.get("amount")?.toLong(), signed=true))
-        tvTimestamp.text = ltr(formatTime(txInfo.get("timestamp")?.toLong()))
-        tvStatus.text = txInfo.get("status")!!.toString()
+        binding.tvAmount.text = ltr(formatSatoshisAndUnit(txInfo.get("amount")?.toLong(), signed=true))
+        binding.tvTimestamp.text = ltr(formatTime(txInfo.get("timestamp")?.toLong()))
+        binding.tvStatus.text = txInfo.get("status")!!.toString()
 
         val size = tx.callAttr("estimated_size").toInt()
-        tvSize.text = getString(R.string.bytes, size)
+        binding.tvSize.text = getString(R.string.bytes, size)
 
         val fee = txInfo.get("fee")?.toLong()
         if (fee == null) {
-            tvFee.text = getString(R.string.Unknown)
+            binding.tvFee.text = getString(R.string.Unknown)
         } else {
             val feeSpb = (fee.toDouble() / size.toDouble()).roundToInt()
-            tvFee.text = String.format("%s (%s)",
+            binding.tvFee.text = String.format("%s (%s)",
                                        getString(R.string.sats_per, feeSpb),
                                        ltr(formatSatoshisAndUnit(fee)))
         }
     }
 
     override fun onFirstShowDialog() {
-        etDescription.setText(txInfo.get("label")!!.toString())
+        binding.etDescription.setText(txInfo.get("label")!!.toString())
     }
 }

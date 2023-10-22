@@ -2,14 +2,13 @@ package org.electroncash.electroncash3
 
 import android.os.Bundle
 import android.util.*
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
 import com.chaquo.python.PyObject
-import kotlinx.android.synthetic.main.contact_detail.*
-import kotlinx.android.synthetic.main.contacts.*
-import kotlinx.android.synthetic.main.fusion.*
-import kotlinx.android.synthetic.main.fusion_settings.*
-import kotlinx.android.synthetic.main.show_master_key.*
+import org.electroncash.electroncash3.databinding.FusionBinding
+import org.electroncash.electroncash3.databinding.FusionSettingsBinding
 
 
 val fusion = daemonModel.daemon.get("plugins")!!.callAttr("find_plugin", "fusion")
@@ -23,6 +22,23 @@ val FUSIONTYPES = HashMap<Int, String>() .apply {
 
 
 class FusionFragment : ListFragment(R.layout.fusion, R.id.rvFusion)  {
+    private var _binding: FusionBinding? = null
+    private val binding get() = _binding!!
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        _binding = FusionBinding.inflate(LayoutInflater.from(context))
+        val view = binding.root
+        return view
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
 
     override fun onListModelCreated(listModel: ListModel) {
         with (listModel) {
@@ -34,13 +50,13 @@ class FusionFragment : ListFragment(R.layout.fusion, R.id.rvFusion)  {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        btnFusionSettings.setOnClickListener { showDialog(this, FusionSettingsDialog()) }
-        btnActivateFusion.setOnClickListener { toggleFusion() }
+        binding.btnFusionSettings.setOnClickListener { showDialog(this, FusionSettingsDialog()) }
+        binding.btnActivateFusion.setOnClickListener { toggleFusion() }
 
         if (fusion.callAttr("is_autofusing", wallet).toBoolean()){
-            btnActivateFusion.setImageResource(R.drawable.ic_pause_circle_24dp)
+            binding.btnActivateFusion.setImageResource(R.drawable.ic_pause_circle_24dp)
         } else {
-            btnActivateFusion.setImageResource(R.drawable.ic_not_started_24dp)
+            binding.btnActivateFusion.setImageResource(R.drawable.ic_not_started_24dp)
         }
     }
 
@@ -51,12 +67,12 @@ class FusionFragment : ListFragment(R.layout.fusion, R.id.rvFusion)  {
         val is_autofusing = fusion.callAttr("is_autofusing", this.wallet).toBoolean()
         if (is_autofusing) {
             fusion.callAttr("disable_autofusing", this.wallet)
-            btnActivateFusion.setImageResource(R.drawable.ic_not_started_24dp)
+            binding.btnActivateFusion.setImageResource(R.drawable.ic_not_started_24dp)
         }
         else {
             showDialog(this, FusionPasswordDialog())
             if (!fusion.callAttr("is_autofusing", this.wallet).toBoolean()){
-                btnActivateFusion.setImageResource(R.drawable.ic_pause_circle_24dp)
+                binding.btnActivateFusion.setImageResource(R.drawable.ic_pause_circle_24dp)
             }
         }
     }
@@ -69,10 +85,10 @@ class FusionFragment : ListFragment(R.layout.fusion, R.id.rvFusion)  {
     fun warnIfTorUnvailable() {
         val torAvailable = fusion.callAttr("scan_torport")
         if (torAvailable == null) {
-            tvFusion.text = getString(R.string.tor_not)
+            binding.tvFusion.text = getString(R.string.tor_not)
         }
         else {
-            tvFusion.text = getString(R.string.list_of)
+            binding.tvFusion.text = getString(R.string.list_of)
         }
     }
 }
@@ -103,10 +119,13 @@ class FusionModel(wallet: PyObject, val fusionObject: PyObject) : ListItemModel(
 
 
 class FusionSettingsDialog: DetailDialog() {
+    private var _binding: FusionSettingsBinding? = null
+    private val binding get() = _binding!!
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
+        _binding = FusionSettingsBinding.inflate(LayoutInflater.from(context))
         builder.setTitle(R.string.fusion_settings)
-            .setView(R.layout.fusion_settings)
+            .setView(binding.root)
             .setPositiveButton(R.string.save, null)
             .setNegativeButton(R.string.cancel, null)
     }
@@ -124,29 +143,29 @@ class FusionSettingsDialog: DetailDialog() {
         fusionTypes.add(getString(R.string.normal))
         fusionTypes.add(getString(R.string.Fan_out))
         fusionTypes.add(getString(R.string.consolidate))
-        spFusionType.adapter = SimpleArrayAdapter(context!!, fusionTypes)
+        binding.spFusionType.adapter = SimpleArrayAdapter(context!!, fusionTypes)
 
-        tvFusionUrl.setText(serverURL)
-        tvFusionPort.setText(serverPort)
-        swFusionUseSSL.isChecked = serverUseSSL
+        binding.tvFusionUrl.setText(serverURL)
+        binding.tvFusionPort.setText(serverPort)
+        binding.swFusionUseSSL.isChecked = serverUseSSL
 
         val fusionMode = walletConf.get("fusion_mode").toString()
         for ((key, value) in FUSIONTYPES){
             if (fusionMode == value) {
-                spFusionType.setSelection(key)
+                binding.spFusionType.setSelection(key)
             }
         }
 
         val fusionDepths: MutableList<String> = (0..10).map { it.toString() }.toMutableList()
         fusionDepths[0] = getString(R.string.fuse_forever)
-        spFusionDepth.adapter = SimpleArrayAdapter(context!!, fusionDepths)
+        binding.spFusionDepth.adapter = SimpleArrayAdapter(context!!, fusionDepths)
 
         val fusionDepth = walletConf.get("fuse_depth")!!.toInt()
-        spFusionDepth.setSelection(fusionDepth)
+        binding.spFusionDepth.setSelection(fusionDepth)
 
 
         val spendOnlyFusedCoins = walletConf.get("spend_only_fused_coins")!!.toBoolean()
-        swFusionSpendOnlyFusedCoins.isChecked = spendOnlyFusedCoins
+        binding.swFusionSpendOnlyFusedCoins.isChecked = spendOnlyFusedCoins
 
 
 
@@ -155,12 +174,12 @@ class FusionSettingsDialog: DetailDialog() {
 
     fun saveSettings() {
 
-        val serverUrl = tvFusionUrl.text.toString()
-        val serverPort = tvFusionPort.text.toString().toInt()
-        val serverUseSSL = swFusionUseSSL.isChecked
-        val selectedFusionTypePosition = spFusionType.selectedItemPosition
-        val selectedFusionDepthPosition = spFusionDepth.selectedItemPosition
-        val spendOnlyFusedCoins = swFusionSpendOnlyFusedCoins.isChecked
+        val serverUrl = binding.tvFusionUrl.text.toString()
+        val serverPort = binding.tvFusionPort.text.toString().toInt()
+        val serverUseSSL = binding.swFusionUseSSL.isChecked
+        val selectedFusionTypePosition = binding.spFusionType.selectedItemPosition
+        val selectedFusionDepthPosition = binding.spFusionDepth.selectedItemPosition
+        val spendOnlyFusedCoins = binding.swFusionSpendOnlyFusedCoins.isChecked
 
         val walletConf = fusion.callAttr("get_wallet_conf", this.wallet)
 

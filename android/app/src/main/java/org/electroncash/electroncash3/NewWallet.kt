@@ -4,22 +4,25 @@ import android.app.Dialog
 import android.content.Intent
 import android.os.Bundle
 import android.text.Selection
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
+import androidx.viewbinding.ViewBinding
 import com.chaquo.python.Kwarg
 import com.chaquo.python.PyException
 import com.chaquo.python.PyObject
 import com.google.zxing.integration.android.IntentIntegrator
-import kotlinx.android.synthetic.main.choose_keystore.*
-import kotlinx.android.synthetic.main.multisig_cosigners.*
-import kotlinx.android.synthetic.main.show_master_key.*
-import kotlinx.android.synthetic.main.wallet_new.*
-import kotlinx.android.synthetic.main.wallet_new_2.*
+import org.electroncash.electroncash3.databinding.ChooseKeystoreBinding
+import org.electroncash.electroncash3.databinding.MultisigCosignersBinding
+import org.electroncash.electroncash3.databinding.ShowMasterKeyBinding
+import org.electroncash.electroncash3.databinding.WalletNew2Binding
+import org.electroncash.electroncash3.databinding.WalletNewBinding
 import kotlin.properties.Delegates.notNull
 
 
@@ -31,30 +34,48 @@ val COSIGNER_OFFSET = 2 // min. number of multisig cosigners = 2
 val SIGNATURE_OFFSET = 1 // min. number of req. multisig signatures = 1
 
 class NewWalletDialog1 : AlertDialogFragment() {
+    private var _binding: WalletNewBinding? = null
+    private val binding get() = _binding!!
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        super.onCreateView(inflater, container, savedInstanceState)
+        return binding.root
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
+
     override fun onBuildDialog(builder: AlertDialog.Builder) {
+        _binding = WalletNewBinding.inflate(LayoutInflater.from(context))
         builder.setTitle(R.string.New_wallet)
-            .setView(R.layout.wallet_new)
+            .setView(binding.root)
             .setPositiveButton(R.string.next, null)
             .setNegativeButton(R.string.cancel, null)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        spnWalletType.adapter = MenuAdapter(context!!, R.menu.wallet_kind)
+        binding.spnWalletType.adapter = MenuAdapter(context!!, R.menu.wallet_kind)
     }
 
     override fun onShowDialog() {
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             try {
-                val name = etName.text.toString()
+                val name = binding.etName.text.toString()
                 validateWalletName(name)
-                val password = confirmPassword(dialog)
+                val password = confirmPassword(dialog, binding.etNewPassword, binding.etConfirmPassword)
                 val arguments = Bundle().apply {
                     putString("name", name)
                     putString("password", password)
                 }
 
-                val nextDialog = when (spnWalletType.selectedItemId.toInt()) {
+                val nextDialog = when (binding.spnWalletType.selectedItemId.toInt()) {
                     R.id.menuStandardWallet -> {
                         KeystoreDialog()
                     }
@@ -65,7 +86,7 @@ class NewWalletDialog1 : AlertDialogFragment() {
                         NewWalletImportDialog()
                     }
                     else -> {
-                        throw Exception("Unknown item: ${spnWalletType.selectedItem}")
+                        throw Exception("Unknown item: ${binding.spnWalletType.selectedItem}")
                     }
                 }
                 showDialog(this, nextDialog.apply { setArguments(arguments) })
@@ -107,10 +128,10 @@ fun validateWalletName(name: String) {
 
 
 // Also called from PasswordChangeDialog.
-fun confirmPassword(dialog: Dialog): String {
-    val password = dialog.etNewPassword.text.toString()
+fun confirmPassword(dialog: Dialog, etNewPassword: EditText, etConfirmPassword: EditText): String {
+    val password = etNewPassword.text.toString()
     if (password.isEmpty()) throw ToastException(R.string.Enter_password, Toast.LENGTH_SHORT)
-    if (password != dialog.etConfirmPassword.text.toString()) {
+    if (password != etConfirmPassword.text.toString()) {
         throw ToastException(R.string.wallet_passwords)
     }
     return password
@@ -118,11 +139,29 @@ fun confirmPassword(dialog: Dialog): String {
 
 // Choose the way of generating the wallet (new seed, import seed, etc.)
 class KeystoreDialog : AlertDialogFragment() {
+    private var _binding: ChooseKeystoreBinding? = null
+    private val binding get() = _binding!!
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        super.onCreateView(inflater, container, savedInstanceState)
+        return binding.root
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
+
     override fun onBuildDialog(builder: AlertDialog.Builder) {
+        _binding = ChooseKeystoreBinding.inflate(LayoutInflater.from(context))
         builder.setTitle(R.string.New_wallet)
-                .setView(R.layout.choose_keystore)
-                .setPositiveButton(android.R.string.ok, null)
-                .setNegativeButton(R.string.back, null)
+            .setView(binding.root)
+            .setPositiveButton(android.R.string.ok, null)
+            .setNegativeButton(R.string.back, null)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -142,12 +181,12 @@ class KeystoreDialog : AlertDialogFragment() {
         val keystoreMenu: Int
         if (keystores != null && keystores.size != 0) {
             keystoreMenu = R.menu.cosigner_type
-            keystoreDesc.setText(R.string.add_a)
+            binding.keystoreDesc.setText(R.string.add_a)
         } else {
-            keystoreDesc.setText(R.string.do_you_want_to_create)
+            binding.keystoreDesc.setText(R.string.do_you_want_to_create)
             keystoreMenu = R.menu.wallet_type
         }
-        spnType.adapter = MenuAdapter(context!!, keystoreMenu)
+        binding.spnType.adapter = MenuAdapter(context!!, keystoreMenu)
     }
 
     override fun onShowDialog() {
@@ -155,7 +194,7 @@ class KeystoreDialog : AlertDialogFragment() {
             try {
                 val nextDialog: DialogFragment
                 val nextArguments = Bundle(arguments)
-                val keystoreType = spnType.selectedItemId.toInt()
+                val keystoreType = binding.spnType.selectedItemId.toInt()
                 if (keystoreType in listOf(R.id.menuCreateSeed, R.id.menuRestoreSeed)) {
                     nextDialog = NewWalletSeedDialog()
                     val seed = if (keystoreType == R.id.menuCreateSeed)
@@ -165,7 +204,7 @@ class KeystoreDialog : AlertDialogFragment() {
                 } else if (keystoreType in listOf(R.id.menuImportMaster)) {
                     nextDialog = NewWalletImportMasterDialog()
                 } else {
-                    throw Exception("Unknown item: ${spnType.selectedItem}")
+                    throw Exception("Unknown item: ${binding.spnType.selectedItem}")
                 }
                 nextDialog.setArguments(nextArguments)
                 showDialog(this, nextDialog)
@@ -182,9 +221,27 @@ private fun multisigTitle(arguments: Bundle) =
 
 abstract class NewWalletDialog2 : TaskLauncherDialog<PyObject?>() {
     var input: String by notNull()
+    private var _binding: WalletNew2Binding? = null
+    public val binding get() = _binding!!
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        super.onCreateView(inflater, container, savedInstanceState)
+        return binding.root
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
-        builder.setView(R.layout.wallet_new_2)
+        _binding = WalletNew2Binding.inflate(LayoutInflater.from(context))
+        builder.setTitle(R.string.New_wallet)
+            .setView(binding.root)
             .setPositiveButton(android.R.string.ok, null)
             .setNegativeButton(R.string.back, null)
 
@@ -198,7 +255,7 @@ abstract class NewWalletDialog2 : TaskLauncherDialog<PyObject?>() {
     }
 
     override fun onPreExecute() {
-        input = etInput.text.toString()
+        input = binding.etInput.text.toString()
     }
 
     override fun doInBackground(): PyObject? {
@@ -288,21 +345,21 @@ class NewWalletSeedDialog : NewWalletDialog2() {
 
     override fun onShowDialog() {
         super.onShowDialog()
-        setupSeedDialog(this)
+        setupSeedDialog(this, binding)
         if (arguments!!.getString("seed") == null) {  // Restore from seed
-            bip39Panel.visibility = View.VISIBLE
-            val bip39Listener = { etDerivation.isEnabled = swBip39.isChecked }
-            swBip39.setOnCheckedChangeListener { _, _ -> bip39Listener() }
+            binding.bip39Panel.visibility = View.VISIBLE
+            val bip39Listener = { binding.etDerivation.isEnabled = binding.swBip39.isChecked }
+            binding.swBip39.setOnCheckedChangeListener { _, _ -> bip39Listener() }
             bip39Listener()
         }
     }
 
     override fun onPreExecute() {
         super.onPreExecute()
-        passphrase = etPassphrase.text.toString()
-        bip39 = swBip39.isChecked
+        passphrase = binding.etPassphrase.text.toString()
+        bip39 = binding.swBip39.isChecked
         if (bip39) {
-            derivation = etDerivation.text.toString()
+            derivation = binding.etDerivation.text.toString()
         }
     }
 
@@ -338,7 +395,7 @@ class NewWalletImportDialog : NewWalletDialog2() {
 
     override fun onShowDialog() {
         super.onShowDialog()
-        tvPrompt.setText(R.string.enter_a_list_of_bitcoin)
+        binding.tvPrompt.setText(R.string.enter_a_list_of_bitcoin)
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { scanQR(this) }
     }
 
@@ -377,7 +434,7 @@ class NewWalletImportDialog : NewWalletDialog2() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (result != null && result.contents != null) {
-            appendLine(etInput, result.contents)
+            appendLine(binding.etInput, result.contents)
         } else {
             super.onActivityResult(requestCode, resultCode, data)
         }
@@ -411,7 +468,7 @@ class NewWalletImportMasterDialog : NewWalletDialog2() {
             getString(R.string.to_create_a_watching) + " " +
             getString(R.string.to_create_a_spending)
         }
-        tvPrompt.setText(keyPrompt)
+        binding.tvPrompt.setText(keyPrompt)
 
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { scanQR(this) }
     }
@@ -419,8 +476,8 @@ class NewWalletImportMasterDialog : NewWalletDialog2() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (result != null && result.contents != null) {
-            etInput.setText(result.contents)
-            etInput.setSelection(result.contents.length)
+            binding.etInput.setText(result.contents)
+            binding.etInput.setSelection(result.contents.length)
         } else {
             super.onActivityResult(requestCode, resultCode, data)
         }
@@ -442,32 +499,33 @@ class NewWalletImportMasterDialog : NewWalletDialog2() {
 }
 
 
-fun setupSeedDialog(fragment: AlertDialogFragment) {
+fun setupSeedDialog(fragment: AlertDialogFragment, binding: WalletNew2Binding) {
+
     with (fragment) {
         val seed = fragment.arguments!!.getString("seed")
         if (seed == null) {
             // Import
-            tvPrompt.setText(R.string.please_enter_your_seed_phrase)
+            binding.tvPrompt.setText(R.string.please_enter_your_seed_phrase)
         } else {
             // Generate or display
-            tvPrompt.setText(seedAdvice(seed))
-            etInput.setText(seed)
-            etInput.setFocusable(false)
+            binding.tvPrompt.setText(seedAdvice(seed))
+            binding.etInput.setText(seed)
+            binding.etInput.setFocusable(false)
         }
 
         val passphrase = fragment.arguments!!.getString("passphrase")
         if (passphrase == null) {
             // Import or generate
-            passphrasePanel.visibility = View.VISIBLE
-            tvPassphrasePrompt.setText(app.getString(R.string.you_may_extend) + " " +
+            binding.passphrasePanel.visibility = View.VISIBLE
+            binding.tvPassphrasePrompt.setText(app.getString(R.string.you_may_extend) + " " +
                                        app.getString(R.string.if_you_are))
         } else {
             // Display
             if (passphrase.isNotEmpty()) {
-                passphrasePanel.visibility = View.VISIBLE
-                tvPassphrasePrompt.setText(R.string.passphrase)
-                etPassphrase.setText(passphrase)
-                etPassphrase.setFocusable(false)
+                binding.passphrasePanel.visibility = View.VISIBLE
+                binding.tvPassphrasePrompt.setText(R.string.passphrase)
+                binding.etPassphrase.setText(passphrase)
+                binding.etPassphrase.setFocusable(false)
             }
         }
     }
@@ -475,27 +533,31 @@ fun setupSeedDialog(fragment: AlertDialogFragment) {
 
 // Choose the number of multi-sig wallet cosigners
 class CosignerDialog : AlertDialogFragment() {
+    private var _binding: MultisigCosignersBinding? = null
+    private val binding get() = _binding!!
+
     override fun onBuildDialog(builder: AlertDialog.Builder) {
+        _binding = MultisigCosignersBinding.inflate(LayoutInflater.from(context))
         builder.setTitle(R.string.Multi_signature)
-                .setView(R.layout.multisig_cosigners)
+                .setView(binding.root)
                 .setPositiveButton(R.string.next, null)
                 .setNegativeButton(R.string.cancel, null)
     }
 
     val numCosigners: Int
-        get() = sbCosigners.progress + COSIGNER_OFFSET
+        get() = binding.sbCosigners.progress + COSIGNER_OFFSET
 
     val numSignatures: Int
-        get() = sbSignatures.progress + SIGNATURE_OFFSET
+        get() = binding.sbSignatures.progress + SIGNATURE_OFFSET
 
     override fun onFirstShowDialog() {
         super.onFirstShowDialog()
 
-        with (sbCosigners) {
+        with (binding.sbCosigners) {
             progress = 0
         }
 
-        with (sbSignatures) {
+        with (binding.sbSignatures) {
             progress = numCosigners - SIGNATURE_OFFSET
             max = numCosigners - SIGNATURE_OFFSET
         }
@@ -506,7 +568,7 @@ class CosignerDialog : AlertDialogFragment() {
         updateUi()
 
         // Handle the total number of cosigners
-        with (sbCosigners) {
+        with (binding.sbCosigners) {
             max = MAX_COSIGNERS - COSIGNER_OFFSET
 
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -520,7 +582,7 @@ class CosignerDialog : AlertDialogFragment() {
         }
 
         // Handle the number of required signatures
-        with (sbSignatures) {
+        with (binding.sbSignatures) {
             setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                     updateUi()
@@ -551,9 +613,9 @@ class CosignerDialog : AlertDialogFragment() {
     }
 
     private fun updateUi() {
-        tvCosigners.text = getString(R.string.from_cosigners, numCosigners)
-        tvSignatures.text = getString(R.string.require_signatures, numSignatures)
-        sbSignatures.max = numCosigners - SIGNATURE_OFFSET
+        binding.tvCosigners.text = getString(R.string.from_cosigners, numCosigners)
+        binding.tvSignatures.text = getString(R.string.require_signatures, numSignatures)
+        binding.sbSignatures.max = numCosigners - SIGNATURE_OFFSET
     }
 }
 
@@ -561,23 +623,27 @@ class CosignerDialog : AlertDialogFragment() {
  * View and copy the master public key of the (multisig) wallet.
  */
 class MasterPublicKeyDialog : AlertDialogFragment() {
+    private var _binding: ShowMasterKeyBinding? = null
+    private val binding get() = _binding!!
+
     override fun onBuildDialog(builder: AlertDialog.Builder) {
-        builder.setView(R.layout.show_master_key)
+        _binding = ShowMasterKeyBinding.inflate(LayoutInflater.from(context))
+        builder.setView(binding.root)
                 .setPositiveButton(R.string.next, null)
                 .setNegativeButton(R.string.back, null)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        fabCopyMasterKey.setOnClickListener {
-            copyToClipboard(walletMasterKey.text, R.string.Master_public_key)
+        binding.fabCopyMasterKey.setOnClickListener {
+            copyToClipboard(binding.walletMasterKey.text, R.string.Master_public_key)
         }
     }
 
     override fun onShowDialog() {
         super.onShowDialog()
-        walletMasterKey.setText(arguments!!.getString("masterKey"))
-        walletMasterKey.setFocusable(false)
+        binding.walletMasterKey.setText(arguments!!.getString("masterKey"))
+        binding.walletMasterKey.setFocusable(false)
 
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             dismiss()
