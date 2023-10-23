@@ -26,6 +26,7 @@ class ContactsFragment : ListFragment(R.layout.contacts, R.id.rvContacts) {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
+        super.onCreateView(inflater, container, savedInstanceState)
         _binding = ContactsBinding.inflate(LayoutInflater.from(context))
         return binding.root
     }

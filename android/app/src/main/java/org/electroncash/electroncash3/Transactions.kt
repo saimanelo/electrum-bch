@@ -23,9 +23,9 @@ class TransactionsFragment : ListFragment(R.layout.transactions, R.id.rvTransact
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        _binding = TransactionsBinding.inflate(inflater, container, false)
-        val view = binding.root
-        return view
+        super.onCreateView(inflater, container, savedInstanceState)
+        _binding = TransactionsBinding.inflate(LayoutInflater.from(context))
+        return binding.root
     }
 
     override fun onDestroyView() {
@@ -56,7 +56,8 @@ class TransactionsFragment : ListFragment(R.layout.transactions, R.id.rvTransact
 
     private fun showFusionFragment() {
         activity!!.supportFragmentManager.beginTransaction()
-            .replace(this.id, FusionFragment()).commitNow()
+            .replace(this.id, FusionFragment::class.java.getDeclaredConstructor().newInstance())
+            .commitNow()
     }
 
     override fun onCreateAdapter() = TransactionsAdapter(this)

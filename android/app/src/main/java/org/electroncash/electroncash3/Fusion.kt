@@ -30,9 +30,9 @@ class FusionFragment : ListFragment(R.layout.fusion, R.id.rvFusion)  {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
+        super.onCreateView(inflater, container, savedInstanceState)
         _binding = FusionBinding.inflate(LayoutInflater.from(context))
-        val view = binding.root
-        return view
+        return binding.root
     }
 
     override fun onDestroyView() {

@@ -29,18 +29,14 @@ import androidx.core.content.FileProvider
 import androidx.core.view.MenuCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.observe
 import com.chaquo.python.Kwarg
 import com.chaquo.python.PyException
 import com.chaquo.python.PyObject
 import org.electroncash.electroncash3.databinding.MainBinding
-import org.electroncash.electroncash3.databinding.PasswordBinding
 import org.electroncash.electroncash3.databinding.PasswordChangeBinding
-import org.electroncash.electroncash3.databinding.TransactionDetailBinding
 import org.electroncash.electroncash3.databinding.WalletExportBinding
 import org.electroncash.electroncash3.databinding.WalletInformationBinding
 import org.electroncash.electroncash3.databinding.WalletNew2Binding
-import org.electroncash.electroncash3.databinding.WalletNewBinding
 import org.electroncash.electroncash3.databinding.WalletOpenBinding
 import org.electroncash.electroncash3.databinding.WalletRenameBinding
 import java.io.File
@@ -90,7 +86,8 @@ class MainActivity : AppCompatActivity(R.layout.main) {
         }
         super.onCreate(if (!cleanStart) state else null)
         binding = MainBinding.inflate(layoutInflater)
-        val view = binding.root
+        setContentView(binding.root)
+
         setSupportActionBar(binding.toolbar)
         supportActionBar!!.apply {
             setDisplayHomeAsUpEnabled(true)
@@ -134,7 +131,6 @@ class MainActivity : AppCompatActivity(R.layout.main) {
         if (state != null) {
             onRestoreInstanceState(state)
         }
-        setContentView(view)
     }
 
     fun refresh() {
@@ -152,7 +148,7 @@ class MainActivity : AppCompatActivity(R.layout.main) {
         var fusionFragmentIsVisibile : Boolean = false
         val fragments: List<Fragment> = supportFragmentManager.getFragments()
         for (fragment in fragments) {
-            if (fragment != null && fragment.isVisible() && fragment is FusionFragment) {
+            if (fragment.isVisible() && fragment is FusionFragment) {
                 fusionFragmentIsVisibile = true
             }
         }
@@ -360,7 +356,7 @@ class MainActivity : AppCompatActivity(R.layout.main) {
         if (frag != null) {
             return frag
         } else {
-            frag = FRAGMENTS[id]!!.java.newInstance()
+            frag = FRAGMENTS[id]!!.java.getDeclaredConstructor().newInstance()
             supportFragmentManager.beginTransaction()
                 .add(binding.flContent.id, frag, fragTag(id))
                 .commitNow()
