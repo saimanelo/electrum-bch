@@ -1188,6 +1188,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 label2 = QLabel("⚠" + _("This HW wallet cannot sign CashToken inputs; sending tokens to this wallet"
                                         " should be avoided."))
                 label2.setStyleSheet(ColorScheme.YELLOW.as_stylesheet())
+                label2.setWordWrap(True)
                 grid.addWidget(label2, row, 1, 1, -1)
                 label.setBuddy(label2)
                 label.setDisabled(True)
