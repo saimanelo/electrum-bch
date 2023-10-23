@@ -963,9 +963,11 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
         menu.exec_(global_pos)
 
     def _add_addr_to_io_menu_lists_for_widget(self, addr, show_list, copy_list, widget):
+        hide_token_aware = False
         if hasattr(addr, 'to_ui_string'):
             addr_text = addr.to_ui_string()
             if isinstance(addr, Address) and self.wallet.is_mine(addr):
+                hide_token_aware = self.wallet.is_hw_without_cashtoken_support()
                 show_list += [ ( _("Address Details"), lambda: self._open_internal_link(addr_text) ) ]
                 addr_URL = web.BE_URL(self.main_window.config, 'addr', addr)
                 if addr_URL:
@@ -977,7 +979,7 @@ class TxDialog(QDialog, MessageBoxMixin, PrintError):
             else:
                 action_text = _("Copy Address")
             copy_list += [ ( action_text, lambda: self._copy_to_clipboard(addr_text, widget) ) ]
-            if isinstance(addr, Address):
+            if isinstance(addr, Address) and not hide_token_aware:
                 token_text = addr.to_token_string()
                 if token_text != addr_text:
                     copy_list += [(_("Copy Address") + ' ' + _("(token-aware)"),

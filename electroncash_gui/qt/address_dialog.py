@@ -68,14 +68,15 @@ class AddressDialog(PrintError, WindowModalDialog):
         tooltip = _('This is the token-aware version of this address.')
         lbl = QLabel(_("Token Address:"))
         lbl.setToolTip(tooltip)
-        vbox.addWidget(lbl)
         self.tok_addr_e = ButtonsLineEdit()
         icon = ":icons/qrcode_white.svg" if ColorScheme.dark_scheme else ":icons/qrcode.svg"
         self.tok_addr_e.addButton(icon, self.show_token_addr_qr, _("Show QR Code"))
         self.tok_addr_e.addCopyButton()
         self.tok_addr_e.setReadOnly(True)
         self.tok_addr_e.setToolTip(tooltip)
-        vbox.addWidget(self.tok_addr_e)
+        if not self.wallet.is_hw_without_cashtoken_support():
+            vbox.addWidget(lbl)
+            vbox.addWidget(self.tok_addr_e)
 
         self.update_addr()
 

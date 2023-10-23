@@ -276,6 +276,7 @@ class AddressList(MyTreeWidget, PrintError):
             return
         from electroncash.wallet import Multisig_Wallet
         is_multisig = isinstance(self.wallet, Multisig_Wallet)
+        is_hw_no_tokens = self.wallet.is_hw_without_cashtoken_support()
         can_delete = self.wallet.can_delete_address()
         selected = self.selectedItems()
         multi_select = len(selected) > 1
@@ -320,7 +321,7 @@ class AddressList(MyTreeWidget, PrintError):
             if alt_copy_text and alt_column_title:
                 # Add 'Copy Legacy Address' and 'Copy Cash Address' alternates if right-click is on column 0
                 menu.addAction(_("Copy {}").format(alt_column_title), lambda: doCopy(alt_copy_text))
-            if token_text:
+            if token_text and not is_hw_no_tokens:
                 menu.addAction(_("Copy {}").format(_("Token Address")), lambda: doCopy(token_text))
             a = menu.addAction(_('Details') + "...", lambda: self.parent.show_address(addr))
             if col == 0:

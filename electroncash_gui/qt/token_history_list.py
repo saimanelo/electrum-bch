@@ -359,3 +359,8 @@ class TokenHistoryList(MyTreeWidget, PrintError):
             txid = item.data(0, self.DataRoles.tx_hash)
             h_label = self.wallet.get_label(txid)
             item.setText(self.Col.description, h_label)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        if e.isAccepted():
+            self.parent.warn_about_cashtokens_if_hw_wallet()

@@ -674,3 +674,8 @@ class TokenList(MyTreeWidget, util.PrintError):
                 if tx:
                     label = self.wallet.get_label(tx_hash) or None
                     self.parent.show_transaction(tx, label)
+
+    def showEvent(self, e):
+        super().showEvent(e)
+        if e.isAccepted():
+            self.parent.warn_about_cashtokens_if_hw_wallet()

@@ -1182,12 +1182,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             label.setBuddy(self.receive_address_e)
             grid.addWidget(label, row, 0)
             row += 1
-            grid.addWidget(self.receive_token_address_e, row, 1, 1, -1)
             label = HelpLabel(_('&Token address'), msg2)
-            label.setBuddy(self.receive_token_address_e)
             grid.addWidget(label, row, 0)
+            if self.wallet.is_hw_without_cashtoken_support():
+                label2 = QLabel("⚠" + _("This HW wallet cannot sign CashToken inputs; sending tokens to this wallet"
+                                        " should be avoided."))
+                label2.setStyleSheet(ColorScheme.YELLOW.as_stylesheet())
+                grid.addWidget(label2, row, 1, 1, -1)
+                label.setBuddy(label2)
+                label.setDisabled(True)
+            else:
+                grid.addWidget(self.receive_token_address_e, row, 1, 1, -1)
+                label.setBuddy(self.receive_token_address_e)
             row += 1
-
 
         # Cash Account for this address (if any)
         msg = _("The Cash Account (if any) associated with this address. It doesn't get saved with the request, but it is shown here for your convenience.\n\nYou may use the Cash Accounts button to register a new Cash Account for this address.")
@@ -5405,7 +5412,27 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 # never ask checked
                 self.config.set_key('cashaccounts_never_show_send_tab_hint', True)
 
+    def warn_about_cashtokens_if_hw_wallet(self):
+        """ Warn if CashTokens are dangerous for this HW wallet because it cannot sign CashToken inputs. """
+        if (self.isVisible() and self.wallet.is_hw_without_cashtoken_support()
+                and not self.wallet.storage.get('suppress_hw_wallet_cashtokens_warning', False)):
+            ok, chk = self.show_warning(
+                _("This HW wallet cannot sign CashToken inputs; sending tokens to this wallet should be avoided."),
+                detail_text=_("The signing of CashToken-bearing inputs with this hardware wallet"
+                              " is not implemented. As such, creating or receiving CashTokens with this wallet"
+                              " will lead to the inability to send them further. Please contact your"
+                              " HW wallet vendor to get them to support the signing of"
+                              " CashToken-bearing inputs."),
+                rich_text=False,
+                title=_('Warning'),
+                icon=QMessageBox.Warning,
+                checkbox_text=_("Don't warn again for this wallet"),
+                app_modal=False)
+            if chk:
+                self.wallet.storage.put('suppress_hw_wallet_cashtokens_warning', True)
+
     def show_create_new_token_dialog(self):
+        self.warn_about_cashtokens_if_hw_wallet()
         from . import token_create
         if not self.create_new_token_dialog:
             self.create_new_token_dialog = token_create.CreateTokenForm(self)
