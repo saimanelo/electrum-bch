@@ -84,6 +84,12 @@ class KeyStore(PrintError):
     def set_wallet_advice(self, addr, advice):
         pass
 
+    def is_hw_without_cashtoken_support(self):
+        """Reimplement this method to signal to the wallet that CashToken support for this keystore is dangerously
+        misleading. This returns False by default, but is re-implemented in Hardware_KeyStore to return True, because
+        all HW wallets other than Satochip (which reimplements this yet again to returns False), cannot sign
+        CashToken inputs."""
+        return False
 
 
 class Software_KeyStore(KeyStore):
@@ -222,7 +228,6 @@ class Imported_KeyStore(Software_KeyStore):
             b = pw_decode(v, old_password)
             c = pw_encode(b, new_password)
             self.keypairs[k] = c
-
 
 
 class Deterministic_KeyStore(Software_KeyStore):
@@ -563,7 +568,6 @@ class Old_KeyStore(Deterministic_KeyStore):
             self.seed = pw_encode(decoded, new_password)
 
 
-
 class Hardware_KeyStore(KeyStore, Xpub):
     # Derived classes must set:
     #   - device
@@ -631,6 +635,12 @@ class Hardware_KeyStore(KeyStore, Xpub):
     def needs_prevtx(self):
         '''Returns true if this hardware wallet needs to know the input
         transactions to sign a transactions'''
+        return True
+
+    def is_hw_without_cashtoken_support(self):
+        """Default a HW wallet to warning about CashTokens being dangerous to send to wallet, until proven otherwise.
+        The only HW wallet currently supporting CashTokens is Satochip (which reimplements this function to
+        return False)."""
         return True
 
 

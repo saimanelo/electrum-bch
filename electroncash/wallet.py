@@ -3679,6 +3679,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         sh = addr.to_scripthash_hex()
         return sh in self.synchronizer.change_scripthashes_that_are_retired
 
+    def is_hw_without_cashtoken_support(self):
+        """If true, the UI should take steps to warn or otherwise guide the user away from receiving
+        CashTokens.  This is True for hardware wallets that cannot sign txns that send CashTokens, which
+        are all of them other than the satochip-based HW wallets."""
+        return any(k.is_hw_without_cashtoken_support() for k in self.get_keystores())
+
 
 class Simple_Wallet(Abstract_Wallet):
     """ wallet with a single keystore """

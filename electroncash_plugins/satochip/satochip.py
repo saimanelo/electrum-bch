@@ -404,13 +404,13 @@ class Satochip_KeyStore(Hardware_KeyStore):
                     pre_hash_hex= pre_hash.hex()
                     self.print_error('sign_transaction(): pre_tx_hex=', pre_tx_hex) #debugSatochip
                     self.print_error('sign_transaction(): pre_hash=', pre_hash_hex) #debugSatochip
-                    
+
                     # check whether the input i has cashtoken
                     is_cashtoken = False
                     if tx.token_datas()[i] is not None:
                         is_cashtoken = (pre_tx[104] == 0xEF)
 
-                    if not is_cashtoken:     
+                    if not is_cashtoken:
                         (response, sw1, sw2, tx_hash, needs_2fa) = client.cc.card_parse_transaction(pre_tx, True) # use 'True' since BCH use BIP143 as in Segwit...
                         tx_hash_hex= bytearray(tx_hash).hex()
                         if pre_hash_hex!= tx_hash_hex:
@@ -424,7 +424,7 @@ class Satochip_KeyStore(Hardware_KeyStore):
                         coin_type= 145 #see https://github.com/satoshilabs/slips/blob/master/slip-0044.md
                         test_net= networks.net.TESTNET
 
-                        if not is_cashtoken:  
+                        if not is_cashtoken:
                             msg= {'action':"sign_tx", 'tx':pre_tx_hex, 'ct':coin_type, 'sw':True, 'tn':test_net, 'txo':txOutputs, 'ty':txin['type']}
                         else:
                             msg= {'action':"sign_tx_hash", 'tx':pre_tx_hex, 'ct':coin_type, 'sw':True, 'tn':test_net, 'txo':txOutputs, 'ty':txin['type'], 'hash':pre_hash_hex, 'is_cashtoken':is_cashtoken}
@@ -470,7 +470,7 @@ class Satochip_KeyStore(Hardware_KeyStore):
                     else:
                         chalresponse= None
 
-                    if not is_cashtoken:    
+                    if not is_cashtoken:
                         (tx_sig, sw1, sw2) = client.cc.card_sign_transaction(keynbr, tx_hash, chalresponse)
                     else:
                         (tx_sig, sw1, sw2) = client.cc.card_sign_transaction_hash(keynbr, list(pre_hash), chalresponse)
@@ -499,6 +499,10 @@ class Satochip_KeyStore(Hardware_KeyStore):
     def show_address(self, sequence, txin_type):
         self.print_error('show_address(): todo!')
         return
+
+    def is_hw_without_cashtoken_support(self):
+        """Satochip HW wallets support CashTokens"""
+        return False
 
 
 class SatochipPlugin(HW_PluginBase):
