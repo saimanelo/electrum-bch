@@ -2257,12 +2257,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             return False
         return True
 
-    def _warn_if_legacy_address(self):
+    def _warn_if_legacy_address(self) -> bool:
         """Show a warning if self.payto_e has legacy addresses, since the user
-        might be trying to send BTC instead of BCH."""
-        warn_legacy_address = bool(self.config.get("warn_legacy_address", True))
-        if not warn_legacy_address:
-            return
+        might be trying to send BTC instead of BCH. On False return the send
+        should be aborted."""
+        disabled = bool(self.wallet.storage.get("disable_legacy_address_warning", False))
+        if disabled:
+            return True
         for line in self.payto_e.lines():
             line = line.strip()
             if line.lower().startswith(networks.net.CASHADDR_PREFIX + ":"):
@@ -2272,30 +2273,40 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 line = line.split(",", 1)[0]
             line = line.strip()
             if Address.is_legacy(line):
+                red = ColorScheme.RED.get_html()
                 msg1 = (
-                    _("You are about to send BCH to a legacy address.")
-                    + "<br><br>"
-                    + _("Legacy addresses are deprecated for Bitcoin Cash "
-                        "(BCH), but they are used by Bitcoin (BTC).")
+                    _("You are about to send BCH to a BTC legacy address.")
+                    + f"<br><br><font color={red}>"
+                    + _("Do NOT proceed unless you are CERTAIN this is a BCH address!")
+                    + "</font>"
                 )
-                msg2 = _("Proceed if what you intend to do is to send BCH.")
-                msg3 = _("If you intend to send BTC, close the application "
-                         "and use a BTC wallet instead. Electron Cash is a "
-                         "BCH wallet, not a BTC wallet.")
+                msg2 = _("Address") + ": " + line
+                msg3 = (
+                    _("Either you know what you are doing, or you may accidentally be sending money to a BTC address,"
+                      " risking loss of funds.")
+                    + "\n\n"
+                    + _("If you intend to send BTC, close the application and use a BTC wallet instead. Electron Cash"
+                        " is a BCH wallet, not a BTC wallet.")
+                )
                 res = self.msg_box(
                     parent=self,
                     icon=QMessageBox.Warning,
-                    title=_("You are sending to a legacy address"),
+                    buttons=(_('Send to BTC Legacy'), _('Cancel')),
+                    defaultButton=_('Cancel'),
+                    escapeButton=_('Cancel'),
+                    title=_("BTC Legacy Address Detected"),
                     rich_text=True,
                     text=msg1,
                     informative_text=msg2,
                     detail_text=msg3,
-                    checkbox_text=_("Never show this again"),
-                    checkbox_ischecked=False,
                 )
-                if res[1]:  # Never ask if checked
-                    self.config.set_key("warn_legacy_address", False)
-                break
+                if res == 0:
+                    # User was sure
+                    return True
+                else:
+                    # User was Cancelled
+                    return False
+        return True
 
     def do_preview(self):
         self.do_send(preview = True)
@@ -2311,7 +2322,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         if not self._chk_no_segwit_suspects():
             return
 
-        self._warn_if_legacy_address()
+        if not self._warn_if_legacy_address():
+            return
 
         if not self.payto_e.is_paycode:
             r = self.read_send_tab()
@@ -4745,6 +4757,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             use_schnorr_cb.setEnabled(False)
             use_schnorr_cb.setToolTip(no_schnorr_reason[0])
         per_wallet_tx_widgets.append((use_schnorr_cb, None))
+
+        # Legacy BTC Address Warning
+        # -- Currently commented-out but here just in case we want to add support for toggling this option
+        """
+        legacy_address_cb = QCheckBox(_("Disable legacy addresses warning"))
+        legacy_address_cb.setToolTip(_('If enabled, the send tab will no longer warn about sending money to BTC legacy'
+                                       ' addresses'))
+        legacy_address_cb.setChecked(bool(self.wallet.storage.get('disable_legacy_address_warning', False)))
+        def on_legacy_address_cb(b):
+            self.wallet.storage.put('disable_legacy_address_warning', bool(b))
+        legacy_address_cb.stateChanged.connect(on_legacy_address_cb)
+        per_wallet_tx_widgets.append((legacy_address_cb, None))
+        """
 
         # Retire old change addresses
         limit_change_w = QWidget()
