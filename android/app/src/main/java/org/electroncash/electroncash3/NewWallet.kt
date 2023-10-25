@@ -500,7 +500,6 @@ class NewWalletImportMasterDialog : NewWalletDialog2() {
 
 
 fun setupSeedDialog(fragment: AlertDialogFragment, binding: WalletNew2Binding) {
-
     with (fragment) {
         val seed = fragment.arguments!!.getString("seed")
         if (seed == null) {

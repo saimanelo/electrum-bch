@@ -23,8 +23,7 @@ class RequestsFragment : ListFragment(R.layout.requests, R.id.rvRequests) {
     ): View? {
         super.onCreateView(inflater, container, savedInstanceState)
         _binding = RequestsBinding.inflate(inflater, container, false)
-        val view = binding.root
-        return view
+        return binding.root
     }
 
     override fun onDestroyView() {

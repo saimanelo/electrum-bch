@@ -305,7 +305,7 @@ class LaunchedTaskDialog<Result> : TaskDialog<Result>() {
 
 
 abstract class PasswordDialog<Result> : TaskLauncherDialog<Result>() {
-    var password: String = ""// by notNull()
+    var password: String = ""
     private var _binding: PasswordBinding? = null
     private val binding get() = _binding!!
 

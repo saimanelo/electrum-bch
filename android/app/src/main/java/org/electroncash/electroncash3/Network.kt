@@ -47,11 +47,10 @@ class NetworkActivity : AppCompatActivity(R.layout.network) {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = NetworkBinding.inflate(layoutInflater)
-        val view = binding.root
         setupVerticalList(binding.rvIfaces)
         binding.rvIfaces.adapter = IfacesAdapter(this)
         daemonUpdate.observe(this, { refresh() })
-        setContentView(view)
+        setContentView(binding.root)
     }
 
     fun refresh() {

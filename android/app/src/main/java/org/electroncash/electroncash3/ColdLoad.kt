@@ -169,7 +169,6 @@ class SignedTransactionDialog : TaskLauncherDialog<Unit>() {
 }
 
 fun hideDescription(dialog: DialogFragment, descriptionLabel: TextView, description: TextView) {
-    //for (view in listOf(dialog.tvDescriptionLabel, dialog.etDescription)) {
     for (view in listOf(descriptionLabel, description)) {
         view.visibility = View.GONE
     }

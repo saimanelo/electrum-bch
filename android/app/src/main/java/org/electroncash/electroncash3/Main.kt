@@ -567,7 +567,7 @@ open class WalletCloseDialog : TaskDialog<Unit>() {
 // Nor happy about this one either, same as above
 class PasswordChangeDialog : TaskLauncherDialog<String>() {
     lateinit var newPassword: String
-    var password: String = ""// by notNull()
+    var password: String = ""
     private var _binding: PasswordChangeBinding? = null
     private val binding get() = _binding!!
 
@@ -789,8 +789,6 @@ class WalletInformationDialog : AlertDialogFragment() {
         }
     }
 
-    //override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-    //super.onViewCreated(view, savedInstanceState)
     override fun onShowDialog() {
         super.onShowDialog()
         binding.idWalletName.setText(daemonModel.walletName)
