@@ -10,6 +10,7 @@ import webbrowser
 from collections import namedtuple
 from functools import partial, wraps
 from locale import atof
+from typing import Optional
 
 from electroncash.address import Address
 from electroncash.util import print_error, PrintError, Weak, finalization_print_error
@@ -474,7 +475,7 @@ def text_dialog(parent, title, label, ok_label, default=None, allow_multi=False)
         return txt.toPlainText()
 
 class ChoicesLayout(object):
-    def __init__(self, msg, choices, on_clicked=None, checked_index=0):
+    def __init__(self, msg, choices, on_clicked=None, on_id_clicked=None, checked_index=0):
         vbox = QVBoxLayout()
         if len(msg) > 50:
             vbox.addWidget(WWLabel(msg))
@@ -497,14 +498,20 @@ class ChoicesLayout(object):
 
         if on_clicked:
             group.buttonClicked.connect(partial(on_clicked, self))
+        if on_id_clicked:
+            group.idClicked.connect(partial(on_id_clicked, self))
 
         self.vbox = vbox
+        self.gb = gb2
 
     def layout(self):
         return self.vbox
 
     def selected_index(self):
         return self.group.checkedId()
+
+    def group_box(self):
+        return self.gb
 
 def address_combo(addresses):
     addr_combo = QComboBox()

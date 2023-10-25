@@ -58,7 +58,7 @@ from electroncash import Transaction
 from electroncash import util, bitcoin, commands, cashacct, token
 from electroncash import paymentrequest
 from electroncash.transaction import OPReturn
-from electroncash.wallet import Multisig_Wallet, sweep_preparations
+from electroncash.wallet import Multisig_Wallet, sweep_preparations, MultiXPubWallet, PrivateKeyMissing
 from electroncash.contacts import Contact
 from electroncash import rpa
 try:
@@ -70,10 +70,12 @@ import electroncash.web as web
 from .amountedit import AmountEdit, BTCAmountEdit, MyLineEdit, BTCSatsByteEdit
 from .qrcodewidget import QRCodeWidget, QRDialog
 from .qrtextedit import ShowQRTextEdit, ScanQRTextEdit
+from .seed_dialog import SeedDialog
 from .transaction_dialog import show_transaction
 from .fee_slider import FeeSlider
 from .popup_widget import ShowPopupLabel, KillPopupLabel
 from . import cashacctqt
+from . import wallet_information
 from .util import *
 from .token_meta import TokenMetaQt
 
@@ -1522,7 +1524,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.saved = True
 
     def new_payment_request(self):
-        addr = self.wallet.get_unused_address(frozen_ok=False)
+        addr = self.wallet.get_unused_address(frozen_ok=False, preferred=True)
         if addr is None:
             if not self.wallet.is_deterministic():
                 msg = [
@@ -1537,7 +1539,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 # Warn if past gap limit.
                 if not self.question(_("Warning: The next address will not be recovered automatically if you restore your wallet from seed; you may need to add it manually.\n\nThis occurs because you have too many unused addresses in your wallet. To avoid this situation, use the existing addresses first.\n\nCreate anyway?")):
                     return
-                addr = self.wallet.create_new_address(False)
+                addr = self.wallet.create_new_preferred_address(False)
         self.set_receive_address(addr)
         self.expires_label.hide()
         self.expires_combo.show()
@@ -1581,7 +1583,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             if addr is None:
                 if self.wallet.is_deterministic():
                     # creae a new one if deterministic
-                    addr = self.wallet.create_new_address(False)
+                    addr = self.wallet.create_new_preferred_address(False)
                 else:
                     # otherwise give up and just re-use one.
                     addr = self.wallet.get_receiving_address()
@@ -2453,7 +2455,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 self.payment_request = None
                 return False, _("Payment request has expired")
             if pr:
-                refund_address = self.wallet.get_receiving_addresses()[0]
+                refund_address = self.wallet.get_receiving_address(preferred=True)
                 ack_status, ack_msg = pr.send_payment(str(tx), refund_address)
                 if not ack_status:
                     if ack_msg == "no url":
@@ -3264,44 +3266,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                               add_to_contacts_button = True, pay_to_button = True)
 
     def show_master_public_keys(self):
-        dialog = WindowModalDialog(self.top_level_window(), _("Wallet Information"))
-        dialog.setMinimumSize(500, 100)
-        mpk_list = self.wallet.get_master_public_keys()
-        vbox = QVBoxLayout()
-        wallet_type = self.wallet.storage.get('wallet_type', '')
-        grid = QGridLayout()
-        basename = os.path.basename(self.wallet.storage.path)
-        grid.addWidget(QLabel(_("Wallet name")+ ':'), 0, 0)
-        grid.addWidget(QLabel(basename), 0, 1)
-        grid.addWidget(QLabel(_("Wallet type")+ ':'), 1, 0)
-        grid.addWidget(QLabel(wallet_type), 1, 1)
-        grid.addWidget(QLabel(_("Script type")+ ':'), 2, 0)
-        grid.addWidget(QLabel(self.wallet.txin_type), 2, 1)
-        vbox.addLayout(grid)
-        if self.wallet.is_deterministic():
-            mpk_text = ShowQRTextEdit()
-            mpk_text.setMaximumHeight(150)
-            mpk_text.addCopyButton()
-            def show_mpk(index):
-                mpk_text.setText(mpk_list[index])
-            # only show the combobox in case multiple accounts are available
-            if len(mpk_list) > 1:
-                def label(key):
-                    if isinstance(self.wallet, Multisig_Wallet):
-                        return _("cosigner") + ' ' + str(key+1)
-                    return ''
-                labels = [label(i) for i in range(len(mpk_list))]
-                on_click = lambda clayout: show_mpk(clayout.selected_index())
-                labels_clayout = ChoicesLayout(_("Master Public Keys"), labels, on_click)
-                vbox.addLayout(labels_clayout.layout())
-            else:
-                vbox.addWidget(QLabel(_("Master Public Key")))
-            show_mpk(0)
-            vbox.addWidget(mpk_text)
-        vbox.addStretch(1)
-        vbox.addLayout(Buttons(CloseButton(dialog)))
-        dialog.setLayout(vbox)
-        dialog.exec_()
+        wallet_information.show_wallet_information(self)
 
     def remove_wallet(self):
         if self.question('\n'.join([
@@ -3341,7 +3306,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         except BaseException as e:
             self.show_error(str(e))
             return
-        from .seed_dialog import SeedDialog
         d = SeedDialog(self.top_level_window(), seed, passphrase, derivation, seed_type)
         d.exec_()
 
@@ -3819,6 +3783,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 except InvalidPassword:
                     # See #921 -- possibly a corrupted wallet or other strangeness
                     privkey = 'INVALID_PASSWORD'
+                except PrivateKeyMissing:
+                    privkey = 'WATCHING_ONLY'
                 private_keys[addr.to_ui_string()] = privkey
                 strong_d = weak_d()
                 try:
@@ -4079,10 +4045,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         return success
 
     def sweep_key_dialog(self):
-        addresses = self.wallet.get_unused_addresses()
+        addresses = self.wallet.get_unused_addresses(preferred=True)
         if not addresses:
             try:
-                addresses = self.wallet.get_receiving_addresses()
+                addresses = self.wallet.get_preferred_receiving_addresses()
             except AttributeError:
                 addresses = self.wallet.get_addresses()
         if not addresses:
@@ -5257,6 +5223,55 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             except RuntimeError as e:
                 self.show_error(str(e))
 
+    def _wallet_delete_add_xpub_common(self):
+        if self.gui_object.warn_if_no_network(self):
+            # Don't allow if offline mode.
+            self.show_error(_("Operation not permitted in offline mode"))
+            return False
+        if not isinstance(self.wallet, MultiXPubWallet):
+            # Paranoia
+            self.show_error(_("Operation not permitted for this wallet type"))
+            return False
+        return True
+
+    def wallet_delete_xpub(self, index) -> bool:
+        if not self._wallet_delete_add_xpub_common():
+            return False
+        msg = ' '.join([
+            _('This feature is intended to allow you to remove an entire set of addresses from this wallet;'
+              ' those addresses that belong to the selected master key.'),
+            "\n\n"+_("In order to accomplish this task, your entire wallet's history must be rebuilt from the network,"
+                     " this time without the selected key's addresses."),
+            _('Just to be safe, back up your wallet file first!'),
+            "\n\n"+_("Delete this master key from the wallet now?")
+        ])
+        if not self.question(msg, title=_("Delete Master Key")):
+            return False
+        try:
+            self.wallet.delete_keystore(index, rebuild_history=True)
+        except (RuntimeError, ValueError) as e:
+            self.show_error(str(e))
+        return True
+
+    def wallet_add_xpub(self, master_key) -> bool:
+        if not self._wallet_delete_add_xpub_common():
+            return False
+        msg = ' '.join([
+            _('This feature is intended to allow you to add an entire set of addresses to this wallet;'
+              ' those addresses that belong to the master key you just inputted.'),
+            "\n\n"+_("In order to accomplish this task, your entire wallet's history must be rebuilt from the network,"
+                     " this time with the selected key's addresses."),
+            _('Just to be safe, back up your wallet file first!'),
+            "\n\n"+_("Add this master key to the wallet now?")
+        ])
+        if not self.question(msg, title=_("Add Master Key")):
+            return False
+        try:
+            self.wallet.add_keystore(master_key, rebuild_history=True)
+        except (RuntimeError, ValueError) as e:
+            self.show_error(str(e))
+        return True
+
     def scan_beyond_gap(self):
         if self.gui_object.warn_if_no_network(self):
             return
@@ -5337,7 +5352,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             addr = self._pick_address(title=_("Register A New Cash Account"), icon=QIcon(":icons/cashacct-logo.png"))
             if addr is None:
                 return  # user cancel
-        addr = addr or self.receive_address or self.wallet.get_receiving_address()
+        addr = addr or self.receive_address or self.wallet.get_receiving_address(preferred=True)
         if not addr:
             self.print_error("register_new_cash_account: no receive address specified")
             return

@@ -29,6 +29,7 @@
 #   - ImportedPrivkeyWallet: imported private keys, keystore
 #   - Standard_Wallet: one keystore, P2PKH
 #   - Multisig_Wallet: several keystores, P2SH
+#   - MultiXPubWallet: several keystores, P2PKH
 
 import copy
 import errno
@@ -407,7 +408,12 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return self.basename()
 
     def get_master_public_key(self):
+        """Subclasses that use master pubkeys should reimplement this"""
         return None
+
+    def get_master_public_keys(self):
+        """Subclasses that use master pubkeys should reimplement this"""
+        return []
 
     def load_keystore_wrapper(self):
         """ Loads the keystore, but also tries to preserve derivation(s). Older
@@ -1472,6 +1478,19 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         """ Must be reimplemented in subclasses """
         raise RuntimeError("'get_receiving_addresses' is not implemented in this class: " + str(type(self)))
 
+    def get_preferred_change_addresses(self):
+        """ In most subclasses this is just self.get_change_addresses(), but in the MultiXPubWallet, it is
+        the addresses from one of the XPubs we have the private keys for (if any), otherwise it's just
+        the regular change addresses."""
+        return self.get_change_addresses()
+
+    def get_preferred_receiving_addresses(self):
+        """Reimplemented in MultiXPubWallet"""
+        return self.get_receiving_addresses()
+
+    def get_preferred_addresses(self):
+        return self.get_preferred_receiving_addresses() + self.get_preferred_change_addresses()
+
     def get_frozen_balance(self):
         if not self.frozen_coins and not self.frozen_coins_tmp:
             # performance short-cut -- get the balance of the frozen address set only IFF we don't have any frozen coins
@@ -2333,11 +2352,11 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
         On non-deterministic wallets, this returns an empty list.
         """
-        if count <= 0 or not hasattr(self, 'create_new_address'):
+        if count <= 0 or not hasattr(self, 'create_new_preferred_address'):
             return []
 
         with self.lock:
-            last_change_addrs = self.get_change_addresses()[-self.gap_limit_for_change:]
+            last_change_addrs = self.get_preferred_change_addresses()[-self.gap_limit_for_change:]
             if not last_change_addrs:
                 # this happens in non-deterministic wallets but the above
                 # hasattr check should have caught those.
@@ -2352,7 +2371,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 for addr in last_change_addrs:
                     yield addr
                 while True:
-                    yield self.create_new_address(for_change=True)
+                    yield self.create_new_preferred_address(for_change=True)
 
             result = []
             for addr in gen_change():
@@ -2485,7 +2504,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                         # to picking first max_change change_addresses that have
                         # no history
                         change_addrs = []
-                        for addr in self.get_change_addresses()[-self.gap_limit_for_change:]:
+                        for addr in self.get_preferred_change_addresses()[-self.gap_limit_for_change:]:
                             if self.get_num_tx(addr) == 0:
                                 change_addrs.append(addr)
                                 if len(change_addrs) >= max_change:
@@ -2495,7 +2514,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                             # Fall back to picking ANY wallet address
                             try:
                                 # Pick a random address
-                                change_addrs = [random.choice(self.get_addresses())]
+                                change_addrs = [random.choice(self.get_preferred_addresses())]
                             except IndexError:
                                 change_addrs = []  # Address-free wallet?!
                         # This should never happen
@@ -3268,26 +3287,32 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             except UserCancelled:
                 continue
 
-    def get_unused_addresses(self, *, for_change=False, frozen_ok=True):
+    def get_unused_addresses(self, *, for_change=False, frozen_ok=True, preferred=False):
         # fixme: use slots from expired requests
         with self.lock:
-            domain = self.get_receiving_addresses() if not for_change else (self.get_change_addresses() or self.get_receiving_addresses())
+            if preferred:
+                domain = (self.get_preferred_receiving_addresses() if not for_change
+                          else (self.get_preferred_change_addresses() or self.get_preferred_receiving_addresses()))
+            else:
+                domain = (self.get_receiving_addresses() if not for_change
+                          else (self.get_change_addresses() or self.get_receiving_addresses()))
             return [addr for addr in domain
                     if not self.get_address_history(addr)
                     and addr not in self.receive_requests
                     and (frozen_ok or addr not in self.frozen_addresses)
                     and (not for_change or not self.is_retired_change_addr(addr))]
 
-    def get_unused_address(self, *, for_change=False, frozen_ok=True):
-        addrs = self.get_unused_addresses(for_change=for_change, frozen_ok=frozen_ok)
+    def get_unused_address(self, *, for_change=False, frozen_ok=True, preferred=False):
+        addrs = self.get_unused_addresses(for_change=for_change, frozen_ok=frozen_ok, preferred=preferred)
         if addrs:
             return addrs[0]
 
-    def get_receiving_address(self, *, frozen_ok=True):
+    def get_receiving_address(self, *, frozen_ok=True, preferred=True):
         """Returns a receiving address or None."""
-        domain = self.get_unused_addresses(for_change=False, frozen_ok=frozen_ok)
+        domain = self.get_unused_addresses(for_change=False, frozen_ok=frozen_ok, preferred=preferred)
         if not domain:
-                domain = [a for a in self.get_receiving_addresses()
+                addr_list = self.get_preferred_receiving_addresses() if preferred else self.get_receiving_addresses()
+                domain = [a for a in addr_list
                           if frozen_ok or a not in self.frozen_addresses]
         if domain:
             return domain[0]
@@ -3517,6 +3542,15 @@ class Abstract_Wallet(PrintError, SPVDelegate):
     def get_fingerprint(self):
         raise NotImplementedError()
 
+    def is_watching_only(self):
+        """Reimplemented in subclasses"""
+        raise NotImplementedError()
+
+    def can_fully_sign_for_all_addresses(self):
+        """Checks that all keystores are able to sign. Relevant for MultiXPubWallet hybrid wallets which have
+        multiple keystores, not all of which have the private keys for their associated addresses."""
+        return not self.is_watching_only() and all(not ks.is_watching_only() for ks in self.get_keystores())
+
     def can_import_privkey(self):
         return False
 
@@ -3561,9 +3595,9 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         return self.keystore.decrypt_message(index, message, password)
 
     def rebuild_history(self):
-        ''' This is an advanced function for use in the GUI when the user
+        """ This is an advanced function for use in the GUI when the user
         wants to resynch the whole wallet from scratch, preserving labels
-        and contacts.  '''
+        and contacts. """
         if not self.network or not self.network.is_connected():
             raise RuntimeError('Refusing to rebuild wallet without a valid server connection!')
         if not self.synchronizer or not self.verifier:
@@ -3575,7 +3609,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         with self.lock:
             self.transactions.clear(); self.unverified_tx.clear(); self.verified_tx.clear()
             self.clear_history()
-            if isinstance(self, Standard_Wallet):
+            if isinstance(self, (Standard_Wallet, MultiXPubWallet)):
                 # reset the address list to default too, just in case. New synchronizer will pick up the addresses again.
                 self.receiving_addresses, self.change_addresses = self.receiving_addresses[:self.gap_limit], self.change_addresses[:self.gap_limit_for_change]
                 do_addr_save = True
@@ -3774,6 +3808,8 @@ class ImportedWalletBase(Simple_Wallet):
                 self.verified_tx.pop(tx_hash, None)
                 self.unverified_tx.pop(tx_hash, None)
                 self.transactions.pop(tx_hash, None)
+                self.ct_txi.pop(tx_hash, None)
+                self.ct_txo.pop(tx_hash, None)
                 self._addr_bal_cache.pop(address, None)  # not strictly necessary, above calls also have this side-effect. but here to be safe. :)
                 if self.verifier:
                     # TX is now gone. Toss its SPV proof in case we have it
@@ -3781,7 +3817,15 @@ class ImportedWalletBase(Simple_Wallet):
                     # will avoid the situation where the UI says "not verified"
                     # erroneously!
                     self.verifier.remove_spv_proof_for_tx(tx_hash)
-                # FIXME: what about pruned_txo?
+                # Remove also from pruned_txo
+                if tx_hash in self.pruned_txo_values:
+                    self.pruned_txo_values.discard(tx_hash)
+                    to_pop = []
+                    for key, th in self.pruned_txo.items():
+                        if tx_hash == th:
+                            to_pop.append(key)
+                    for key in to_pop:
+                        self.pruned_txo.pop(key, None)
 
             self.storage.put('verified_tx3', self.verified_tx)
 
@@ -3790,15 +3834,14 @@ class ImportedWalletBase(Simple_Wallet):
         self.set_label(address, None)
         self.remove_payment_request(address, {})
         self.set_frozen_state([address], False)
-
-        self.delete_address_derived(address)
+        self.delete_address_derived(address)  # Assumption: derived class implements this
+        self.invalidate_address_set_cache()
 
         self.cashacct.on_address_deletion(address)
         self.cashacct.save()
 
         self.save_addresses()
-
-        self.storage.write() # no-op if above already wrote
+        self.storage.write()  # no-op if above already wrote
 
 
 class ImportedAddressWallet(ImportedWalletBase):
@@ -3847,7 +3890,7 @@ class ImportedAddressWallet(ImportedWalletBase):
     def can_import_address(self):
         return True
 
-    def get_addresses(self, include_change=False):
+    def get_addresses(self):
         if not self._sorted:
             self._sorted = sorted(self.addresses,
                                   key=lambda addr: addr.to_ui_string())
@@ -3921,7 +3964,7 @@ class ImportedPrivkeyWallet(ImportedWalletBase):
     def can_import_address(self):
         return False
 
-    def get_addresses(self, include_change=False):
+    def get_addresses(self):
         return self.keystore.get_addresses()
 
     def delete_address_derived(self, address):
@@ -4047,7 +4090,7 @@ class RpaWallet(ImportedWalletBase):
     def can_import_address(self):
         return False
 
-    def get_addresses(self, include_change=False):
+    def get_addresses(self):
         return self.keystore.get_addresses()
 
     def delete_address_derived(self, address):
@@ -4145,6 +4188,14 @@ class Deterministic_Wallet(Abstract_Wallet):
     def add_seed(self, seed, pw):
         self.keystore.add_seed(seed, pw)
 
+    def can_delete_keystore(self):
+        """Reimplemented in MultiXPubWallet"""
+        return False
+
+    def can_add_keystore(self):
+        """Reimplemented in MultiXPubWallet"""
+        return False
+
     def change_gap_limit(self, value):
         '''This method is not called in the code, it is kept for console use'''
         with self.lock:
@@ -4202,6 +4253,11 @@ class Deterministic_Wallet(Abstract_Wallet):
                 self.save_addresses()
             self.add_address(address, for_change=for_change)
             return address
+
+    def create_new_preferred_address(self, for_change=False, save=True):
+        """Default just calls create_new_address(). MultiXPubWallet reimplements this to keep generating
+        until it gets a preferred address."""
+        return self.create_new_address(for_change=for_change, save=save)
 
     def synchronize_sequence(self, for_change):
         limit = self.gap_limit_for_change if for_change else self.gap_limit
@@ -4376,7 +4432,258 @@ class Multisig_Wallet(Deterministic_Wallet):
     def is_multisig(self):
         return True
 
-wallet_types = ['standard', 'multisig', 'imported', 'rpa']
+
+class PrivateKeyMissing(RuntimeError):
+    """Only ever raised by MultiXPubWallet below if calling code attempts to retrieve a private key
+    for an address for which the wallet lacks the xprv."""
+
+
+class MultiXPubWallet(Deterministic_Wallet):
+    """ P2PKH "aggregate" wallet. A deterministic wallet which combines multiple xpubs into one view.
+    The addresses are interleaved modulo len(self.keystores). """
+
+    txin_type = 'p2pkh'
+    wallet_type = 'multi_xpub'
+
+    def __init__(self, storage):
+        Deterministic_Wallet.__init__(self, storage)
+        # Scale gap limit to catch everything from all sub-xpubs
+        prev_gap_limit = self.gap_limit
+        self.gap_limit = max(self.gap_limit, 20 * len(self.keystores))
+        self.gap_limit_for_change = max(self.gap_limit_for_change, self.gap_limit)
+        if self.gap_limit != prev_gap_limit:
+            self.storage.put("gap_limit", self.gap_limit)
+
+    class _KeyStoreFacade:
+        """This class is used as a facade to catch calls to wallet.keystore by code in the app
+        and forward and/or translate the call appropriately so that things work as expected."""
+        def __init__(self, parent):
+            self.parent = parent
+
+        def is_deterministic(self):
+            return self.parent.is_deterministic()
+
+        def get_private_key(self, sequence, password):
+            for_change, index = sequence
+            ks, real_index = self.parent._map_address_index(index)
+            if ks.is_watching_only():
+                raise PrivateKeyMissing(_("This address is watching-only"))
+            return ks.get_private_key((for_change, real_index), password)
+
+        def check_password(self, password):
+            for ks in self.parent.get_keystores():
+                if ks.may_have_password():
+                    ks.check_password(password)
+
+        def sign_message(self, sequence, message, password):
+            for_change, index = sequence
+            ks, real_index = self.parent._map_address_index(index)
+            if ks.is_watching_only():
+                raise PrivateKeyMissing(_("This address is watching-only"))
+            return ks.sign_message((for_change, real_index), message, password)
+
+        def decrypt_message(self, sequence, message, password):
+            for_change, index = sequence
+            ks, real_index = self.parent._map_address_index(index)
+            return ks.decrypt_message((for_change, real_index), message, password)
+
+        def get_pubkey_derivation(self, x_pubkey):
+            for which_ks, ks in enumerate(self.parent.get_keystores()):
+                derivation = ks.get_pubkey_derivation(x_pubkey)
+                if derivation:
+                    for_change, real_index = derivation
+                    index = self.parent._unmap_address_index(which_ks, real_index)
+                    return for_change, index
+
+    def get_keystore(self):
+        return self._KeyStoreFacade(self)
+
+    @property
+    def keystore(self):
+        return self.get_keystore()
+
+    def get_keystores(self):
+        return self.keystores
+
+    def _delete_add_keystore_common(self):
+        # Assumption: self.lock is held by caller
+        saved_gap_limit = self.gap_limit
+        saved_gap_limit_for_change = self.gap_limit_for_change
+        self.gap_limit = max(self.gap_limit, 20 * len(self.keystores))
+        self.gap_limit_for_change = max(self.gap_limit_for_change, self.gap_limit)
+        self.storage.put("gap_limit", self.gap_limit)
+        self.save_keystore()
+        self.change_reserved.clear()
+        self.change_reserved_default.clear()
+        self.change_unreserved.clear()
+        self.change_reserved_tmp.clear()
+        # delete every address and regen
+        del self.receiving_addresses[:]
+        del self.change_addresses[:]
+        while len(self.receiving_addresses) < saved_gap_limit:
+            self.create_new_address(for_change=False, save=False)
+        while len(self.change_addresses) < saved_gap_limit_for_change:
+            self.create_new_address(for_change=True, save=False)
+        self.invalidate_address_set_cache()
+        self.save_addresses()
+
+    def can_delete_keystore(self):
+        return len(self.keystores) > 1
+
+    def can_add_keystore(self):
+        return True
+
+    def delete_keystore(self, index, rebuild_history=True):
+        """Note that removing a keystore really should involve full wallet history rebuild via self.rebuild_history()
+        due to all the invariants that are now potentially violated by this operation."""
+        n_ks = len(self.keystores)
+        if index < 0 or index >= n_ks or n_ks == 1:
+            raise ValueError(_('Cannot delete keystore at index {index}').format(index=index))
+        with self.lock:
+            del self.keystores[index]
+            self._delete_add_keystore_common()
+        if rebuild_history:
+            self.rebuild_history()
+
+    def add_keystore(self, master_key, rebuild_history=True):
+        """Note that adding a keystore really should involve full wallet history rebuild via self.rebuild_history()
+        due to all the invariants that are now potentially violated by this operation."""
+        assert keystore.is_master_key(master_key)
+        ks = keystore.from_master_key(master_key)
+        if any(ks.get_master_public_key() == k.get_master_public_key() for k in self.keystores):
+            raise ValueError(_('XPub already exists in wallet') + f":\n{str(master_key)}")
+        with self.lock:
+            self.keystores.append(ks)
+            self._delete_add_keystore_common()
+        if rebuild_history:
+            self.rebuild_history()
+
+    def is_watching_only(self):
+        return all(k.is_watching_only() for k in self.get_keystores())
+
+    def get_preferred_receiving_addresses(self):
+        return self._get_preferred_addresses(False)
+
+    def get_preferred_change_addresses(self):
+        return self._get_preferred_addresses(True)
+
+    @property
+    def _signing_xpubs(self) -> Set[str]:
+        return {k.get_master_public_key() for k in self.get_keystores() if not k.is_watching_only()}
+
+    def _get_preferred_addresses(self, for_change):
+        signing_xpubs = self._signing_xpubs
+        domain = self.get_change_addresses() if for_change else self.get_receiving_addresses()
+        if not signing_xpubs or len(signing_xpubs) >= len(self.get_keystores()):
+            # We can't sign, or we can sign all, so we prefer nothing in particular, return all addresses
+            return domain
+        # Remove addresses we can't sign for and return the rest, since we "prefer" those
+        ret = []
+        for i, addr in enumerate(domain):
+            ks, _ = self._map_address_index(i)
+            if ks.get_master_public_key() in signing_xpubs:
+                ret.append(addr)
+        return ret or domain  # If ret empty, fallback to full set of addresses
+
+    def create_new_preferred_address(self, for_change=False, save=True):
+        signing_xpubs = self._signing_xpubs
+        if not signing_xpubs or len(signing_xpubs) >= len(self.get_keystores()):
+            # Can't sign, or all xpubs can sign, so just take normal path
+            return self.create_new_address(for_change=for_change, save=save)
+        # Keep looping until we get a new address we can sign for
+        while True:
+            address = self.create_new_address(for_change=for_change, save=save)
+            c, index = self.get_address_index(address)
+            assert bool(c) == bool(for_change)
+            ks, _ = self._map_address_index(index)
+            if ks.get_master_public_key() in signing_xpubs:
+                return address
+
+    def can_change_password(self):
+        return any(k.can_change_password() for k in self.get_keystores())
+
+    def update_password(self, old_pw, new_pw, encrypt=False):
+        if old_pw is None and self.has_password():
+            raise InvalidPassword()
+        for k in self.get_keystores():
+            if k is not None and k.can_change_password():
+                k.update_password(old_pw, new_pw)
+        self.save_keystore()
+        self.storage.set_password(new_pw, encrypt)
+        self.storage.write()
+
+    def load_keystore(self):
+        l = self.storage.get("keystores")
+        assert l and isinstance(l, list)
+        self.keystores = []
+        for d in l:
+            assert isinstance(d, dict)
+            k = load_keystore({"dummy": d}, "dummy")
+            assert k.is_deterministic(), "This class only supports deterministic wallets"
+            self.keystores.append(k)
+
+    def save_keystore(self):
+        self.storage.put('keystores', [k.dump() for k in self.get_keystores()])
+
+    def has_seed(self):
+        return False
+
+    def get_seed(self, password):
+        return None
+
+    def add_seed(self, seed, pw):
+        pass
+
+    def is_deterministic(self):
+        return all(k.is_deterministic() for k in self.keystores)
+
+    def get_public_key(self, address):
+        sequence = self.get_address_index(address)
+        pubkey = self.get_pubkey(*sequence)
+        return pubkey
+
+    def get_pubkey(self, c, i):
+        return self.derive_pubkeys(c, i)
+
+    def get_public_keys(self, address):
+        return [self.get_public_key(address)]
+
+    def _map_address_index(self, index):
+        n_ks = len(self.keystores)
+        which_ks = index % n_ks
+        real_index = index // n_ks
+        return self.keystores[which_ks], real_index
+
+    def _unmap_address_index(self, ks: Union[object, int], real_index):
+        n_ks = len(self.keystores)
+        which_ks = ks if isinstance(ks, int) else self.keystores.index(ks)
+        index = real_index * n_ks + which_ks
+        return index
+
+    def add_input_sig_info(self, txin, address):
+        is_change, index = self.get_address_index(address)
+        keystore, real_index = self._map_address_index(index)
+        x_pubkey = keystore.get_xpubkey(is_change, real_index)
+        txin['x_pubkeys'] = [x_pubkey]
+        txin['signatures'] = [None]
+        txin['num_sig'] = 1
+
+    def get_master_public_keys(self):
+        return [k.get_master_public_key() for k in self.keystores]
+
+    def get_fingerprint(self):
+        return ''.join(sorted(self.get_master_public_keys()))
+
+    def derive_pubkeys(self, c, i):
+        keystore, real_index = self._map_address_index(i)
+        return keystore.derive_pubkey(c, real_index)
+
+    @staticmethod
+    def pubkeys_to_address(pubkey):
+        return Address.from_pubkey(pubkey)
+
+
+wallet_types = ['standard', 'multisig', 'imported', 'rpa', 'multi_xpub']
 
 
 def register_wallet_type(category):
@@ -4390,6 +4697,7 @@ wallet_constructors = {
     'imported_privkey': ImportedPrivkeyWallet,
     'imported_addr': ImportedAddressWallet,
     'rpa': RpaWallet,
+    'multi_xpub': MultiXPubWallet,
 }
 
 
