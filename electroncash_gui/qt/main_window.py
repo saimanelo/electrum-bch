@@ -839,22 +839,29 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
 
     # custom wrappers for getOpenFileName and getSaveFileName, that remember the path selected by the user
-    def getOpenFileName(self, title, filter = ""):
-        return __class__.static_getOpenFileName(title=title, filter=filter, config=self.config, parent=self)
+    def getOpenFileName(self, title, filter = "", *, multi_file=False):
+        return __class__.static_getOpenFileName(title=title, filter=filter, config=self.config, parent=self,
+                                                multi_file=multi_file)
 
     def getSaveFileName(self, title, filename, filter = ""):
         return __class__.static_getSaveFileName(title=title, filename=filename, filter=filter, config=self.config, parent=self)
 
     @staticmethod
-    def static_getOpenFileName(*, title, parent=None, config=None, filter=""):
+    def static_getOpenFileName(*, title, parent=None, config=None, filter="", multi_file=False):
         if not config:
             config = get_config()
         userdir = os.path.expanduser('~')
         directory = config.get('io_dir', userdir) if config else userdir
-        fileName, __ = QFileDialog.getOpenFileName(parent, title, directory, filter)
+        if multi_file:
+            fileNames, __ = QFileDialog.getOpenFileNames(parent, title, directory, filter)
+            ret = fileNames
+            fileName = fileNames[0] if fileNames else ''
+        else:
+            fileName, __ = QFileDialog.getOpenFileName(parent, title, directory, filter)
+            ret = fileName
         if fileName and directory != os.path.dirname(fileName) and config:
             config.set_key('io_dir', os.path.dirname(fileName), True)
-        return fileName
+        return ret
 
     @staticmethod
     def static_getSaveFileName(*, title, filename, parent=None, config=None, filter=""):
@@ -3870,26 +3877,53 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 f.write(json.dumps(pklist, indent = 4))
 
     def do_import_labels(self):
-        labelsFile = self.getOpenFileName(_("Open labels file"), "*.json")
-        if not labelsFile: return
-        try:
-            with open(labelsFile, 'r', encoding='utf-8') as f:  # always ensure UTF-8. See issue #1453.
-                data = f.read()
-                data = json.loads(data)
-            if type(data) is not dict or not len(data) or not all(type(v) is str and type(k) is str for k,v in data.items()):
-                self.show_critical(_("The file you selected does not appear to contain labels."))
-                return
-            for key, value in data.items():
-                self.wallet.set_label(key, value)
-            self.show_message(_("Your labels were imported from") + " '%s'" % str(labelsFile))
-        except (IOError, OSError, json.decoder.JSONDecodeError) as reason:
-            self.show_critical(_("Electron Cash was unable to import your labels.") + "\n" + str(reason))
-        self.address_list.update()
-        self.history_list.update()
-        self.utxo_list.update()
-        self.token_list.update()
-        self.token_history_list.update()
-        self.history_updated_signal.emit()  # inform things like address_dialog that there's a new history
+        files = self.getOpenFileName(title=_("Import labels from JSON and/or wallet files"),
+                                     filter="JSON files (*.json);;Wallet files (*)", multi_file=True)
+        if not files:
+            return
+
+        def show_error(msg):
+            res = self.show_warning(msg, buttons=QMessageBox.Ok | QMessageBox.Cancel, defaultButton=QMessageBox.Ok,
+                                    escapeButton=QMessageBox.Cancel)
+            return res in (QDialog.Accepted, QMessageBox.Ok)
+
+        n_imported = 0
+        for file in files:
+            bname = os.path.basename(file)
+            try:
+                with open(file, 'r', encoding='utf-8') as f:  # always ensure UTF-8. See issue #1453.
+                    data = json.loads(f.read())
+                # For wallets: require just a dict. We are ok with label-free wallets.
+                is_ok = isinstance(data, dict)
+                if is_ok and isinstance(data.get("labels"), dict):
+                    # This is a wallet file, drill down to get the "labels" dict.
+                    data = data["labels"]
+                elif is_ok:
+                    # For non-wallets, require a non-empty dict
+                    is_ok = len(data) > 0
+                is_ok = is_ok and all(type(k) is str and type(v) is str for k, v in data.items())
+                if not is_ok:
+                    if not show_error(_("File does not appear to contain labels") + ":\n\n" + bname):
+                        break
+                    else:
+                        continue
+                for key, value in data.items():
+                    self.wallet.set_label(key, value)
+                n_imported += 1
+            except (IOError, OSError, json.decoder.JSONDecodeError, UnicodeError) as exc:
+                if not show_error(_("Electron Cash was unable to import your labels from {file}").format(file=bname)
+                                  + ":\n\n" + str(exc)):
+                    break
+        if n_imported:
+            self.address_list.update()
+            self.history_list.update()
+            self.utxo_list.update()
+            self.token_list.update()
+            self.token_history_list.update()
+            self.history_updated_signal.emit()  # inform things like address_dialog that there's a new history
+            self.show_message(ngettext("Your labels were imported from {num} file",
+                                       "Your labels were imported from {num} files", n_imported)
+                              .format(num=n_imported))
 
     def do_export_labels(self):
         labels = self.wallet.labels
@@ -3899,7 +3933,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 with open(fileName, 'w+', encoding='utf-8') as f:  # always ensure UTF-8. See issue #1453.
                     json.dump(labels, f, indent=4, sort_keys=True)
                 self.show_message(_("Your labels were exported to") + " '%s'" % str(fileName))
-        except (IOError, os.error) as reason:
+        except (IOError, os.error, UnicodeError) as reason:
             self.show_critical(_("Electron Cash was unable to export your labels.") + "\n" + str(reason))
 
     def export_history_dialog(self):
