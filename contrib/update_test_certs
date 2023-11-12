@@ -19,13 +19,16 @@ BASEDOMAIN="tests.electroncash.org"
 
 CERT_VALIDITY=1825
 
+# This script fails when run in MSYS2/MINGW, see
+# https://github.com/openssl/openssl/issues/8795
+
 # Create a root CA key and self-signed certificate
 openssl genpkey -algorithm RSA -out "$ROOT_FILENAME.key"
-openssl req -x509 -new -key "$ROOT_FILENAME.key" -out "$ROOT_FILENAME.crt" -subj "/CN=$ROOT_NAME"
+openssl req -x509 -new -key "$ROOT_FILENAME.key" -out "$ROOT_FILENAME.crt" -subj "/CN=$ROOT_NAME" -days $CERT_VALIDITY
 
 # Create an untrused root CA key and self-signed certificate
 openssl genpkey -algorithm RSA -out "$UNTRUSTED_ROOT_FILENAME.key"
-openssl req -x509 -new -key "$UNTRUSTED_ROOT_FILENAME.key" -out "$UNTRUSTED_ROOT_FILENAME.crt" -subj "/CN=$UNTRUSTED_ROOT_NAME"
+openssl req -x509 -new -key "$UNTRUSTED_ROOT_FILENAME.key" -out "$UNTRUSTED_ROOT_FILENAME.crt" -subj "/CN=$UNTRUSTED_ROOT_NAME" -days $CERT_VALIDITY
 
 # Generate a certificate for a specific domain
 FILENAME="$OUTDIR/valid.$BASEDOMAIN"
