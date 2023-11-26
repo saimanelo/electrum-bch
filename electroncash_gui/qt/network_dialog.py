@@ -46,7 +46,7 @@ from electroncash.tor import TorController
 from electroncash.util import print_error, Weak, PrintError, in_main_thread
 
 from .util import *
-from .utils import UserPortValidator
+from .utils import PortValidator, UserPortValidator, HostValidator
 
 protocol_names = ['TCP', 'SSL']
 protocol_letters = 'ts'
@@ -449,8 +449,10 @@ class NetworkChoiceLayout(QObject, OnDestroyedMixin, PrintError):
 
         self.server_host = QLineEdit()
         self.server_host.setFixedWidth(200)
+        self.server_host.setValidator(HostValidator(self.server_host))
         self.server_port = QLineEdit()
         self.server_port.setFixedWidth(60)
+        self.server_port.setValidator(PortValidator(self.server_port))
         self.ssl_cb = QCheckBox(_('Use SSL'))
         self.autoconnect_cb = QCheckBox(_('Select server automatically'))
         self.autoconnect_cb.setEnabled(self.config.is_modifiable('auto_connect'))
@@ -523,8 +525,10 @@ class NetworkChoiceLayout(QObject, OnDestroyedMixin, PrintError):
         self.proxy_mode.addItems(['SOCKS4', 'SOCKS5', 'HTTP'])
         self.proxy_host = QLineEdit()
         self.proxy_host.setFixedWidth(200)
+        self.proxy_host.setValidator(HostValidator(self.proxy_host))
         self.proxy_port = QLineEdit()
         self.proxy_port.setFixedWidth(60)
+        self.proxy_port.setValidator(PortValidator(self.proxy_port))
         self.proxy_user = QLineEdit()
         self.proxy_user.setPlaceholderText(_("Proxy user"))
         self.proxy_password = QLineEdit()
