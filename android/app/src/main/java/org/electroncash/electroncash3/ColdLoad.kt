@@ -3,20 +3,23 @@ package org.electroncash.electroncash3
 import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
+import androidx.viewbinding.ViewBinding
 import com.chaquo.python.Kwarg
 import com.chaquo.python.PyException
 import com.chaquo.python.PyObject
 import com.chaquo.python.PyObject.fromJava
 import com.google.zxing.integration.android.IntentIntegrator
-import kotlinx.android.synthetic.main.load.*
-import kotlinx.android.synthetic.main.load.tvStatus
-import kotlinx.android.synthetic.main.signed_transaction.*
-import kotlinx.android.synthetic.main.sweep.*
+import org.electroncash.electroncash3.databinding.LoadBinding
+import org.electroncash.electroncash3.databinding.SignedTransactionBinding
+import org.electroncash.electroncash3.databinding.SweepBinding
+import org.electroncash.electroncash3.databinding.WalletInformationBinding
 
 
 val libTransaction by lazy { libMod("transaction") }
@@ -28,10 +31,13 @@ val libTransaction by lazy { libMod("transaction") }
 // Valid transaction quickly show up in transactions.
 
 class ColdLoadDialog : AlertDialogFragment() {
+    private var _binding: LoadBinding? = null
+    private val binding get() = _binding!!
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
+        _binding = LoadBinding.inflate(LayoutInflater.from(context))
         builder.setTitle(R.string.load_transaction)
-                .setView(R.layout.load)
+                .setView(binding.root)
                 .setNegativeButton(android.R.string.cancel, null)
                 .setNeutralButton(R.string.scan_qr, null)
                 .setPositiveButton(R.string.OK, null)
@@ -39,23 +45,23 @@ class ColdLoadDialog : AlertDialogFragment() {
 
     override fun onShowDialog() {
         super.onShowDialog()
-        etTransaction.addAfterTextChangedListener{ updateUI() }
+        binding.etTransaction.addAfterTextChangedListener{ updateUI() }
         updateUI()
 
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { onOK() }
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { scanQR(this) }
-        btnPaste.setOnClickListener {
+        binding.btnPaste.setOnClickListener {
             val clipdata = getSystemService(ClipboardManager::class).primaryClip
             if (clipdata != null && clipdata.getItemCount() > 0) {
                 val cliptext = clipdata.getItemAt(0)
-                etTransaction.setText(cliptext.text)
+                binding.etTransaction.setText(cliptext.text)
             }
         }
     }
 
     private fun updateUI() {
-        val tx = txFromHex(etTransaction.text.toString())
-        updateStatusText(tvStatus, tx)
+        val tx = txFromHex(binding.etTransaction.text.toString())
+        updateStatusText(binding.tvStatus, tx)
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled =
             canSign(tx) || canBroadcast(tx)
     }
@@ -70,14 +76,14 @@ class ColdLoadDialog : AlertDialogFragment() {
             } catch (e: PyException) {
                 result.contents
             }
-            etTransaction.setText(txHex)
+            binding.etTransaction.setText(txHex)
         } else {
             super.onActivityResult(requestCode, resultCode, data)
         }
     }
 
     fun onOK() {
-        val txHex = etTransaction.text.toString()
+        val txHex = binding.etTransaction.text.toString()
         val tx = txFromHex(txHex)
 
         try {
@@ -119,13 +125,17 @@ private fun updateStatusText(idTxStatus: TextView, tx: PyObject) {
 
 
 class SignedTransactionDialog : TaskLauncherDialog<Unit>() {
+    private var _binding: SignedTransactionBinding? = null
+    private val binding get() = _binding!!
+
     private val tx: PyObject by lazy {
         txFromHex(arguments!!.getString("txHex")!!)
     }
     private lateinit var description: String
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
-        builder.setView(R.layout.signed_transaction)
+        _binding = SignedTransactionBinding.inflate(LayoutInflater.from(context))
+        builder.setView(binding.root)
                .setNegativeButton(R.string.close, null)
                .setPositiveButton(R.string.send, null)
     }
@@ -133,20 +143,20 @@ class SignedTransactionDialog : TaskLauncherDialog<Unit>() {
     override fun onShowDialog() {
         super.onShowDialog()
 
-        fabCopy.setOnClickListener {
+        binding.fabCopy.setOnClickListener {
             copyToClipboard(tx.toString(), R.string.transaction)
         }
-        showQR(imgQR, baseEncode(tx.toString(), 43))
-        updateStatusText(tvStatus, tx)
+        showQR(binding.imgQR, baseEncode(tx.toString(), 43))
+        updateStatusText(binding.tvStatus, tx)
 
         if (!canBroadcast(tx)) {
-            hideDescription(this)
+            hideDescription(this, binding.tvDescriptionLabel, binding.etDescription)
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
         }
     }
 
     override fun onPreExecute() {
-        description = etDescription.text.toString()
+        description = binding.etDescription.text.toString()
     }
 
     override fun doInBackground() {
@@ -158,14 +168,17 @@ class SignedTransactionDialog : TaskLauncherDialog<Unit>() {
     }
 }
 
-fun hideDescription(dialog: DialogFragment) {
-    for (view in listOf(dialog.tvDescriptionLabel, dialog.etDescription)) {
+fun hideDescription(dialog: DialogFragment, descriptionLabel: TextView, description: TextView) {
+    for (view in listOf(descriptionLabel, description)) {
         view.visibility = View.GONE
     }
 }
 
 
 class SweepDialog : TaskLauncherDialog<PyObject>() {
+    private var _binding: SweepBinding? = null
+    private val binding get() = _binding!!
+
     lateinit var input: String
 
     init {
@@ -173,8 +186,9 @@ class SweepDialog : TaskLauncherDialog<PyObject>() {
     }
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
+        _binding = SweepBinding.inflate(LayoutInflater.from(context))
         builder.setTitle(R.string.sweep_private)
-            .setView(R.layout.sweep)
+            .setView(binding.root)
             .setNeutralButton(R.string.scan_qr, null)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(android.R.string.ok, null)
@@ -188,14 +202,14 @@ class SweepDialog : TaskLauncherDialog<PyObject>() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
         if (result != null && result.contents != null) {
-            appendLine(etInput, result.contents)
+            appendLine(binding.etInput, result.contents)
         } else {
             super.onActivityResult(requestCode, resultCode, data)
         }
     }
 
     override fun onPreExecute() {
-        input = etInput.text.toString()
+        input = binding.etInput.text.toString()
     }
 
     override fun doInBackground(): PyObject {

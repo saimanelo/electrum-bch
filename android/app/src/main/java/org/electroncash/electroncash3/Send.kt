@@ -3,9 +3,11 @@ package org.electroncash.electroncash3
 import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
+import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -17,8 +19,8 @@ import com.chaquo.python.PyException
 import com.chaquo.python.PyObject
 import com.chaquo.python.PyObject.fromJava
 import com.google.zxing.integration.android.IntentIntegrator
-import kotlinx.android.synthetic.main.load.*
-import kotlinx.android.synthetic.main.send.*
+import org.electroncash.electroncash3.databinding.AmountBoxBinding
+import org.electroncash.electroncash3.databinding.SendBinding
 
 
 val libPaymentRequest by lazy { libMod("paymentrequest") }
@@ -28,6 +30,9 @@ val MIN_FEE = 1  // sat/byte
 
 
 class SendDialog : TaskLauncherDialog<Unit>() {
+    private var _binding: SendBinding? = null
+    private val binding get() = _binding!!
+
     val wallet = daemonModel.wallet!!
 
     class Model : ViewModel() {
@@ -89,6 +94,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
     }
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
+        _binding = SendBinding.inflate(LayoutInflater.from(context))
         if (!unbroadcasted) {
             builder.setTitle(R.string.send)
                 .setPositiveButton(R.string.send, null)
@@ -96,15 +102,14 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             builder.setTitle(R.string.sign_transaction)
                 .setPositiveButton(R.string.sign, null)
         }
-        builder.setView(R.layout.send)
+        builder.setView(binding.root)
             .setNegativeButton(android.R.string.cancel, null)
             .setNeutralButton(R.string.scan_qr, null)
     }
 
     override fun onShowDialog() {
         super.onShowDialog()
-
-        etAddress.addAfterTextChangedListener { s: Editable ->
+        binding.etAddress.addAfterTextChangedListener { s: Editable ->
             val scheme = libNetworks.get("net")!!.get("CASHADDR_PREFIX")!!.toString()
             if (s.startsWith(scheme + ":")) {
                 onUri(s.toString())
@@ -113,22 +118,22 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             }
         }
 
-        amountBox = AmountBox(dialog)
+        amountBox = AmountBox(binding.incAmount)
         amountBox.listener = {
             if (!settingAmount) {
-                btnMax.isChecked = false
+                binding.btnMax.isChecked = false
                 refreshTx()
             }
         }
         setPaymentRequest(model.paymentRequest)
-        btnMax.setOnCheckedChangeListener { _, isChecked ->
+        binding.btnMax.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 setAmount(null)
             }
             refreshTx()
         }
 
-        with (sbFee) {
+        with (binding.sbFee) {
             // setMin is not available until API level 26, so values are offset by MIN_FEE.
             progress = (daemonModel.config.callAttr("fee_per_kb").toInt() / 1000) - MIN_FEE
             max = (daemonModel.config.callAttr("max_fee_rate").toInt() / 1000) - MIN_FEE
@@ -157,7 +162,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         // If this is the final signature, the user will be given a chance to set the
         // description in the SignedTransactionDialog.
         if (unbroadcasted) {
-            hideDescription(this)
+            hideDescription(this, binding.tvDescriptionLabel, binding.etDescription)
         }
 
         val txHex = arguments?.getString("txHex")
@@ -168,7 +173,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         }
 
         if (arguments?.getString("sweepKeypairs") != null) {
-            btnMax.isChecked = true
+            binding.btnMax.isChecked = true
 
             // The inputs may be truncated to avoid exceeding the maximum transaction size,
             // Display the input count so the user knows to sweep again in that situation.
@@ -177,10 +182,10 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         }
 
         if (readOnly) {
-             etAddress.isFocusable = false
-             (btnContacts as View).visibility = View.GONE
+            binding.etAddress.isFocusable = false
+             (binding.btnContacts as View).visibility = View.GONE
              amountBox.isEditable = false
-             btnMax.isEnabled = false
+             binding.btnMax.isEnabled = false
              dialog.getButton(AlertDialog.BUTTON_NEUTRAL).visibility = View.GONE
         }
 
@@ -192,7 +197,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         if (arguments != null) {
             val address = arguments!!.getString("address")
             if (address != null) {
-                etAddress.setText(address)
+                binding.etAddress.setText(address)
                 amountBox.requestFocus()
             }
         }
@@ -200,12 +205,12 @@ class SendDialog : TaskLauncherDialog<Unit>() {
     }
 
     val feeSpb: Int
-        get() = MIN_FEE + sbFee.progress
+        get() = MIN_FEE + binding.sbFee.progress
 
     fun refreshTx() {
         if (arguments?.containsKey("txHex") != true) {
-            model.tx.refresh(TxArgs(wallet, model.paymentRequest, etAddress.text.toString(),
-                amountBox.amount, btnMax.isChecked, inputs))
+            model.tx.refresh(TxArgs(wallet, model.paymentRequest, binding.etAddress.text.toString(),
+                amountBox.amount, binding.btnMax.isChecked, inputs))
         }
     }
 
@@ -215,7 +220,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         } catch (e: ToastException) {
             null  // Don't show it until the user clicks Send.
         }
-        if (btnMax.isChecked && tx != null) {
+        if (binding.btnMax.isChecked && tx != null) {
             setAmount(tx.callAttr("output_value").toLong())
         }
         setFeeLabel(tx)
@@ -238,7 +243,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         if (fee != null) {
             feeLabel += " (${ltr(formatSatoshisAndUnit(fee.toLong()))})"
         }
-        tvFeeLabel.setText(feeLabel)
+        binding.tvFeeLabel.setText(feeLabel)
         return spb
     }
 
@@ -315,8 +320,8 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                 showDialog(this, GetPaymentRequestDialog(r.toString()))
             } else {
                 setPaymentRequest(null)
-                parsed.callAttr("get", "address")?.let { etAddress.setText(it.toString()) }
-                parsed.callAttr("get", "message")?.let { etDescription.setText(it.toString()) }
+                parsed.callAttr("get", "address")?.let { binding.etAddress.setText(it.toString()) }
+                parsed.callAttr("get", "message")?.let { binding.etDescription.setText(it.toString()) }
                 parsed.callAttr("get", "amount")?.let {
                     try {
                         amountBox.amount = it.toLong()
@@ -326,7 +331,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                     }
                 }
                 amountBox.requestFocus()
-                btnMax.isChecked = false
+                binding.btnMax.isChecked = false
             }
         } catch (e: ToastException) {
             e.show()
@@ -335,22 +340,22 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     fun setPaymentRequest(pr: PyObject?) {
         model.paymentRequest = pr
-        for (et in listOf(etAddress, etDescription)) {
+        for (et in listOf(binding.etAddress, binding.etDescription)) {
             setEditable(et, (pr == null))
         }
         amountBox.isEditable = (pr == null)
-        btnMax.isEnabled = (pr == null)
+        binding.btnMax.isEnabled = (pr == null)
 
         if (pr != null) {
-            etAddress.setText(pr.callAttr("get_requestor").toString())
+            binding.etAddress.setText(pr.callAttr("get_requestor").toString())
             amountBox.amount = pr.callAttr("get_amount").toLong()
-            btnMax.isChecked = false
-            etDescription.setText(pr.callAttr("get_memo").toString())
+            binding.btnMax.isChecked = false
+            binding.etDescription.setText(pr.callAttr("get_memo").toString())
         }
 
-        btnContacts.setImageResource(if (pr == null) R.drawable.ic_person_24dp
+        binding.btnContacts.setImageResource(if (pr == null) R.drawable.ic_person_24dp
                                      else R.drawable.ic_check_24dp)
-        btnContacts.setOnClickListener {
+        binding.btnContacts.setOnClickListener {
             if (pr == null) {
                 showDialog(this, SendContactsDialog())
             } else {
@@ -364,9 +369,9 @@ class SendDialog : TaskLauncherDialog<Unit>() {
      */
     fun setLoadedTransaction(tx: PyObject) {
         val spb = setFeeLabel(tx)
-        sbFee.setOnSeekBarChangeListener(null)  // Avoid persisting to settings.
-        sbFee.progress = spb - MIN_FEE
-        sbFee.isEnabled = false
+        binding.sbFee.setOnSeekBarChangeListener(null)  // Avoid persisting to settings.
+        binding.sbFee.progress = spb - MIN_FEE
+        binding.sbFee.isEnabled = false
 
         // Try to guess which outputs are the intended recipients. Where possible, this should
         // display the same values that were entered when the transaction was created.
@@ -385,9 +390,9 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         // If there is only one recipient, their address will be displayed.
         // Otherwise, this is a "pay to many" transaction.
         if (recipients.size == 1) {
-            etAddress.setText(recipients[0].asList()[1].toString())
+            binding.etAddress.setText(recipients[0].asList()[1].toString())
         } else {
-            etAddress.setText(R.string.pay_to_many)
+            binding.etAddress.setText(R.string.pay_to_many)
         }
         setAmount(recipients.map { it.asList()[2].toLong() }.sum())
     }
@@ -396,7 +401,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         outputs.filter { !wallet.callAttr(methodName, it.asList()[1]).toBoolean() }
 
     override fun onPreExecute() {
-        description = etDescription.text.toString()
+        description = binding.etDescription.text.toString()
     }
 
     override fun doInBackground() {
@@ -421,7 +426,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                 txResult.get()   // May throw ToastException.
 
                 showDialog(this, SendPasswordDialog().apply { arguments = Bundle().apply {
-                    putString("description", this@SendDialog.etDescription.text.toString())
+                    putString("description", this@SendDialog.binding.etDescription.text.toString())
                 }})
             } catch (e: ToastException) { e.show() }
         }
@@ -453,6 +458,24 @@ class GetPaymentRequestDialog() : TaskDialog<PyObject>() {
 
 
 class SendContactsDialog : MenuDialog() {
+    private var _binding: SendBinding? = null
+
+    private val binding get() = _binding!!
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        _binding = SendBinding.inflate(inflater, container, false)
+        return binding.root
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
+
     val sendDialog by lazy { targetFragment as SendDialog }
     val contacts: List<PyObject> by lazy {
         guiContacts.callAttr("get_contacts", sendDialog.wallet).asList()
@@ -475,7 +498,7 @@ class SendContactsDialog : MenuDialog() {
     override fun onMenuItemSelected(item: MenuItem) {
         val address = makeAddress(contacts.get(item.itemId).get("address").toString())
         with (sendDialog) {
-            etAddress.setText(address.callAttr("to_ui_string").toString())
+            binding.etAddress.setText(address.callAttr("to_ui_string").toString())
             amountBox.requestFocus()
         }
     }
