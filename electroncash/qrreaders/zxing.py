@@ -57,10 +57,10 @@ class ZxingCppQrCodeReader(AbstractQrCodeReader):
         self,
         buffer: ctypes.c_void_p,
         buffer_size: int,
-        _rowlen_bytes: int,
+        rowlen_bytes: int,
         width: int,
         height: int,
-        _frame_id: int = -1,
+        frame_id: int = -1,
     ) -> List[QrCodeResult]:
         pybuffer = _PyMemoryView_FromMemory(buffer, buffer_size, _PyBUF_READ).cast("B", (height, width))
 
