@@ -25,7 +25,7 @@
 import os
 from typing import List, Optional
 
-from PyQt5.Qt import Qt, QMargins
+from PyQt5.QtCore import Qt, QMargins
 from PyQt5.QtWidgets import QDialog, QGridLayout, QVBoxLayout, QLabel, QPushButton, QToolButton, QGroupBox
 
 from electroncash import keystore
