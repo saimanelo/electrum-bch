@@ -62,6 +62,7 @@ class ZxingCppQrCodeReader(AbstractQrCodeReader):
         height: int,
         frame_id: int = -1,
     ) -> List[QrCodeResult]:
+        assert rowlen_bytes == width  # ZXing-C++ doesn't support image lines != width
         pybuffer = _PyMemoryView_FromMemory(buffer, buffer_size, _PyBUF_READ).cast("B", (height, width))
 
         results = []
