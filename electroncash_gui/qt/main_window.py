@@ -66,6 +66,7 @@ try:
 except:
     plot_history = None
 import electroncash.web as web
+from electroncash.qrreaders import get_supported_qr_reader_types
 
 from .amountedit import AmountEdit, BTCAmountEdit, MyLineEdit, BTCSatsByteEdit
 from .qrcodewidget import QRCodeWidget, QRDialog
@@ -4496,6 +4497,28 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.config.set_key('block_explorer', be_result, True)
         block_ex_combo.currentIndexChanged.connect(on_be)
         gui_widgets.append((block_ex_label, block_ex_combo))
+
+        # QR code reader selection
+
+        qr_reader_combo = QComboBox()
+        qr_reader_label = HelpLabel(_('QR Reader'), '')
+
+        qr_reader_combo.clear()
+        qr_reader_combo.addItem(_("Default"), "default")
+        for reader in get_supported_qr_reader_types():
+            qr_reader_combo.addItem(reader.reader_name(), reader.__name__)
+        qr_reader = self.config.get("qr_reader")
+        qr_reader_index = 0
+        if qr_reader:
+            qr_reader_index = max(0, qr_reader_combo.findData(qr_reader))  # if not found, default to 0 (the default item)
+        qr_reader_combo.setCurrentIndex(qr_reader_index)
+        def on_qr_reader(x):
+            self.config.set_key("qr_reader", None if x == 0 else qr_reader_combo.itemData(x), True)
+        qr_reader_combo.currentIndexChanged.connect(on_qr_reader)
+
+        gui_widgets.append((qr_reader_label, qr_reader_combo))
+
+        # Video device selection
 
         qr_combo = QComboBox()
         qr_label = HelpLabel(_('Video device'), '')

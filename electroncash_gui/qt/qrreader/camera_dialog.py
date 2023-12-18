@@ -95,7 +95,7 @@ class QrReaderCameraDialog(PrintError, MessageBoxMixin, QDialog):
         self.config = get_config()
 
         # Try to get the QR reader for this system
-        self.qrreader = get_qr_reader()
+        self.qrreader = get_qr_reader(self.config.get("qr_reader", None))
         if not self.qrreader:
             raise MissingQrDetectionLib(_("The platform QR detection library is not available."))
 
