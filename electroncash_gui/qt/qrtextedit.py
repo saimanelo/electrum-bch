@@ -6,6 +6,7 @@ from electroncash import util, get_config
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import QFileDialog, QAbstractButton, QApplication, QMenu
+from PyQt5 import sip
 
 from .util import ButtonsTextEdit, MessageBoxMixin, ColorScheme
 
@@ -114,11 +115,33 @@ class ScanQRTextEdit(_QrCodeTextEdit, MessageBoxMixin):
             return
 
         image_y800 = image.convertToFormat(QImage.Format_Grayscale8)
+        width = image_y800.width()
+        height = image_y800.height()
+        bpl = image_y800.bytesPerLine()
+        cropped_data = bytearray()  # Declared here to ensure this bytearray lives longer than sip_vp
+
+        if width == bpl:
+            sip_vp = image_y800.constBits()
+            sip_vp.setsize(image_y800.byteCount())
+        else:
+            # "Crop" the image to ensure that each line is exactly width() bytes,
+            # since sometimes QImage lines are in 4-byte multiples.
+            sip_arr = image_y800.constBits().asarray(image_y800.byteCount())
+            for line in range(height):
+                line_offset = line * bpl
+                for col in range(width):
+                    offset = line_offset + col
+                    cropped_data.append(sip_arr[offset])
+            sip_vp = sip.voidptr(cropped_data)
+            sip_vp.setsize(len(cropped_data))
+        assert sip_vp.getsize() == width * height
+
         res = qr_reader.read_qr_code(
-            image_y800.constBits().__int__(), image_y800.byteCount(),
-            image_y800.bytesPerLine(),
-            image_y800.width(),
-            image_y800.height()
+            buffer=sip_vp.__int__(),
+            buffer_size=sip_vp.getsize(),
+            rowlen_bytes=width,
+            width=width,
+            height=height
         )
 
         return res
