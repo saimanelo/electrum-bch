@@ -39,12 +39,6 @@ verify_hash "$CACHEDIR/appimagetool" "d918b4df547b388ef253f3c9e7f6529ca81a885395
 download_if_not_exist "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" "https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tar.xz"
 verify_hash "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" $PYTHON_SRC_TARBALL_HASH
 
-# Download zxing-cpp source and patch to remove __FILE__ macro.
-download_if_not_exist "$CACHEDIR/zxing-cpp-2.2.0.tar.gz" "https://files.pythonhosted.org/packages/a7/8f/77828ef6e7bcad2ed17da58a4af833fce52e2afb6e72214e0403fa0ef197/zxing-cpp-2.2.0.tar.gz"
-verify_hash "$CACHEDIR/zxing-cpp-2.2.0.tar.gz" "11884ef9d1a61e47ad89836339da9e1040cb28b083fb37462bc58e8d46f135bc"
-tar xf "$CACHEDIR/zxing-cpp-2.2.0.tar.gz" -C "$CACHEDIR"
-sed -in  's/__FILE__/" "/' "$CACHEDIR/zxing-cpp-2.2.0/core/src/Error.h"
-
 (
     cd "$PROJECT_ROOT"
     for pkg in secp zbar openssl libevent zlib tor ; do
@@ -118,14 +112,21 @@ info "Preparing electrum-locale"
 )
 
 
+function filter_deps {
+  awk "$1"' {exclude=1; next} exclude && /^[[:space:]]/ {next} {exclude=0} !exclude {print}'
+}
+
+export CMAKE_PREFIX_PATH=$APPDIR/usr
+
 info "Installing Electron Cash and its dependencies"
 mkdir -p "$CACHEDIR/pip_cache"
 # Note: We must specify -g0 for CFLAGS to ensure no debug symbols (which can be non-deterministic due to tmp paths
 # encoded in the debug symbols).
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-pip.txt"
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements.txt"
-CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --only-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-binaries-appimage.txt"
-CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --only-binary :all: --cache-dir "$CACHEDIR/pip_cache" "$CACHEDIR/zxing-cpp-2.2.0"
+CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --only-binary pyqt5 --cache-dir "$CACHEDIR/pip_cache" -r <(filter_deps /zxing-cpp/ < "$CONTRIB/deterministic-build/requirements-binaries.txt")
+# zxing-cpp with patch for reproducible build, see https://github.com/zxing-cpp/zxing-cpp/pull/730
+CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --only-binary cmake --cache-dir "$CACHEDIR/pip_cache" git+https://github.com/zxing-cpp/zxing-cpp.git@428aeb73d46239c2c7738f76e2ddfbbd06c1d472#subdirectory=wrappers/python
 # Temporary fix for hidapi incompatibility with Cython 3
 # See https://github.com/trezor/cython-hidapi/issues/155
 # We use PIP_CONSTRAINT as an environment variable instead of command line flag because it gets passed to subprocesses
