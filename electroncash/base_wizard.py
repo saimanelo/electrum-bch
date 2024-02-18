@@ -87,7 +87,7 @@ class BaseWizard(util.PrintError):
             ('standard',  _("Standard wallet")),
             ('multisig',  _("Multi-signature wallet")),
             ('imported',  _("Import Bitcoin Cash addresses or private keys")),
-            #('rpa', _("Reusable payment address")),
+            ('rpa', _("Reusable payment address")),
         ]
         choices = [pair for pair in wallet_kinds if pair[0] in wallet_types]
         self.choice_dialog(title=title, message=message, choices=choices, run_next=self.on_wallet_type)
