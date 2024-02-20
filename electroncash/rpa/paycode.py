@@ -142,7 +142,6 @@ def _generate_address_from_pubkey_and_secret(parent_pubkey, secret):
 def _generate_privkey_from_secret(parent_privkey, secret):
     """parent_privkey and secret are expected to be bytes
     This function generates a receiving address based on CKD."""
-
     return bitcoin.CKD_priv(parent_privkey, secret, 0)[0].hex()
 
 
@@ -432,9 +431,16 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
             (False, 1), password)
         spend_private_key_int_format = int.from_bytes(Base58.decode_check(spend_private_key_wif_format)[1:33],
                                                       byteorder="big")
+                                                                                   
         # Generate the private key for the money being received via paycode
+        spend_private_key_hex_format = hex(spend_private_key_int_format)[2:]
+
+        # Pad with leading zero if necesssary
+        if len(spend_private_key_hex_format) % 2 !=0:
+            spend_private_key_hex_format = "0" + spend_private_key_hex_format
+            
         privkey = _generate_privkey_from_secret(bytes.fromhex(
-            hex(spend_private_key_int_format)[2:]), shared_secret)
+            spend_private_key_hex_format), shared_secret)
 
         # Now convert to WIF
         extendedkey = "80" + privkey
