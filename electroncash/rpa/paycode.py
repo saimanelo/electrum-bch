@@ -232,7 +232,12 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
         raise ValueError("Invalid prefix size. Must be 4,8,12, or 16 bits.")
 
     # Construct the transaction, initially with a dummy destination
-    rpa_dummy_address = wallet.dummy_address().to_string(Address.FMT_CASHADDR)
+    rpa_dummy_address_generation_string="rpadummy" 
+    rpa_dummy_address_generation_bytes = rpa_dummy_address_generation_string.encode('utf-8')
+    rpa_dummy_address_generation_hash = sha256(rpa_dummy_address_generation_bytes)
+    rpa_dummy_pubkey = bitcoin.public_key_from_private_key(rpa_dummy_address_generation_hash, True)
+    rpa_dummy_address = Address.from_pubkey(rpa_dummy_pubkey).to_string(Address.FMT_CASHADDR)
+    
     unsigned = True
     tx = _mktx(wallet, config, [(rpa_dummy_address, amount)], tx_fee, change_addr, domain, nocheck, unsigned,
                password, locktime, op_return, op_return_raw)
