@@ -9,9 +9,9 @@ pefile==2023.2.7 \
 pycparser==2.20 \
     --hash=sha256:2d475327684562c3a96cc71adf7dc8c4f0565175cf86b6d7a404ff4c771f15f0 \
     --hash=sha256:7582ad22678f0fcd81102833f60ef8d0e57288b6b5fb00323d101be910e35705
-pyinstaller-hooks-contrib==2023.9 \
-    --hash=sha256:76084b5988e3957a9df169d2a935d65500136967e710ddebf57263f1a909cd80 \
-    --hash=sha256:f34f4c6807210025c8073ebe665f422a3aa2ac5f4c7ebf4c2a26cc77bebf63b5
+pyinstaller-hooks-contrib==2024.1 \
+    --hash=sha256:131494f9cfce190aaa66ed82e82c78b2723d1720ce64d012fbaf938f4ab01d35 \
+    --hash=sha256:51a51ea9e1ae6bd5ffa7ec45eba7579624bf4f2472ff56dba0edc186f6ed46a6
 pywin32-ctypes==0.2.2 \
     --hash=sha256:3426e063bdd5fd4df74a14fa3cf80a0b42845a87e1d1e81f6549f9daec593a60 \
     --hash=sha256:bf490a1a709baf35d688fe0ecf980ed4de11d2b3e37b51e5442587a75d9957e7
