@@ -59,7 +59,7 @@ prepare_wine() {
         LIBUSB_COMMIT=c6a35c56016ea2ab2f19115d2ea1e85e0edae155 # Version 1.0.24
 
         PYINSTALLER_REPO='https://github.com/pyinstaller/pyinstaller.git'
-        PYINSTALLER_COMMIT=7001defa6f8cbbd23d880e609693ae62452d1b34 # Version 6.0.0
+        PYINSTALLER_COMMIT=90256f93ed943daf6de53c7dd39710a415f705cb # Version 6.4.0
 
         ## These settings probably don't need change
         PYHOME=c:/python$PYTHON_VERSION  # NB: PYTON_VERSION comes from ../base.sh
