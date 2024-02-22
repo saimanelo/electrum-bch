@@ -458,7 +458,7 @@ class Transaction:
         return d
 
     @classmethod
-    def from_io(cls, inputs, outputs, locktime=0, version=1, sign_schnorr=False, *, token_datas=None) -> object:
+    def from_io(cls, inputs, outputs, locktime=0, sign_schnorr=False, *, token_datas=None, version=1) -> object:
         assert all(isinstance(output[1], (PublicKey, Address, ScriptOutput))
                    for output in outputs)
         self = cls(None)
