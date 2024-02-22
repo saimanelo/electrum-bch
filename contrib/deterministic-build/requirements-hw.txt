@@ -1,3 +1,6 @@
+construct-classes==0.1.2 \
+    --hash=sha256:72ac1abbae5bddb4918688713f991f5a7fb6c9b593646a82f4bf3ac53de7eeb5 \
+    --hash=sha256:e82437261790758bda41e45fb3d5622b54cfbf044ceb14774af68346faf5e08e
 btchip-python==0.1.31 \
     --hash=sha256:4167f3c6ea832dd189d447d0d7a8c2a968027671ae6f43c680192f2b72c39b2c
 click==7.1.2 \
@@ -101,9 +104,9 @@ libusb1==1.9.1 \
     --hash=sha256:4a024fffe195c49f3e7eadd2266087b4be065982f0cb41ef4b7e2c5053e7e65c \
     --hash=sha256:b12666e8ad4df78e8f1bae36298c7d6f8f45d70ceea058b88631ef8478fd1eb0 \
     --hash=sha256:d03ef15248c8b8ce440f6be4248eaadc074fc2dc5edd36c48e6e78eef3999292
-mnemonic==0.19 \
-    --hash=sha256:4e37eb02b2cbd56a0079cabe58a6da93e60e3e4d6e757a586d9f23d96abea931 \
-    --hash=sha256:a8d78c5100acfa7df9bab6b9db7390831b0e54490934b718ff9efd68f0d731a6
+mnemonic==0.21 \
+    --hash=sha256:72dc9de16ec5ef47287237b9b6943da11647a03fe7cf1f139fc3d7c4a7439288 \
+    --hash=sha256:1fe496356820984f45559b1540c80ff10de448368929b9c60a2b55744cc88acf
 pyopenssl==20.0.0 \
     --hash=sha256:898aefbde331ba718570244c3b01dcddb1b31a3b336613436a45e52e27d9a82d \
     --hash=sha256:92f08eccbd73701cf744e8ffd6989aa7842d48cbe3fea8a7c031c5647f590ac5

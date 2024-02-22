@@ -141,7 +141,9 @@ mkdir -p $BUILDDIR
 
 info "Building PyInstaller."
 PYINSTALLER_REPO="https://github.com/pyinstaller/pyinstaller.git"
-PYINSTALLER_COMMIT="e20e74c03768d432d48665b8ef1e02511b16e4be"
+PYINSTALLER_COMMIT="90256f93ed943daf6de53c7dd39710a415f705cb"
+# ^ tag "v6.4.0"
+#PYINSTALLER_COMMIT="e20e74c03768d432d48665b8ef1e02511b16e4be"
 # ^ tag "4.3"
 # TODO test newer versions of pyinstaller for build-reproducibility.
 #      we are using this version for now due to change in code-signing behavior
@@ -281,7 +283,7 @@ if ((DARWIN_VER >= 18 && FORCE_MOJAVE_DARK)); then
 fi
 
 # Sign the Tor binary separately
-DoCodeSignMaybe "tor binary" "dist/${PACKAGE}.app/Contents/MacOS/electroncash/tor/bin/tor" "$APP_SIGN"
+DoCodeSignMaybe "tor binary" "dist/${PACKAGE}.app/Contents/Frameworks/electroncash/tor/bin/tor" "$APP_SIGN"
 # Finally, codesign the whole thing
 DoCodeSignMaybe ".app bundle" "dist/${PACKAGE}.app" "$APP_SIGN"
 
