@@ -353,6 +353,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
             my_txin = my_tx._inputs[0]
             while not tx_matches_paycode_prefix:
                 if exit_event and exit_event.is_set():
+                    results.put(None)  # NoneType indicates user cancelled
                     return
                 nonce_bytes = nonce.to_bytes(length=5, byteorder='little')
                 ndata = sha256(nonce_bytes)
@@ -406,6 +407,9 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
         if isinstance(tx_or_e, Exception):
             # This should never happen. Sub-thread got an exception. Bubble it out.
             raise tx_or_e
+        elif tx_or_e is None:
+            # User cancelled
+            return
         tx = tx_or_e
     finally:
         join_threads()
