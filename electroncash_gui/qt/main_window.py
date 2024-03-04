@@ -2111,35 +2111,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
     def read_send_tab(self,get_raw=False):
 
-        # This is a wrapper function around the call the generate the rpa transaction.  We can pass this function to the waiting dialog.
-        def rpa_grind():
-            exit_event = threading.Event()
-
-            def update_prog_grinding(x):
-                if dlg:
-                    dlg.update_progress(int(x))
-                    if dlg.isHidden():
-                        exit_event.set()
-            self.raw_tx = rpa.paycode.generate_transaction_from_paycode(
-                self.wallet, self.config, full_unit_amount, paycode_string,
-                password=rpa_pwd, progress_callback=update_prog_grinding,
-                exit_event=exit_event
-            )
-            return
-
         isInvoice= False
 
         if self.payment_request and self.payment_request.has_expired():
             self.show_error(_('Payment request has expired'))
             return
         label = self.message_e.text()
+        raw_tx = None
         if not self.wallet.is_multisig() and self.payto_e.is_paycode:
             paycode_string = self.payto_e.text()[1:-1]
             if self.amount_e.get_amount() is None:
                 self.show_error(_('Invalid Amount'))
                 return
             full_unit_amount = self.amount_e.get_amount() / 100000000
-
 
             rpa_pwd = None
             if self.wallet.wallet_type == 'rpa':
@@ -2154,18 +2138,37 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                         return
                     rpa_pwd = password
 
-            self.raw_tx = None
-            dlg = WaitingDialog(self, _('Please allow a few moments while Electron Cash creates your RPA transaction.  It needs to grind through many transaction signatures.'), rpa_grind, None, self.on_error, progress_bar=True, progress_min=0, progress_max=100)
-            val=dlg.exec_()
-            # If the user closes the waiting dialog, we should just exit.
-            if self.raw_tx == None:
-                return
+            paycode_raw_tx = dlg = None
 
-            raw_tx = self.raw_tx
-            if raw_tx == 0:
+            def rpa_grind():
+                """ This is a wrapper function around the call the generate the rpa transaction.
+                We can pass this function to the waiting dialog."""
+                nonlocal paycode_raw_tx
+                exit_event = threading.Event()
+
+                def update_prog_grinding(x):
+                    if dlg:
+                        dlg.update_progress(int(x))
+                        if dlg.isHidden():
+                            exit_event.set()
+
+                paycode_raw_tx = rpa.paycode.generate_transaction_from_paycode(
+                    self.wallet, self.config, full_unit_amount, paycode_string,
+                    password=rpa_pwd, progress_callback=update_prog_grinding,
+                    exit_event=exit_event, coins=self.get_coins(isInvoice))
+
+            dlg = WaitingDialog(self, _('Please allow a few moments while Electron Cash creates your RPA transaction.'
+                                        '  It needs to grind through many transaction signatures.'),
+                                rpa_grind, None, self.on_error, progress_bar=True, progress_min=0, progress_max=100)
+            val = dlg.exec_()
+            # If the user closes the waiting dialog, we should just exit.
+            if paycode_raw_tx is None:
+                return
+            elif paycode_raw_tx == 0:
                 self.show_error("Problem creating paycode tx.")
                 return
-            unpacked_tx = Transaction.deserialize(Transaction(raw_tx))
+            raw_tx = paycode_raw_tx
+            unpacked_tx = Transaction.deserialize(Transaction(paycode_raw_tx))
             output_zero_address = unpacked_tx["outputs"][0]['address']
             # Set the pay-to field address as a tuple with index 0 and the rpa
             # output address

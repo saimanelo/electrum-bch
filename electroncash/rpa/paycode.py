@@ -9,12 +9,13 @@
 '''
 This implements the functionality for RPA (Reusable Payment Address) aka Paycodes
 '''
-
+import random
 from decimal import Decimal as PyDecimal
 import time
 
 from . import addr
 from .. import bitcoin
+from .. import schnorr
 from .. import transaction
 from ..address import Address, Base58
 from ..bitcoin import *  # COIN, TYPE_ADDRESS, sha256
@@ -42,7 +43,8 @@ def _resolver(wallet, x, nocheck):
 
 
 def _mktx(wallet, config, outputs, fee=None, change_addr=None, domain=None, nocheck=False,
-          unsigned=False, password=None, locktime=None, op_return=None, op_return_raw=None):
+          unsigned=False, password=None, locktime=None, op_return=None, op_return_raw=None,
+          coins=None):
     if op_return and op_return_raw:
         raise ValueError(
             'Both op_return and op_return_raw cannot be specified together!')
@@ -68,7 +70,7 @@ def _mktx(wallet, config, outputs, fee=None, change_addr=None, domain=None, noch
         amount = _satoshis(amount)
         final_outputs.append((TYPE_ADDRESS, address, amount))
 
-    coins = wallet.get_spendable_coins(domain, config)
+    coins = coins or wallet.get_spendable_coins(domain, config)
     try:
         tx = wallet.make_unsigned_transaction(
             coins, final_outputs, config, fee, change_addr)
@@ -187,7 +189,8 @@ def generate_paycode(wallet, prefix_size="10"):
 
 def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, fee=None, from_addr=None,
                                       change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None,
-                                      op_return=None, op_return_raw=None, progress_callback=None, exit_event=None):
+                                      op_return=None, op_return_raw=None, progress_callback=None, exit_event=None,
+                                      coins=None):
     if not wallet.is_schnorr_enabled():
         print_msg(
             "You must enable schnorr signing on this wallet for RPA.  Exiting.")
@@ -232,15 +235,15 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
         raise ValueError("Invalid prefix size. Must be 4,8,12, or 16 bits.")
 
     # Construct the transaction, initially with a dummy destination
-    rpa_dummy_address_generation_string="rpadummy" 
+    rpa_dummy_address_generation_string="rpadummy"
     rpa_dummy_address_generation_bytes = rpa_dummy_address_generation_string.encode('utf-8')
     rpa_dummy_address_generation_hash = sha256(rpa_dummy_address_generation_bytes)
     rpa_dummy_pubkey = bitcoin.public_key_from_private_key(rpa_dummy_address_generation_hash, True)
     rpa_dummy_address = Address.from_pubkey(rpa_dummy_pubkey).to_string(Address.FMT_CASHADDR)
-    
+
     unsigned = True
     tx = _mktx(wallet, config, [(rpa_dummy_address, amount)], tx_fee, change_addr, domain, nocheck, unsigned,
-               password, locktime, op_return, op_return_raw)
+               password, locktime, op_return, op_return_raw, coins=coins)
 
     # HANDLE A FAILURE BY RETURNING ZERO (FOR NOW)
     if tx == 0:
@@ -305,7 +308,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
         sec, compressed = keypairs.get(_pubkey)
 
     # Get the keys and preimage ready for signing
-    pubkey = public_key_from_private_key(sec, compressed)
+    pubkey = bytes.fromhex(public_key_from_private_key(sec, compressed))
     nHashType = 0x00000041  # hardcoded, perhaps should be taken from unsigned input dict
     pre_hash = Hash(bfh(tx.serialize_preimage(0, nHashType, use_cache=False)))
 
@@ -317,30 +320,60 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
     if progress_callback:
         progress_callback(progress_count)
 
+    # The below unrolls some of the Transacton class signing code into here, to optimize it. It's much faster this
+    # way, even if a bit complex. -Calin
+    def my_sign(sec: bytes, pre_hash: bytes, ndata: bytes, nHashType: int):
+        sig = schnorr.sign(sec, pre_hash, ndata=ndata)
+        return sig + bytes((nHashType & 0xff,))
+
+    nonce = random.randint(0, 0xff_ff_ff_ff)
+    ser_prefix = Transaction.serialize_outpoint_bytes(txin)
+    script_prefix = push_script_bytes(bytes((0x0,) * 65))[:-65]  # create the push prefix e.g. 0x41
+    script_suffix = push_script_bytes(pubkey)  # push of the pubkey
+    script_prefix = var_int_bytes(len(script_prefix) + 65 + len(script_suffix)) + script_prefix  # prepend length byte
+    ser_suffix = int_to_bytes(txin.get('sequence', 0xffffffff - 1), 4)
+    prefix_target_hex = paycode_field_scan_pubkey[2:prefix_chars + 2].lower()
+
+    t0 = time.time()
     while not tx_matches_paycode_prefix:
         if exit_event:
             if exit_event.is_set():
                 break
-
-        grind_nonce_string = str(grind_count)
-        grinding_message = paycode_hex + grind_nonce_string + grinding_version
-        ndata = sha256(grinding_message)
-        # Re-sign the transaction input.
-        tx._sign_txin(0, 0, sec, compressed, use_cache=False, ndata=ndata)
+        nonce += 1
+        nonce_bytes = nonce.to_bytes(length=5, byteorder='little')
+        ndata = sha256(nonce_bytes)
+        signature = my_sign(sec, pre_hash, ndata, nHashType)
+        assert len(signature) == 65
+        serialized_input = ser_prefix + script_prefix + signature + script_suffix + ser_suffix
 
         if progress_callback and progress_count < grind_count // 1000:
             progress_count = grind_count // 1000
             progress_callback(progress_count)
 
-        input_zero = tx._inputs[0]
-        my_serialized_input = tx.serialize_input(input_zero, tx.input_script(input_zero, False, tx._sign_schnorr))
-        my_serialized_input_bytes = bytes.fromhex(my_serialized_input)
-        hashed_input = sha256(sha256(my_serialized_input_bytes)).hex()
-        if hashed_input[0:prefix_chars].upper(
-        ) == paycode_field_scan_pubkey[2:prefix_chars + 2].upper():
-            tx_matches_paycode_prefix = True
+        hashed_input = sha256(sha256(serialized_input))
+        hashed_input_prefix_hex = hashed_input[:2].hex()[0:prefix_chars]
 
+        if hashed_input_prefix_hex == prefix_target_hex:
+            print_error(f"matched prefix {prefix_target_hex} for serialized input with hash: {hashed_input.hex()}")
+            reason=[]
+            if not Transaction.verify_signature(pubkey, signature[:-1], pre_hash, reason=reason):
+                raise RuntimeError(f"Signature verification failed: {str(reason)}")
+            else:
+                txin['signatures'][0] = signature.hex()
+                txin['pubkeys'][0] = pubkey.hex()
+                check_input = tx.serialize_input_bytes(txin, bytes.fromhex(tx.input_script(txin)))
+                check_hash = Hash(check_input)
+                if hashed_input != check_hash:
+                    print_error(f"Real input hash: {check_hash.hex()} does not match what we calculated: {hashed_input.hex()}")
+                    print_error(f"our ser input : {serialized_input.hex()}")
+                    print_error(f"real ser input: {check_input.hex()}")
+                    raise RuntimeError("Internal error calculating the input prefix. Calculated prefix does not match"
+                                       " what the Transaction class would have done. FIXME!")
+                tx_matches_paycode_prefix = True
         grind_count += 1
+    tf = time.time()
+
+    print_error(f"Iterated {grind_count} times in {tf-t0:1.3f} secs")
 
     # Sort the inputs and outputs deterministically
     tx.BIP69_sort()
@@ -436,14 +469,14 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
             (False, 1), password)
         spend_private_key_int_format = int.from_bytes(Base58.decode_check(spend_private_key_wif_format)[1:33],
                                                       byteorder="big")
-                                                                                   
+
         # Generate the private key for the money being received via paycode
         spend_private_key_hex_format = hex(spend_private_key_int_format)[2:]
 
         # Pad with leading zero if necesssary
         if len(spend_private_key_hex_format) % 2 !=0:
             spend_private_key_hex_format = "0" + spend_private_key_hex_format
-            
+
         privkey = _generate_privkey_from_secret(bytes.fromhex(
             spend_private_key_hex_format), shared_secret)
 

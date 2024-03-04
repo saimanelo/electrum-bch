@@ -25,6 +25,7 @@
 
 from threading import Lock
 import queue
+import time
 
 from electroncash.util import ThreadJob
 
@@ -38,6 +39,7 @@ class RpaManager(ThreadJob):
         self.network = network
         self.lock = Lock()
         self.rpa_q_rawtx = queue.Queue()
+        self.last_mempool_check = 0.0
 
         # self.tx_heights is a dict that stores the height of each tx the rpa_manager encounters.
         self.tx_heights = dict()
@@ -45,18 +47,20 @@ class RpaManager(ThreadJob):
         # self.block_requests is a dict that stores the requests made for blocks from the server.
         self.block_requests = dict()
 
-    def rpa_phase_1_mempool(self):
-        """Not part of the normal peristent loop.  This is called externally when the wallet
-        wants to check the mempool.  We make the request similar to the normal phase 1
-        and let the module do the rest."""
+    def rpa_phase_1_mempool(self, polling=False):
+        """Part of the normal peristent loop, but runs once every 10 seconds.  This is also called externally
+        from the wallet wants to check the mempool (with polling=False).  We make the request similar to the
+        normal phase 1 and let the module do the rest."""
 
+        # Ensure we don't execute too often if polling
+        if polling and time.time() - self.last_mempool_check < 10.0:
+            return
         # Define the "grind string" (the RPA prefix)
         rpa_grind_string = self.wallet.get_grind_string()
         params = [rpa_grind_string]
-        requests = []
-        requests.append(('blockchain.reusable.get_mempool', params))
+        requests = [('blockchain.reusable.get_mempool', params)]
         self.network.send(requests, self.rpa_phase_2)
-        return
+        self.last_mempool_check = time.time()
 
     def rpa_phase_1(self):
         # Check the rawtx queue first, because if it still has transactions to process from a previous run,
@@ -116,11 +120,12 @@ class RpaManager(ThreadJob):
         for i in payload:
             txid = i['tx_hash']
             tx_height = i['height']
+            if tx_height == self.tx_heights.get(txid) and txid in self.wallet.transactions:
+                # Skip known txns (mempool polling)
+                continue
             self.tx_heights[txid] = tx_height
-            rawtx_request  = []
-            params_tx_get = [txid]
-            rawtx_request.append(('blockchain.transaction.get', params_tx_get))
-            self.network.send(rawtx_request,self.rpa_phase_3)
+            rawtx_request = [('blockchain.transaction.get', [txid])]
+            self.network.send(rawtx_request, self.rpa_phase_3)
 
         # We will also implement a special queue item called "lastblock" which contains the literal strick "lastblock"
         # instead of a rawtx.  This can pushed on the queue after all other items in the payload are pushed.  The FIFO
@@ -132,9 +137,10 @@ class RpaManager(ThreadJob):
         # Put the lastblock item into the queue.  Only for block requests, not mempool.
         if method == 'blockchain.reusable.get_history':
             # Don't forget to subtract one from the blockheight plus the number of blocks.
-            last_block_in_payload = params[0]+params[1]-1
-            # Put a special "last block" item in the queue.  We can do it here rather than using a callback, which happens for normal queue items
-            raw_tx_and_height_tuple = ("lastblock",last_block_in_payload)
+            last_block_in_payload = params[0] + params[1]-1
+            # Put a special "last block" item in the queue.  We can do it here rather than using a callback, which
+            # happens for normal queue items
+            raw_tx_and_height_tuple = ("lastblock", last_block_in_payload)
             self.rpa_q_rawtx.put(raw_tx_and_height_tuple)
 
     def rpa_phase_3(self, response):
@@ -146,7 +152,7 @@ class RpaManager(ThreadJob):
         params = response.get('params')
         txid = params[0]
         tx_height = self.tx_heights[txid]
-        raw_tx_and_height_tuple = (raw_tx,tx_height)
+        raw_tx_and_height_tuple = (raw_tx, tx_height)
         self.rpa_q_rawtx.put(raw_tx_and_height_tuple)
 
     def rpa_phase_4(self):
@@ -162,7 +168,7 @@ class RpaManager(ThreadJob):
         lastblock_height = 0
         if not self.rpa_q_rawtx.empty():
             rawtx_tuple = self.rpa_q_rawtx.get()
-            rawtx=rawtx_tuple[0]
+            rawtx = rawtx_tuple[0]
             tx_height = rawtx_tuple[1]
             extracted_private_key = 0
 
@@ -213,5 +219,6 @@ class RpaManager(ThreadJob):
         #
         # Note: only phase 1 and phase 4 are called directly from this run loop.  Phases 2 and 3 are executed as callbacks.
         self.rpa_phase_1()
+        self.rpa_phase_1_mempool(polling=True)
         self.rpa_phase_4()
 
