@@ -414,7 +414,6 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
     finally:
         join_threads()
     tf = time.time()
-    join_threads()
     print_error(f"RPA grind: Using {n_threads} threads, iterated {grind_count} times in {tf-t0:1.3f} secs")
 
     # Sort the inputs and outputs deterministically
