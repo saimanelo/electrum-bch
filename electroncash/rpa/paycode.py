@@ -23,7 +23,7 @@ from ..bitcoin import *  # COIN, TYPE_ADDRESS, sha256
 from ..plugins import run_hook
 from ..transaction import Transaction, OPReturn
 from ..keystore import KeyStore
-from ..util import print_msg, do_in_main_thread
+from ..util import print_msg, print_error, do_in_main_thread
 from .. import networks
 
 
@@ -350,9 +350,8 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
 
     t0 = time.time()
     while not tx_matches_paycode_prefix:
-        if exit_event:
-            if exit_event.is_set():
-                break
+        if exit_event and exit_event.is_set():
+            return
         nonce += 1
         nonce_bytes = nonce.to_bytes(length=5, byteorder='little')
         ndata = sha256(nonce_bytes)
@@ -392,9 +391,8 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
     # Sort the inputs and outputs deterministically
     tx.BIP69_sort()
 
-    # Re-seriliaze the transaction.
-    tx.raw = tx.serialize()
-    retval = tx.as_dict()["hex"]
+    # Re-serialize the transaction.
+    retval = tx.raw = tx.serialize()
 
     # Return a raw transaction string
     return retval

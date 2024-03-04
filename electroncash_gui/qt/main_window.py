@@ -2139,18 +2139,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                     rpa_pwd = password
 
             paycode_raw_tx = dlg = None
+            exit_event = threading.Event()
 
             def rpa_grind():
                 """ This is a wrapper function around the call the generate the rpa transaction.
                 We can pass this function to the waiting dialog."""
                 nonlocal paycode_raw_tx
-                exit_event = threading.Event()
 
                 def update_prog_grinding(x):
                     if dlg:
                         dlg.update_progress(int(x))
-                        if dlg.isHidden():
-                            exit_event.set()
 
                 paycode_raw_tx = rpa.paycode.generate_transaction_from_paycode(
                     self.wallet, self.config, full_unit_amount, paycode_string,
@@ -2161,6 +2159,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                         '  It needs to grind through many transaction signatures.'),
                                 rpa_grind, None, self.on_error, progress_bar=True, progress_min=0, progress_max=100)
             val = dlg.exec_()
+            if val != QDialog.DialogCode.Accepted:
+                # User cancel
+                self.print_error("User cancelled the paycode grind operation")
+                exit_event.set()  # tell rpa_paycode.generate_transaction_from_paycode to return early
+                return
             # If the user closes the waiting dialog, we should just exit.
             if paycode_raw_tx is None:
                 return
