@@ -344,7 +344,8 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
     tx_matches_paycode_prefix = False
     t0 = time.time()
     results = queue.Queue()
-    def threadFunc(thread_num):
+
+    def thread_func(thread_num):
         try:
             nonlocal grind_count, tx_matches_paycode_prefix, progress_count
             nonce = (search_space // n_threads) * thread_num
@@ -389,19 +390,27 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
         except Exception as e:
             traceback.print_exc(file=sys.stderr)
             results.put(e)
+
     threads = []
     for i in range(n_threads):
-        threads.append(threading.Thread(target=threadFunc, args=(i,), name=f"RPA grinder thread {i+1}"))
+        threads.append(threading.Thread(target=thread_func, args=(i,), name=f"RPA grinder thread {i + 1}"))
         threads[-1].start()
     tx_or_e = results.get(block=True)
-    if isinstance(tx_or_e, Exception):
-        # This should never happen. Sub-thread got an exception. Bubble it out. Note that sub-threads are not joined...
-        raise tx_or_e
-    tx = tx_or_e
-    for t in threads:
-        t.join()
-    tf = time.time()
 
+    def join_threads():
+        exit_event.set()  # Just in case, get sub-threads to stop
+        for t in threads:
+            t.join()
+
+    try:
+        if isinstance(tx_or_e, Exception):
+            # This should never happen. Sub-thread got an exception. Bubble it out.
+            raise tx_or_e
+        tx = tx_or_e
+    finally:
+        join_threads()
+    tf = time.time()
+    join_threads()
     print_error(f"RPA grind: Using {n_threads} threads, iterated {grind_count} times in {tf-t0:1.3f} secs")
 
     # Sort the inputs and outputs deterministically
