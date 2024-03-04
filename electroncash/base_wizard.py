@@ -87,7 +87,7 @@ class BaseWizard(util.PrintError):
             ('standard',  _("Standard wallet")),
             ('multisig',  _("Multi-signature wallet")),
             ('imported',  _("Import Bitcoin Cash addresses or private keys")),
-            ('rpa', _("Reusable payment address")),
+            ('rpa', _("Reusable payment address (Beta)")),
         ]
         choices = [pair for pair in wallet_kinds if pair[0] in wallet_types]
         self.choice_dialog(title=title, message=message, choices=choices, run_next=self.on_wallet_type)
@@ -118,7 +118,7 @@ class BaseWizard(util.PrintError):
         title = _('Add cosigner') + ' (%d of %d)'%(i+1, self.n) if self.wallet_type=='multisig' else _('Keystore')
         if self.wallet_type == 'rpa':
             message = _(
-                'Do you want to create a new seed, or to restore a wallet using an existing seed?')
+                '<B>WARNING:</B> RPA is an experimental wallet type.  Use it only with small amounts until you are confident that it works reliably. <p> Do you want to create a new seed, or to restore a wallet using an existing seed?')
             choices = [
                 ('create_standard_seed', _('Create a new seed')),
                 ('restore_from_seed', _('I already have a seed')),
