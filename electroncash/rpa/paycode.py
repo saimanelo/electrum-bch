@@ -213,6 +213,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
                              "In order to enable Schnorr fast-signing, please ensure you have built and installed the"
                              " BCH-specific libsecp256k1 library."))
 
+    exit_event = exit_event or threading.Event()  # Since we rely on exit_event below, ensure it's valid regardless
     # Decode the paycode
     rprefix, addr_hash = addr.decode(rpa_paycode)
     paycode_hex = addr_hash.hex().upper()
@@ -352,7 +353,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
             my_tx = copy.deepcopy(tx)
             my_txin = my_tx._inputs[0]
             while not tx_matches_paycode_prefix:
-                if exit_event and exit_event.is_set():
+                if exit_event.is_set():
                     results.put(None)  # NoneType indicates user cancelled
                     return
                 nonce_bytes = nonce.to_bytes(length=5, byteorder='little')
