@@ -1075,8 +1075,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.update_tabs()
 
     def check_necessary_server_features(self):
-        if self.wallet.wallet_type == 'rpa' and 'rpa' not in self.network.features:
-            self.show_warning("The connected server does not support reusable addresses. Please connect to an RPA server.")
+        if not self.network or self.network.features is None:
+            return  # Suppress check if not really valid yet or no network
+        if self.wallet.wallet_type == 'rpa' and 'rpa' not in (self.network.features or {}):
+            self.show_warning(_("The connected server does not support reusable addresses."
+                                " Please connect to an RPA server."))
 
     @rate_limited(1.0, classlevel=True, ts_after=True) # Limit tab updates to no more than 1 per second, app-wide. Multiple calls across instances will be collated into 1 deferred series of calls (1 call per extant instance)
     def update_tabs(self):
@@ -2140,10 +2143,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
             paycode_raw_tx = dlg = None
             exit_event = threading.Event()
+            rpa_coins = self.get_coins(isInvoice)  # Must do this in main thread
 
             def rpa_grind():
                 """ This is a wrapper function around the call the generate the rpa transaction.
-                We can pass this function to the waiting dialog."""
+                We can pass this function to the waiting dialog. This runs in a sub-thread"""
                 nonlocal paycode_raw_tx
 
                 def update_prog_grinding(x):
@@ -2153,11 +2157,19 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                 paycode_raw_tx = rpa.paycode.generate_transaction_from_paycode(
                     self.wallet, self.config, full_unit_amount, paycode_string,
                     password=rpa_pwd, progress_callback=update_prog_grinding,
-                    exit_event=exit_event, coins=self.get_coins(isInvoice))
+                    exit_event=exit_event, coins=rpa_coins)
+
+            def got_exc(exc_info):
+                """ On exception encounters in above, this runs in the main thread """
+                exc = exc_info[1]
+                if isinstance(exc, InvalidPassword):
+                    self.show_error(str(exc_info[1]))  # Suppresses traceback to print_error
+                else:
+                    self.on_error(exc_info)  # Unexpected exception -- shows traceback plus an error window
 
             dlg = WaitingDialog(self, _('Please allow a few moments while Electron Cash creates your RPA transaction.'
                                         '  It needs to grind through many transaction signatures.'),
-                                rpa_grind, None, self.on_error, progress_bar=True, progress_min=0, progress_max=100)
+                                rpa_grind, None, got_exc, progress_bar=True, progress_min=0, progress_max=100)
             val = dlg.exec_()
             if val != QDialog.DialogCode.Accepted:
                 # User cancel

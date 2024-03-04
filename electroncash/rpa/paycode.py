@@ -9,10 +9,13 @@
 '''
 This implements the functionality for RPA (Reusable Payment Address) aka Paycodes
 '''
-import random
+import copy
+import multiprocessing
 import threading
-from decimal import Decimal as PyDecimal
 import time
+import queue
+import traceback
+from decimal import Decimal as PyDecimal
 
 from . import addr
 from .. import bitcoin
@@ -21,6 +24,7 @@ from .. import schnorr
 from .. import transaction
 from ..address import Address, Base58
 from ..bitcoin import *  # COIN, TYPE_ADDRESS, sha256
+from ..i18n import _
 from ..plugins import run_hook
 from ..transaction import Transaction, OPReturn
 from ..keystore import KeyStore
@@ -44,11 +48,9 @@ def _resolver(wallet, x, nocheck):
 
 
 def _mktx(wallet, config, outputs, fee=None, change_addr=None, domain=None, nocheck=False,
-          unsigned=False, password=None, locktime=None, op_return=None, op_return_raw=None,
-          coins=None):
+          locktime=None, op_return=None, op_return_raw=None, coins=None):
     if op_return and op_return_raw:
-        raise ValueError(
-            'Both op_return and op_return_raw cannot be specified together!')
+        raise ValueError('Both op_return and op_return_raw cannot be specified together!')
 
     domain = None if domain is None else map(
         lambda x: _resolver(wallet, x, nocheck), domain)
@@ -62,8 +64,7 @@ def _mktx(wallet, config, outputs, fee=None, change_addr=None, domain=None, noch
             assert tmp == op_return_raw.lower()
             op_return_raw = tmp
         except Exception as e:
-            raise ValueError(
-                "op_return_raw must be an even number of hex digits") from e
+            raise ValueError("op_return_raw must be an even number of hex digits") from e
         final_outputs.append(OPReturn.output_for_rawhex(op_return_raw))
 
     for address, amount in outputs:
@@ -75,26 +76,25 @@ def _mktx(wallet, config, outputs, fee=None, change_addr=None, domain=None, noch
 
     tx = None
     done = threading.Event()
+    exc = None
     def make_tx_in_main_thread():
         """We need to do this in the main thread because otherwise wallet hooks that may run may get mad at us """
-        nonlocal tx
+        nonlocal tx, exc
         try:
             try:
-                tx = wallet.make_unsigned_transaction(
-                    coins, final_outputs, config, fee, change_addr)
+                tx = wallet.make_unsigned_transaction(coins, final_outputs, config, fee, change_addr)
             except Exception as e:
-                print_error(f"Failed to sign, caught exception: {e!r}")
-                tx = 0
+                print_error(f"Failed to create txn, caught exception: {e!r}")
+                exc = e
                 return
             if locktime is not None:
                 tx.locktime = locktime
-            if not unsigned:
-                run_hook('sign_tx', wallet, tx)
-                wallet.sign_transaction(tx, password)
         finally:
             done.set()
     do_in_main_thread(make_tx_in_main_thread)
     done.wait()  # Wait for tx variable to get set
+    if exc is not None:
+        raise exc  # bubble exception out to caller
     return tx
 
 
@@ -201,14 +201,17 @@ def generate_paycode(wallet, prefix_size="10"):
     return addr.encode_full(prefix, addr.PUBKEY_TYPE, payloadbytes)
 
 
-def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, fee=None, from_addr=None,
-                                      change_addr=None, nocheck=False, unsigned=False, password=None, locktime=None,
+def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=None, from_addr=None,
+                                      change_addr=None, nocheck=False, password=None, locktime=None,
                                       op_return=None, op_return_raw=None, progress_callback=None, exit_event=None,
                                       coins=None):
     if not wallet.is_schnorr_enabled():
-        print_msg(
-            "You must enable schnorr signing on this wallet for RPA.  Exiting.")
-        return 0
+        raise RuntimeError(_("You must enable Schnorr signing in settings for this wallet in order to send to a paycode"
+                             " address."))
+    if not schnorr.has_fast_sign() or not schnorr.has_fast_verify():
+        raise RuntimeError(_("Schnorr \"fast signing\" is unavailable, cannot proceed.\n\n"
+                             "In order to enable Schnorr fast-signing, please ensure you have built and installed the"
+                             " BCH-specific libsecp256k1 library."))
 
     # Decode the paycode
     rprefix, addr_hash = addr.decode(rpa_paycode)
@@ -226,16 +229,11 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
     if paycode_expiry != 0:
         one_week_from_now = int(time.time()) + 604800
         if paycode_expiry < one_week_from_now:
-            raise BaseException('Paycode expired.')
+            raise RuntimeError('Paycode expired.')
 
     # Initialize a few variables for the transaction
     tx_fee = _satoshis(fee)
     domain = from_addr.split(',') if from_addr else None
-
-    # Initiliaze a few variables for grinding
-    tx_matches_paycode_prefix = False
-    grind_nonce = 0
-    grinding_version = "1"
 
     if paycode_field_prefix_size == "04":
         prefix_chars = 1
@@ -255,13 +253,8 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
     rpa_dummy_pubkey = bitcoin.public_key_from_private_key(rpa_dummy_address_generation_hash, True)
     rpa_dummy_address = Address.from_pubkey(rpa_dummy_pubkey).to_string(Address.FMT_CASHADDR)
 
-    unsigned = True
-    tx = _mktx(wallet, config, [(rpa_dummy_address, amount)], tx_fee, change_addr, domain, nocheck, unsigned,
-               password, locktime, op_return, op_return_raw, coins=coins)
-
-    # HANDLE A FAILURE BY RETURNING ZERO (FOR NOW)
-    if tx == 0:
-        return 0
+    tx = _mktx(wallet, config, [(rpa_dummy_address, amount)], tx_fee, change_addr, domain, nocheck,
+               locktime, op_return, op_return_raw, coins=coins)
 
     # Use the first input (input zero) for our shared secret
     input_zero = tx._inputs[0]
@@ -340,53 +333,76 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
         sig = schnorr.sign(sec, pre_hash, ndata=ndata)
         return sig + bytes((nHashType & 0xff,))
 
-    nonce = random.randint(0, 0xff_ff_ff_ff)
+    search_space = 0xff_ff_ff_ff_ff
     ser_prefix = Transaction.serialize_outpoint_bytes(txin)
     script_prefix = push_script_bytes(bytes((0x0,) * 65))[:-65]  # create the push prefix e.g. 0x41
     script_suffix = push_script_bytes(pubkey)  # push of the pubkey
     script_prefix = var_int_bytes(len(script_prefix) + 65 + len(script_suffix)) + script_prefix  # prepend length byte
     ser_suffix = int_to_bytes(txin.get('sequence', 0xffffffff - 1), 4)
     prefix_target_hex = paycode_field_scan_pubkey[2:prefix_chars + 2].lower()
-
+    n_threads = multiprocessing.cpu_count()
+    tx_matches_paycode_prefix = False
     t0 = time.time()
-    while not tx_matches_paycode_prefix:
-        if exit_event and exit_event.is_set():
-            return
-        nonce += 1
-        nonce_bytes = nonce.to_bytes(length=5, byteorder='little')
-        ndata = sha256(nonce_bytes)
-        signature = my_sign(sec, pre_hash, ndata, nHashType)
-        assert len(signature) == 65
-        serialized_input = ser_prefix + script_prefix + signature + script_suffix + ser_suffix
+    results = queue.Queue()
+    def threadFunc(thread_num):
+        try:
+            nonlocal grind_count, tx_matches_paycode_prefix, progress_count
+            nonce = (search_space // n_threads) * thread_num
+            my_tx = copy.deepcopy(tx)
+            my_txin = my_tx._inputs[0]
+            while not tx_matches_paycode_prefix:
+                if exit_event and exit_event.is_set():
+                    return
+                nonce_bytes = nonce.to_bytes(length=5, byteorder='little')
+                ndata = sha256(nonce_bytes)
+                signature = my_sign(sec, pre_hash, ndata, nHashType)
+                assert len(signature) == 65
+                serialized_input = ser_prefix + script_prefix + signature + script_suffix + ser_suffix
 
-        if progress_callback and progress_count < grind_count // 1000:
-            progress_count = grind_count // 1000
-            do_in_main_thread(progress_callback, progress_count)
+                if progress_callback and progress_count < grind_count // 1000:
+                    progress_count = grind_count // 1000
+                    do_in_main_thread(progress_callback, progress_count)
 
-        hashed_input = sha256(sha256(serialized_input))
-        hashed_input_prefix_hex = hashed_input[:2].hex()[0:prefix_chars]
+                hashed_input = sha256(sha256(serialized_input))
+                hashed_input_prefix_hex = hashed_input[:2].hex()[0:prefix_chars]
 
-        if hashed_input_prefix_hex == prefix_target_hex:
-            print_error(f"matched prefix {prefix_target_hex} for serialized input with hash: {hashed_input.hex()}")
-            reason=[]
-            if not Transaction.verify_signature(pubkey, signature[:-1], pre_hash, reason=reason):
-                raise RuntimeError(f"Signature verification failed: {str(reason)}")
-            else:
-                txin['signatures'][0] = signature.hex()
-                txin['pubkeys'][0] = pubkey.hex()
-                check_input = tx.serialize_input_bytes(txin, bytes.fromhex(tx.input_script(txin)))
-                check_hash = Hash(check_input)
-                if hashed_input != check_hash:
-                    print_error(f"Real input hash: {check_hash.hex()} does not match what we calculated: {hashed_input.hex()}")
-                    print_error(f"our ser input : {serialized_input.hex()}")
-                    print_error(f"real ser input: {check_input.hex()}")
-                    raise RuntimeError("Internal error calculating the input prefix. Calculated prefix does not match"
-                                       " what the Transaction class would have done. FIXME!")
-                tx_matches_paycode_prefix = True
-        grind_count += 1
+                if hashed_input_prefix_hex == prefix_target_hex:
+                    print_error(f"matched prefix {prefix_target_hex} for serialized input with hash: {hashed_input.hex()}")
+                    reason=[]
+                    if not Transaction.verify_signature(pubkey, signature[:-1], pre_hash, reason=reason):
+                        raise RuntimeError(f"Signature verification failed: {str(reason)}")
+                    else:
+                        my_txin['signatures'][0] = signature.hex()
+                        my_txin['pubkeys'][0] = pubkey.hex()
+                        check_input = my_tx.serialize_input_bytes(my_txin, bytes.fromhex(my_tx.input_script(my_txin)))
+                        check_hash = Hash(check_input)
+                        if hashed_input != check_hash:
+                            print_error(f"Real input hash: {check_hash.hex()} does not match what we calculated: {hashed_input.hex()}")
+                            print_error(f"our ser input : {serialized_input.hex()}")
+                            print_error(f"real ser input: {check_input.hex()}")
+                            raise RuntimeError("Internal error calculating the input prefix. Calculated prefix does not match"
+                                               " what the Transaction class would have done. FIXME!")
+                        tx_matches_paycode_prefix = True
+                        results.put(my_tx)
+                grind_count += 1
+                nonce += 1
+        except Exception as e:
+            traceback.print_exc(file=sys.stderr)
+            results.put(e)
+    threads = []
+    for i in range(n_threads):
+        threads.append(threading.Thread(target=threadFunc, args=(i,), name=f"RPA grinder thread {i+1}"))
+        threads[-1].start()
+    tx_or_e = results.get(block=True)
+    if isinstance(tx_or_e, Exception):
+        # This should never happen. Sub-thread got an exception. Bubble it out. Note that sub-threads are not joined...
+        raise tx_or_e
+    tx = tx_or_e
+    for t in threads:
+        t.join()
     tf = time.time()
 
-    print_error(f"Iterated {grind_count} times in {tf-t0:1.3f} secs")
+    print_error(f"RPA grind: Using {n_threads} threads, iterated {grind_count} times in {tf-t0:1.3f} secs")
 
     # Sort the inputs and outputs deterministically
     tx.BIP69_sort()
