@@ -30,6 +30,7 @@ import traceback
 from . import bitcoin
 from . import keystore
 from . import mnemonic
+from . import networks
 from . import util
 from .wallet import (ImportedAddressWallet, ImportedPrivkeyWallet,RpaWallet,
                      Standard_Wallet, Multisig_Wallet, MultiXPubWallet, wallet_types)
@@ -117,8 +118,9 @@ class BaseWizard(util.PrintError):
         i = len(self.keystores)
         title = _('Add cosigner') + ' (%d of %d)'%(i+1, self.n) if self.wallet_type=='multisig' else _('Keystore')
         if self.wallet_type == 'rpa':
-            message = _(
-                '<B>WARNING:</B> RPA is an experimental wallet type.  Use it only with small amounts until you are confident that it works reliably. <p> Do you want to create a new seed, or to restore a wallet using an existing seed?')
+            message = (_('<B>WARNING:</B> RPA is an experimental wallet type.  Use it only with small amounts until you'
+                         ' are confident that it works reliably. <p>')
+                       + _('Do you want to create a new seed, or to restore a wallet using an existing seed?'))
             choices = [
                 ('create_standard_seed', _('Create a new seed')),
                 ('restore_from_seed', _('I already have a seed')),
@@ -349,7 +351,7 @@ class BaseWizard(util.PrintError):
         self.opt_ext = True
         test = mnemonic.is_seed # TODO FIX #bitcoin.is_seed if self.wallet_type == 'standard' else bitcoin.is_new_seed
         if self.wallet_type == 'rpa':
-            self.storage.put('rpa_height', 743000)  # ask from the user in later iterations
+            self.storage.put('rpa_height', networks.net.RPA_START_HEIGHT)  # ask from the user in later iterations
         self.restore_seed_dialog(run_next=self.on_restore_seed, test=test)
 
     def on_restore_seed(self, seed, is_bip39, is_ext):

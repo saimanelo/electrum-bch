@@ -4014,7 +4014,7 @@ class RpaWallet(ImportedWalletBase):
     def __init__(self, storage):
         Abstract_Wallet.__init__(self, storage)
         self.keystore_rpa_aux = None
-        self.rpa_height = 0
+        self.rpa_height = networks.net.RPA_START_HEIGHT
         self.rpa_payload = None
 
     @classmethod
@@ -4163,7 +4163,7 @@ class RpaWallet(ImportedWalletBase):
         self.rpa_manager.rpa_phase_1_mempool()
 
     def rebuild_history(self):
-        self.storage.put('rpa_height', 743000)  # ask from the user in later iterations
+        self.storage.put('rpa_height', networks.net.RPA_START_HEIGHT)  # ask from the user in later iterations
         super(RpaWallet, self).rebuild_history()
 
 

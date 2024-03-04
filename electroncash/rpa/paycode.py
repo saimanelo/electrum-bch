@@ -16,6 +16,7 @@ import time
 
 from . import addr
 from .. import bitcoin
+from .. import networks
 from .. import schnorr
 from .. import transaction
 from ..address import Address, Base58
@@ -24,7 +25,6 @@ from ..plugins import run_hook
 from ..transaction import Transaction, OPReturn
 from ..keystore import KeyStore
 from ..util import print_msg, print_error, do_in_main_thread
-from .. import networks
 
 
 def _satoshis(amount):
@@ -416,16 +416,15 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
                     Address.FMT_CASHADDR))
 
     # Variables for looping
-    number_of_inputs = len(unpacked_tx["inputs"])
-    input_index = 0
-    process_inputs = True
+    inputs = unpacked_tx["inputs"]
+    number_of_inputs = len(inputs)
+    max_inputs_as_per_rpa_spec = 30
 
     # Process each input until we find one that creates the shared secret to
     # get a private key for an output
-    while process_inputs:
-
+    for input_index in range(0, min(max_inputs_as_per_rpa_spec, number_of_inputs)):
         # Grab the outpoint
-        single_input = unpacked_tx["inputs"][input_index]
+        single_input = inputs[input_index]
         prevout_hash = single_input["prevout_hash"]
         prevout_n = str(single_input["prevout_n"])  # n is int. convert to str.
         outpoint_string = prevout_hash + prevout_n
@@ -446,9 +445,6 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
             # exit early.  This scriptsig either doesn't have a key (coinbase
             # tx, etc), or the xpubkey in the scriptsig is not a hex string
             # (P2PK etc)
-            input_index += 1
-            if input_index >= number_of_inputs:
-                process_inputs = False
             continue
 
         sender_pubkey = bytes.fromhex(d["pubkeys"][0])
@@ -493,7 +489,7 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
             spend_private_key_hex_format), shared_secret)
 
         # Now convert to WIF
-        extendedkey = "80" + privkey
+        extendedkey = bytes((networks.net.WIF_PREFIX,)).hex() + privkey
         extendedkey_bytes = bytes.fromhex(extendedkey)
         checksum = bitcoin.Hash(extendedkey).hex()[0:8]
         key_with_checksum = extendedkey + checksum
@@ -502,12 +498,5 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
         # Check the address matches
         if destination in output_addresses:
             retval.append(privkey_wif)
-
-        # Increment the input
-        input_index += 1
-
-        # If this was the last input, stop.
-        if input_index >= number_of_inputs:
-            process_inputs = False
 
     return retval
