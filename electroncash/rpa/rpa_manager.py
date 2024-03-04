@@ -81,10 +81,9 @@ class RpaManager(ThreadJob):
         if not server_height:
             return
 
-        rpa_height = self.wallet.storage.get('rpa_height')
+        rpa_height = self.wallet.rpa_height
         if rpa_height is None:
-            rpa_height = server_height - 100
-            self.wallet.storage.put('rpa_height',rpa_height)
+            self.wallet.rpa_height = rpa_height = server_height - 100
 
         # Only request blocks if the rpa_height is lagging behind the tip.
         if rpa_height < server_height:
@@ -191,7 +190,7 @@ class RpaManager(ThreadJob):
             new_height = lastblock_height+1
 
         if new_height > 0:
-            self.wallet.storage.put('rpa_height', new_height)
+            self.wallet.rpa_height = new_height
 
     def run(self):
         """Called from the network proxy thread main loop."""

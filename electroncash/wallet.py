@@ -4014,8 +4014,15 @@ class RpaWallet(ImportedWalletBase):
     def __init__(self, storage):
         Abstract_Wallet.__init__(self, storage)
         self.keystore_rpa_aux = None
-        self.rpa_height = networks.net.RPA_START_HEIGHT
         self.rpa_payload = None
+
+    @property
+    def rpa_height(self) -> int:
+        return self.storage.get('rpa_height', networks.net.RPA_START_HEIGHT)
+
+    @rpa_height.setter
+    def rpa_height(self, value: int):
+        self.storage.put('rpa_height', value)
 
     @classmethod
     def from_text(cls, storage, text, password=None):
