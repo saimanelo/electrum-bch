@@ -41,14 +41,13 @@ def _resolver(wallet, x, nocheck):
     if x is None:
         return None
     out = wallet.contacts.resolve(x)
-    if out.get('type') == 'openalias' and nocheck is False and out.get(
-            'validated') is False:
-        raise BaseException('cannot verify alias', x)
+    if out.get('type') == 'openalias' and not nocheck and not out.get('validated'):
+        raise RuntimeError(f'cannot verify alias: {x}')
     return out['address']
 
 
 def _mktx(wallet, config, outputs, fee=None, change_addr=None, domain=None, nocheck=False,
-          locktime=None, op_return=None, op_return_raw=None, coins=None):
+          locktime=None, op_return=None, op_return_raw=None, coins=None) -> Transaction:
     if op_return and op_return_raw:
         raise ValueError('Both op_return and op_return_raw cannot be specified together!')
 
@@ -95,6 +94,7 @@ def _mktx(wallet, config, outputs, fee=None, change_addr=None, domain=None, noch
     done.wait()  # Wait for tx variable to get set
     if exc is not None:
         raise exc  # bubble exception out to caller
+    assert isinstance(tx, Transaction)
     return tx
 
 
@@ -267,7 +267,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
         Base58.decode_check(private_key_wif_format)[
             1:33], byteorder="big")
 
-    # Grab the outpoint  (the colon is intentionally ommitted from the string)
+    # Grab the outpoint  (the colon is intentionally omitted from the string)
     outpoint_string = str(
         input_zero["prevout_hash"]) + str(input_zero["prevout_n"])
 
@@ -307,10 +307,8 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
     for j, (pubkey, x_pubkey) in enumerate(zip(pubkeys, x_pubkeys)):
         if pubkey in keypairs:
             _pubkey = pubkey
-            kname = 'pubkey'
         elif x_pubkey in keypairs:
             _pubkey = x_pubkey
-            kname = 'x_pubkey'
         else:
             continue
         sec, compressed = keypairs.get(_pubkey)
@@ -383,8 +381,8 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
                             print_error(f"Real input hash: {check_hash.hex()} does not match what we calculated: {hashed_input.hex()}")
                             print_error(f"our ser input : {serialized_input.hex()}")
                             print_error(f"real ser input: {check_input.hex()}")
-                            raise RuntimeError("Internal error calculating the input prefix. Calculated prefix does not match"
-                                               " what the Transaction class would have done. FIXME!")
+                            raise RuntimeError("Internal error calculating the input prefix. Calculated prefix does not"
+                                               " match what the Transaction class would have done. FIXME!")
                         tx_matches_paycode_prefix = True
                         results.put(my_tx)
                 grind_count += 1
@@ -456,12 +454,12 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
         single_input = inputs[input_index]
         prevout_hash = single_input["prevout_hash"]
         prevout_n = str(single_input["prevout_n"])  # n is int. convert to str.
-        outpoint_string = prevout_hash + prevout_n
+        outpoint_string = prevout_hash + prevout_n  # Intentionally omits the ':' char
 
         # Get the pubkey of the sender from the scriptSig.
         scriptSig = bytes.fromhex(single_input["scriptSig"])
         d = {}
-        parsed_scriptSig = transaction.parse_scriptSig(d, scriptSig)
+        transaction.parse_scriptSig(d, scriptSig)  # Populates `d`
 
         sender_pubkey = None
         if "pubkeys" in d:
@@ -471,9 +469,8 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
                     sender_pubkey = bytes.fromhex(d["pubkeys"][0])
 
         if sender_pubkey is None:
-            # exit early.  This scriptsig either doesn't have a key (coinbase
-            # tx, etc), or the xpubkey in the scriptsig is not a hex string
-            # (P2PK etc)
+            # This scriptsig either doesn't have a key (coinbase tx, etc), or the xpubkey in the scriptsig is not a
+            # hex string (P2PK, etc), or is not a scriptSig we can understand
             continue
 
         sender_pubkey = bytes.fromhex(d["pubkeys"][0])
