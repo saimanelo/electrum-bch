@@ -47,6 +47,9 @@ class RpaManager(ThreadJob):
         # self.block_requests is a dict that stores the requests made for blocks from the server.
         self.block_requests = dict()
 
+        # To avoid downloading the same txn multiple times if mempool polling
+        self.already_downloaded_txids = set()
+
     def rpa_phase_1_mempool(self, polling=False):
         """Part of the normal peristent loop, but runs once every 10 seconds.  This is also called externally
         from the wallet wants to check the mempool (with polling=False).  We make the request similar to the
@@ -89,7 +92,7 @@ class RpaManager(ThreadJob):
 
             number_of_blocks = 50
             # Only request enough blocks to get to the tip.  Otherwise, the next request will be too far ahead
-            if rpa_height+number_of_blocks > server_height:
+            if rpa_height + number_of_blocks > server_height:
                 number_of_blocks = server_height-rpa_height
 
             # Define the "grind string" (the RPA prefix)
@@ -120,7 +123,7 @@ class RpaManager(ThreadJob):
         for i in payload:
             txid = i['tx_hash']
             tx_height = i['height']
-            if tx_height == self.tx_heights.get(txid) and txid in self.wallet.transactions:
+            if tx_height == self.tx_heights.get(txid) and txid in self.already_downloaded_txids:
                 # Skip known txns (mempool polling)
                 continue
             self.tx_heights[txid] = tx_height
@@ -153,6 +156,8 @@ class RpaManager(ThreadJob):
         txid = params[0]
         tx_height = self.tx_heights[txid]
         raw_tx_and_height_tuple = (raw_tx, tx_height)
+        if tx_height <= 0:
+            self.already_downloaded_txids.add(txid)
         self.rpa_q_rawtx.put(raw_tx_and_height_tuple)
 
     def rpa_phase_4(self):

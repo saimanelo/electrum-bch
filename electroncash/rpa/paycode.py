@@ -10,6 +10,7 @@
 This implements the functionality for RPA (Reusable Payment Address) aka Paycodes
 '''
 import random
+import threading
 from decimal import Decimal as PyDecimal
 import time
 
@@ -22,7 +23,7 @@ from ..bitcoin import *  # COIN, TYPE_ADDRESS, sha256
 from ..plugins import run_hook
 from ..transaction import Transaction, OPReturn
 from ..keystore import KeyStore
-from ..util import print_msg
+from ..util import print_msg, do_in_main_thread
 from .. import networks
 
 
@@ -71,16 +72,29 @@ def _mktx(wallet, config, outputs, fee=None, change_addr=None, domain=None, noch
         final_outputs.append((TYPE_ADDRESS, address, amount))
 
     coins = coins or wallet.get_spendable_coins(domain, config)
-    try:
-        tx = wallet.make_unsigned_transaction(
-            coins, final_outputs, config, fee, change_addr)
-    except BaseException:
-        return 0
-    if locktime is not None:
-        tx.locktime = locktime
-    if not unsigned:
-        run_hook('sign_tx', wallet, tx)
-        wallet.sign_transaction(tx, password)
+
+    tx = None
+    done = threading.Event()
+    def make_tx_in_main_thread():
+        """We need to do this in the main thread because otherwise wallet hooks that may run may get mad at us """
+        nonlocal tx
+        try:
+            try:
+                tx = wallet.make_unsigned_transaction(
+                    coins, final_outputs, config, fee, change_addr)
+            except Exception as e:
+                print_error(f"Failed to sign, caught exception: {e!r}")
+                tx = 0
+                return
+            if locktime is not None:
+                tx.locktime = locktime
+            if not unsigned:
+                run_hook('sign_tx', wallet, tx)
+                wallet.sign_transaction(tx, password)
+        finally:
+            done.set()
+    do_in_main_thread(make_tx_in_main_thread)
+    done.wait()  # Wait for tx variable to get set
     return tx
 
 
@@ -318,7 +332,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
     progress_count = 0
 
     if progress_callback:
-        progress_callback(progress_count)
+        do_in_main_thread(progress_callback, progress_count)
 
     # The below unrolls some of the Transacton class signing code into here, to optimize it. It's much faster this
     # way, even if a bit complex. -Calin
@@ -348,7 +362,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode=None, 
 
         if progress_callback and progress_count < grind_count // 1000:
             progress_count = grind_count // 1000
-            progress_callback(progress_count)
+            do_in_main_thread(progress_callback, progress_count)
 
         hashed_input = sha256(sha256(serialized_input))
         hashed_input_prefix_hex = hashed_input[:2].hex()[0:prefix_chars]
