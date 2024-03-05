@@ -35,6 +35,8 @@ class RpaManager(ThreadJob):
     External interface: __init__() and add() member functions."""
 
     def __init__(self, wallet, network):
+        from electroncash.wallet import RpaWallet
+        assert isinstance(wallet, RpaWallet)
         self.wallet = wallet
         self.network = network
         self.lock = Lock()

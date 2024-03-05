@@ -430,7 +430,7 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
     retval = []
 
     # Deserialize the raw transaction
-    unpacked_tx = Transaction.deserialize(Transaction(raw_tx))
+    unpacked_tx = Transaction(raw_tx).deserialize()
 
     # Get a list of output addresses (we will need this for later to check if
     # our key matches)
