@@ -4177,11 +4177,6 @@ class RpaWallet(ImportedWalletBase):
     def extract_private_keys_from_transaction(self, rawtx, password):
         return rpa.extract_private_keys_from_transaction(self, rawtx, password)
 
-    def fetch_rpa_mempool_txs_from_server(self):
-        """This function is intended to be called when the clients wants
-        to check for new incoming RPA transactions from the mempool. """
-        self.rpa_manager.rpa_phase_1_mempool()
-
     def rebuild_history(self):
         self.storage.put('rpa_height', rpa.determine_best_rpa_start_height())  # ask from the user in later iterations
         super(RpaWallet, self).rebuild_history()

@@ -743,11 +743,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         paytomany_menu = tools_menu.addAction(_("&Pay to Many"), self.paytomany, QKeySequence("Ctrl+M"))
 
-        if self.wallet.wallet_type == 'rpa':
-            tools_menu.addAction(
-                _("&Refresh RPA Transactions"),
-                self.wallet.fetch_rpa_mempool_txs_from_server)
-
         raw_transaction_menu = tools_menu.addMenu(_("&Load Transaction"))
         raw_transaction_menu.addAction(_("From &File") + "...", self.do_process_from_file)
         raw_transaction_menu.addAction(_("From &Text") + "...", self.do_process_from_text, QKeySequence("Ctrl+T"))
