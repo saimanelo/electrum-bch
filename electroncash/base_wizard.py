@@ -351,8 +351,6 @@ class BaseWizard(util.PrintError):
         self.opt_bip39 = True
         self.opt_ext = True
         test = mnemonic.is_seed # TODO FIX #bitcoin.is_seed if self.wallet_type == 'standard' else bitcoin.is_new_seed
-        if self.wallet_type == 'rpa':
-            self.storage.put('rpa_height', rpa.paycode.determine_best_rpa_start_height())  # ask from the user in later iterations
         self.restore_seed_dialog(run_next=self.on_restore_seed, test=test)
 
     def on_restore_seed(self, seed, is_bip39, is_ext):
