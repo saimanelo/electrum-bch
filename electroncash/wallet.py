@@ -4020,7 +4020,7 @@ class RpaWallet(ImportedWalletBase):
 
     @property
     def rpa_height(self) -> int:
-        return self.storage.get('rpa_height', networks.net.RPA_START_HEIGHT)
+        return self.storage.get('rpa_height', rpa.determine_best_rpa_start_height())
 
     @rpa_height.setter
     def rpa_height(self, value: int):
@@ -4172,7 +4172,7 @@ class RpaWallet(ImportedWalletBase):
         self.rpa_manager.rpa_phase_1_mempool()
 
     def rebuild_history(self):
-        self.storage.put('rpa_height', networks.net.RPA_START_HEIGHT)  # ask from the user in later iterations
+        self.storage.put('rpa_height', rpa.determine_best_rpa_start_height())  # ask from the user in later iterations
         super(RpaWallet, self).rebuild_history()
 
 

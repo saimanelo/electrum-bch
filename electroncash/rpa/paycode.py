@@ -526,3 +526,22 @@ def extract_private_keys_from_transaction(wallet, raw_tx, password=None):
             retval.append(privkey_wif)
 
     return retval
+
+
+def determine_best_rpa_start_height(wallet_creation_timestamp=1704000000, *, net=None):
+    name = 'determine_best_rpa_start_height'
+    net = net or networks.net
+    if not net:
+        raise RuntimeError('Cannot call determine_best_rpa_start_height without an app-level `net` already set.')
+    default_height = net.RPA_START_HEIGHT
+    if net.asert_daa.anchor is None:
+        print_error(f"{name}: WARNING - Current network {str(type(net))} lacks an ASERT anchor."
+                    f" Will just return the default height for this network ({default_height})")
+        return default_height
+    # formula to determine a rough block height for this timestamp
+    anchor_height = net.asert_daa.anchor.height
+    anchor_ts = net.asert_daa.anchor.prev_time
+    # The height is minimum net.RPA_START_HEIGHT, but may be after it if the user specified a timestamp
+    height = max(default_height, anchor_height + round((wallet_creation_timestamp - anchor_ts) / 600))
+    # print_error(f"{name}: Calculated height {height} for this network from timestamp {wallet_creation_timestamp}")
+    return height

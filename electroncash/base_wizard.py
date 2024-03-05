@@ -31,6 +31,7 @@ from . import bitcoin
 from . import keystore
 from . import mnemonic
 from . import networks
+from . import rpa
 from . import util
 from .wallet import (ImportedAddressWallet, ImportedPrivkeyWallet,RpaWallet,
                      Standard_Wallet, Multisig_Wallet, MultiXPubWallet, wallet_types)
@@ -351,7 +352,7 @@ class BaseWizard(util.PrintError):
         self.opt_ext = True
         test = mnemonic.is_seed # TODO FIX #bitcoin.is_seed if self.wallet_type == 'standard' else bitcoin.is_new_seed
         if self.wallet_type == 'rpa':
-            self.storage.put('rpa_height', networks.net.RPA_START_HEIGHT)  # ask from the user in later iterations
+            self.storage.put('rpa_height', rpa.paycode.determine_best_rpa_start_height())  # ask from the user in later iterations
         self.restore_seed_dialog(run_next=self.on_restore_seed, test=test)
 
     def on_restore_seed(self, seed, is_bip39, is_ext):
