@@ -11,6 +11,7 @@ This implements the functionality for RPA (Reusable Payment Address) aka Paycode
 '''
 import copy
 import multiprocessing
+import random
 import threading
 import time
 import queue
@@ -22,7 +23,7 @@ from .. import bitcoin
 from .. import networks
 from .. import schnorr
 from .. import transaction
-from ..address import Address, Base58
+from ..address import Address, Base58, ScriptOutput
 from ..bitcoin import *  # COIN, TYPE_ADDRESS, sha256
 from ..i18n import _
 from ..plugins import run_hook
@@ -40,6 +41,8 @@ def _satoshis(amount):
 def _resolver(wallet, x, nocheck):
     if x is None:
         return None
+    if isinstance(x, (Address, ScriptOutput)):
+        return x
     out = wallet.contacts.resolve(x)
     if out.get('type') == 'openalias' and not nocheck and not out.get('validated'):
         raise RuntimeError(f'cannot verify alias: {x}')
@@ -201,6 +204,16 @@ def generate_paycode(wallet, prefix_size="10"):
     return addr.encode_full(prefix, addr.PUBKEY_TYPE, payloadbytes)
 
 
+def _swap_dummy_for_destination(tx: Transaction, rpa_dummy_address: Address, rpa_destination_address: Address):
+    for i, (typ, addr, val) in enumerate(tx._outputs.copy()):
+        # Compare the address to see if it's the one we need to swap
+        if addr == rpa_dummy_address:
+            # Do the swap
+            tx._outputs[i] = (typ, rpa_destination_address, val)
+    # It is necessary to re-initialize "raw" so the output swap becomes part of transaction when it is later serialized
+    tx.raw = None
+
+
 def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=None, from_addr=None,
                                       change_addr=None, nocheck=False, password=None, locktime=None,
                                       op_return=None, op_return_raw=None, progress_callback=None, exit_event=None,
@@ -248,11 +261,9 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
         raise ValueError("Invalid prefix size. Must be 4,8,12, or 16 bits.")
 
     # Construct the transaction, initially with a dummy destination
-    rpa_dummy_address_generation_string="rpadummy"
-    rpa_dummy_address_generation_bytes = rpa_dummy_address_generation_string.encode('utf-8')
-    rpa_dummy_address_generation_hash = sha256(rpa_dummy_address_generation_bytes)
-    rpa_dummy_pubkey = bitcoin.public_key_from_private_key(rpa_dummy_address_generation_hash, True)
-    rpa_dummy_address = Address.from_pubkey(rpa_dummy_pubkey).to_string(Address.FMT_CASHADDR)
+    rpa_dummy_privkey = sha256(b"rpadummy" + random.getrandbits(32).to_bytes(4, 'big'))
+    rpa_dummy_pubkey = bitcoin.public_key_from_private_key(rpa_dummy_privkey, True)
+    rpa_dummy_address = Address.from_pubkey(rpa_dummy_pubkey)
 
     tx = _mktx(wallet, config, [(rpa_dummy_address, amount)], tx_fee, change_addr, domain, nocheck,
                locktime, op_return, op_return_raw, coins=coins)
@@ -263,32 +274,37 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
     # Fetch our own private key for the coin
     bitcoin_addr = input_zero["address"]
     private_key_wif_format = wallet.export_private_key(bitcoin_addr, password)
-    private_key_int_format = int.from_bytes(
-        Base58.decode_check(private_key_wif_format)[
-            1:33], byteorder="big")
+    private_key_int_format = int.from_bytes(Base58.decode_check(private_key_wif_format)[1:33], byteorder="big")
 
-    # Grab the outpoint  (the colon is intentionally omitted from the string)
-    outpoint_string = str(
-        input_zero["prevout_hash"]) + str(input_zero["prevout_n"])
+    # Grab the outpoint (the colon is intentionally omitted from the string)
+    outpoint_string = str(input_zero["prevout_hash"]) + str(input_zero["prevout_n"])
 
     # Format the pubkey in preparation to get the shared secret
     scanpubkey_bytes = bytes.fromhex(paycode_field_scan_pubkey)
 
     # Calculate shared secret
-    shared_secret = _calculate_paycode_shared_secret(
-        private_key_int_format, scanpubkey_bytes, outpoint_string)
+    shared_secret = _calculate_paycode_shared_secret(private_key_int_format, scanpubkey_bytes, outpoint_string)
 
     # Get the real destination for the transaction
-    rpa_destination_address = _generate_address_from_pubkey_and_secret(bytes.fromhex(paycode_field_spend_pubkey),
-                                                                       shared_secret).to_string(
-        Address.FMT_CASHADDR)
+    rpa_destination_address = _generate_address_from_pubkey_and_secret(bytes.fromhex(paycode_field_spend_pubkey), shared_secret)
 
     # Swap the dummy destination for the real destination
-    tx.rpa_paycode_swap_dummy_for_destination(
-        rpa_dummy_address, rpa_destination_address)
+    _swap_dummy_for_destination(tx, rpa_dummy_address, rpa_destination_address)
+
+    # Sort just outputs deterministically; must be done before we sign. We do this again even though
+    # make_unsigned_transaction() already sorted the txn for us. Must do this again because we changed
+    # one of the outputs in the line above, and it may end up sorting differently. This is a privacy measure.
+    tx.BIP69_sort(sort_inputs=False, sort_outputs=True)
+
+    # Belt-and-suspenders check that the tx definitely has the rpa_dummy_address removed,
+    # and that it has the rpa_destination_address added
+    if any(addr == rpa_dummy_address for _, addr, _ in tx.outputs()):
+        raise RuntimeError('Internal check failed: Transaction is still sending to the rpa_dummy_address. FIXME!')
+    if not any(addr == rpa_destination_address for _, addr, _ in tx.outputs()):
+        raise RuntimeError('Internal check failed: Transaction is somehow *not* sending to the rpa_destination_address.'
+                           ' FIXME!')
 
     # Now we need to sign the transaction after the outputs are known
-    grind_string = paycode_field_scan_pubkey[2:prefix_chars + 2].upper()
     wallet.sign_transaction(tx, password)
 
     # Setup wallet and keystore in preparation for signature grinding
@@ -296,7 +312,7 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
 
     # We assume one signature per input, for now...
     assert len(input_zero["signatures"]) == 1
-    input_zero["signatures"] = [None]
+    input_zero["signatures"] = [None]  # Clear sig since we must re-sign during grind below
 
     # Keypair logic from transaction module
     keypairs = my_keystore.get_tx_derivations(tx)
@@ -414,9 +430,6 @@ def generate_transaction_from_paycode(wallet, config, amount, rpa_paycode, fee=N
         join_threads()
     tf = time.time()
     print_error(f"RPA grind: Using {n_threads} threads, iterated {grind_count} times in {tf-t0:1.3f} secs")
-
-    # Sort the inputs and outputs deterministically
-    tx.BIP69_sort()
 
     # Re-serialize the transaction.
     retval = tx.raw = tx.serialize()

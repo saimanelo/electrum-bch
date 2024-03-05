@@ -162,7 +162,7 @@ class RpaManager(ThreadJob):
         # Put the lastblock item into the queue.  Only for block requests, not mempool.
         if method == 'blockchain.reusable.get_history':
             # Don't forget to subtract one from the blockheight plus the number of blocks.
-            last_block_in_payload = params[0] + params[1]-1
+            last_block_in_payload = params[0] + params[1] - 1
             # Put a special "last block" item in the queue.  We can do it here rather than using a callback, which
             # happens for normal queue items
             raw_tx_and_height_tuple = ("lastblock", last_block_in_payload)
@@ -211,7 +211,7 @@ class RpaManager(ThreadJob):
                 lastblock_height = tx_height
                 new_height = lastblock_height + 1
                 if new_height > 0:
-                    self.wallet.rpa_height = new_height
+                    self.wallet.rpa_height = lastblock_height
 
             iterct += 1
             if iterct >= limit_iters:
