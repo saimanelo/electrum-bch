@@ -998,10 +998,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             server_height = self.network.get_server_height()
             server_lag = self.network.get_local_height() - server_height
             num_chains = len(self.network.get_blockchains())
+            if self.wallet.rpa_manager is not None:
+                rpa_is_busy = not self.wallet.rpa_manager.up_to_date
+            else:
+                rpa_is_busy = False
             # Server height can be 0 after switching to a new server
             # until we get a headers subscription request response.
             # Display the synchronizing message in that case.
-            if not self.wallet.up_to_date or server_height == 0:
+            if not self.wallet.up_to_date or server_height == 0 or rpa_is_busy:
                 text = _("Synchronizing...")
                 icon = icon_dict["status_waiting"]
                 status_tip = status_tip_dict["status_waiting"]

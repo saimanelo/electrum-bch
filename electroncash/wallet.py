@@ -3019,6 +3019,8 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             if self.wallet_type == 'rpa':
                 self.rpa_manager = RpaManager(self, network)
                 my_jobs.append(self.rpa_manager)
+            else:
+                self.rpa_manager = None
             network.add_jobs(my_jobs)
             self.cashacct.start(self.network)  # start cashacct network-dependent subsystem, nework.add_jobs, etc
         else:
