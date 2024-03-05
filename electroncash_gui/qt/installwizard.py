@@ -490,13 +490,22 @@ class InstallWizard(QDialog, MessageBoxMixin, BaseWizard):
         vbox = QVBoxLayout()
         vbox.addWidget(WWLabel(message))
         de = QDateEdit()
-        de.setDate(QDateTime.fromTime_t(default_time).date())
-        de.setMinimumDate(QDateTime.fromSecsSinceEpoch(int(minimum_time)).date())
+        de.setDateTime(QDateTime.fromTime_t(default_time))
+        de.setMinimumDateTime(QDateTime.fromSecsSinceEpoch(int(minimum_time)))
         de.setCalendarPopup(True)  # Enable calendar popup
         if maximum_time is not None and maximum_time >= minimum_time:
-            de.setMaximumDate(QDateTime.fromSecsSinceEpoch(int(maximum_time)).date())
+            de.setMaximumDateTime(QDateTime.fromSecsSinceEpoch(int(maximum_time)))
+        de.setDisplayFormat("MMMM dd yyyy")
+        def test():
+            d = de.dateTime().toSecsSinceEpoch()
+            mn = de.minimumDateTime().toSecsSinceEpoch()
+            mx = de.maximumDateTime().toSecsSinceEpoch()
+            is_ok = mn <= d <= mx
+            self.next_button.setEnabled(is_ok)
+            return is_ok
+        de.dateChanged.connect(test)
         vbox.addWidget(de)
-        self.exec_layout(vbox, title)
+        self.exec_layout(vbox, title, next_enabled=test())
         return de.dateTime().toSecsSinceEpoch()
 
     @wizard_dialog
