@@ -4178,7 +4178,7 @@ class RpaWallet(ImportedWalletBase):
         return rpa.extract_private_keys_from_transaction(self, rawtx, password)
 
     def rebuild_history(self):
-        self.storage.put('rpa_height', rpa.determine_best_rpa_start_height())  # ask from the user in later iterations
+        self.storage.put('rpa_height', rpa.determine_best_rpa_start_height())
         super(RpaWallet, self).rebuild_history()
 
 
