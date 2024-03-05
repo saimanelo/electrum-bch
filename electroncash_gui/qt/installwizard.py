@@ -486,6 +486,20 @@ class InstallWizard(QDialog, MessageBoxMixin, BaseWizard):
         return clayout.selected_index()
 
     @wizard_dialog
+    def input_date_dialog(self, run_next, title, message, default_time, minimum_time=0, maximum_time=None):
+        vbox = QVBoxLayout()
+        vbox.addWidget(WWLabel(message))
+        de = QDateEdit()
+        de.setDate(QDateTime.fromTime_t(default_time).date())
+        de.setMinimumDate(QDateTime.fromSecsSinceEpoch(int(minimum_time)).date())
+        de.setCalendarPopup(True)  # Enable calendar popup
+        if maximum_time is not None and maximum_time >= minimum_time:
+            de.setMaximumDate(QDateTime.fromSecsSinceEpoch(int(maximum_time)).date())
+        vbox.addWidget(de)
+        self.exec_layout(vbox, title)
+        return de.dateTime().toSecsSinceEpoch()
+
+    @wizard_dialog
     def line_dialog(self, run_next, title, message, default, test, warning=''):
         vbox = QVBoxLayout()
         vbox.addWidget(WWLabel(message))

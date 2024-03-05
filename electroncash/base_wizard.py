@@ -389,7 +389,24 @@ class BaseWizard(util.PrintError):
             t1 = xpub_type(k.xpub)
         if self.wallet_type == 'rpa':
             self.keystores.append(k)
-            self.run('create_wallet')
+            if self.seed_ts is None:
+                # Special case fo RPA and no seed_ts set (restore from seed mode), ask user when this seed was created
+                def on_date(timestamp):
+                    self.seed_ts = timestamp - (60 * 60 * 24)  # Modify it by 1 day in the past to be sure
+                    self.run('create_wallet')
+                default = int(time.time()) - 14 * (60 * 60 * 24)  # 2 weeks ago
+                self.input_date_dialog(run_next=on_date, default_time=default, minimum_time=1704000000,
+                                       title=_("Enter Seed Date"),
+                                       message=_("Please enter the approximate date that you first generated this RPA"
+                                                 " wallet seed.\n\n"
+                                                 "This helps to speed up the RPA wallet sync by not searching within"
+                                                 " blocks before this specified date, however if you choose a date that"
+                                                 " is too late, you may miss some early transactions"
+                                                 " (if you received funds before the date you pick here).\n\n"
+                                                 "If unsure, pick as early a date as possible."),
+                                       maximum_time=int(time.time()))
+            else:
+                self.run('create_wallet')
         elif self.wallet_type == 'standard':
             if multi_xpub:
                 # Multi-xpub case
