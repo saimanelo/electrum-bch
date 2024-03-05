@@ -4015,12 +4015,23 @@ class RpaWallet(ImportedWalletBase):
 
     def __init__(self, storage):
         Abstract_Wallet.__init__(self, storage)
+        self.seed_ts = storage.get('seed_ts')  # The timestamp the seed was created, if known (for default rpa_height)
         self.keystore_rpa_aux = None
         self.rpa_payload = None
 
     @property
     def rpa_height(self) -> int:
-        return self.storage.get('rpa_height', rpa.determine_best_rpa_start_height())
+        height = self.storage.get('rpa_height')
+        if height is not None:
+            # we had a stored height to resume from
+            return height
+        else:
+            # we lack a stored height, use the seed_ts, if known, as a heuristic to start off from
+            if self.seed_ts is not None:
+                args = self.seed_ts,
+            else:
+                args = ()  # just use default which ends up being some height circa Dec 2023
+            return rpa.determine_best_rpa_start_height(*args)
 
     @rpa_height.setter
     def rpa_height(self, value: int):

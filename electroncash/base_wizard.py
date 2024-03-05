@@ -26,6 +26,7 @@
 
 import os
 import sys
+import time
 import traceback
 from . import bitcoin
 from . import keystore
@@ -50,6 +51,10 @@ class BaseWizard(util.PrintError):
         self.keystores = []
         self.is_kivy = config.get('gui') == 'kivy'
         self.seed_type = None
+        # RPA-specific - The timestamp when the seed was first generated. Is None on "restore seed", and for RPA
+        # wallets, requires user to input a time. On "create new seed": has the timestamp of the exact moment the seed
+        # was generated, minus 1 day. Only used by RPA wallets to determine what height to begin syncing from.
+        self.seed_ts = None
 
     def run(self, *args):
         action = args[0]
@@ -103,7 +108,7 @@ class BaseWizard(util.PrintError):
         elif choice == 'imported':
             action = 'import_addresses_or_keys'
         elif choice == 'rpa':
-            action = 'on_rpa'
+            action = 'choose_keystore'
         self.run(action)
 
     def choose_multisig(self):
@@ -158,11 +163,6 @@ class BaseWizard(util.PrintError):
     def bip38_prompt_for_pw(self, bip38_keys):
         ''' Implemented in Qt InstallWizard subclass '''
         raise NotImplementedError('bip38_prompt_for_pw not implemented')
-
-    def on_rpa(self):
-        self.run('choose_keystore')
-        self.request_password(run_next=self.on_password)
-        self.terminate()
 
     def on_import(self, text):
         if keystore.is_address_list(text):
@@ -348,6 +348,7 @@ class BaseWizard(util.PrintError):
         self.line_dialog(title=title, message=message, warning=warning, default='', test=lambda x:True, run_next=run_next)
 
     def restore_from_seed(self):
+        self.seed_ts = None
         self.opt_bip39 = True
         self.opt_ext = True
         test = mnemonic.is_seed # TODO FIX #bitcoin.is_seed if self.wallet_type == 'standard' else bitcoin.is_new_seed
@@ -387,8 +388,8 @@ class BaseWizard(util.PrintError):
             from .bitcoin import xpub_type
             t1 = xpub_type(k.xpub)
         if self.wallet_type == 'rpa':
-            keys = k.dump()
             self.keystores.append(k)
+            self.run('create_wallet')
         elif self.wallet_type == 'standard':
             if multi_xpub:
                 # Multi-xpub case
@@ -451,8 +452,9 @@ class BaseWizard(util.PrintError):
             keys = self.keystores[0].dump()
             self.storage.put('keystore_rpa_aux', keys)
             self.storage.put('seed_type', self.seed_type)
-            text = ""
-            self.wallet = RpaWallet.from_text(self.storage, text, password)
+            if self.seed_ts is not None:
+                self.storage.put('seed_ts', self.seed_ts)
+            self.wallet = RpaWallet.from_text(self.storage, "", password)
         elif self.wallet_type == 'standard':
             if len(self.keystores) > 1 and not self.seed_type:
                 # Multi-xpub case
@@ -497,6 +499,8 @@ class BaseWizard(util.PrintError):
         else:
             # This should never happen.
             raise ValueError('Cannot make seed for unknown seed type ' + str(seed_type))
+        # For RPA: We save time this particular seed was created, minus 1 day for good measure
+        self.seed_ts = round(time.time() - (60 * 60 * 24))
         self.opt_bip39 = False
         f = lambda x: self.request_passphrase(seed, x)
         self.show_seed_dialog(run_next=f, seed_text=seed)
