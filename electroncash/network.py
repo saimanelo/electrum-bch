@@ -869,7 +869,11 @@ class Network(util.DaemonThread):
     @staticmethod
     def get_index(method, params):
         """ hashable index for subscriptions and cache"""
-        return str(method) + (':' + str(params[0]) if params else '')
+        if params and isinstance(params, (list, tuple)):
+            params_part = str(params[0])
+        else:
+            params_part = ''
+        return str(method) + ':' + params_part
 
     def process_responses(self, interface):
         responses = interface.get_responses()
