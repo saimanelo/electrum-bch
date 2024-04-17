@@ -54,9 +54,11 @@ if jnius:
     threading.Thread.run = thread_check_run
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
-is_bundle = getattr(sys, 'frozen', False)
-is_local = not is_bundle and os.path.exists(os.path.join(script_dir, "electron-cash.desktop"))
+is_pyinstaller = getattr(sys, 'frozen', False)
 is_android = 'ANDROID_DATA' in os.environ
+is_appimage = 'APPIMAGE' in os.environ
+is_binary_distributable = is_pyinstaller or is_android or is_appimage
+is_local = not is_binary_distributable and os.path.exists(os.path.join(script_dir, "electron-cash.desktop"))
 
 if is_local:
     sys.path.insert(0, os.path.join(script_dir, 'packages'))
@@ -451,12 +453,24 @@ def process_config_options(args):
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
             tmp_folder = os.path.join(meipass, "is_portable")
-            config_options["portable"] = is_bundle and os.path.exists(tmp_folder)
+            config_options["portable"] = is_pyinstaller and os.path.exists(tmp_folder)
 
     if config_options.get("portable"):
-        config_options["electron_cash_path"] = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)), "electron_cash_data"
-        )
+        if is_local:
+            # Running from git clone or local source: put datadir next to main script
+            portable_dir = os.path.dirname(os.path.realpath(__file__))
+        else:
+            # Running a binary or installed source
+            if is_pyinstaller:
+                # PyInstaller sets sys.executable to the bundle file
+                portable_dir = os.path.dirname(os.path.realpath(sys.executable))
+            elif is_appimage:
+                # AppImage sets the APPIMAGE environment variable to the bundle file
+                portable_dir = os.path.dirname(os.path.realpath(os.environ["APPIMAGE"]))
+            else:
+                # We fall back to getcwd in case nothing else can be used
+                portable_dir = os.getcwd()
+        config_options['electron_cash_path'] = os.path.join(portable_dir, 'electron_cash_data')
 
     set_verbosity(config_options.get("verbose"))
 
