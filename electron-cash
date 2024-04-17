@@ -444,15 +444,14 @@ def process_config_options(args):
         config_options["auto_connect"] = False
     config_options["cwd"] = os.getcwd()
 
-    # fixme: this can probably be achieved with a runtime hook (pyinstaller)
-    try:
-        tmp_folder = os.path.join(
-                sys._MEIPASS,  # pylint: disable=W0212
-                "is_portable"
-        )
-        config_options["portable"] = is_bundle and os.path.exists(tmp_folder)
-    except AttributeError:
-        config_options["portable"] = False
+    if not config_options.get("portable"):
+        # auto detect whether we are started from the portable bundle
+        # we only do this when the user has not already specified portable mode
+        # fixme: this can probably be achieved with a runtime hook (pyinstaller)
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            tmp_folder = os.path.join(meipass, "is_portable")
+            config_options["portable"] = is_bundle and os.path.exists(tmp_folder)
 
     if config_options.get("portable"):
         config_options["electron_cash_path"] = os.path.join(
