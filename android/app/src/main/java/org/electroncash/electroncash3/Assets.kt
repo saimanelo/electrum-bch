@@ -28,8 +28,8 @@ class AssetsFragment : Fragment(R.layout.assets), MainFragment {
             override fun onItemSelected(parent: AdapterView<*>, view: View?,
                                         position: Int, id: Long) {
                 when (position) {
-                    0 -> replaceAssetsFragment<AddressesFragment>()
-                    1 -> replaceAssetsFragment<TokensFragment>()
+                    0 -> replaceAssetsFragment<TokensFragment>()
+                    1 -> replaceAssetsFragment<AddressesFragment>()
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>) { }
