@@ -178,7 +178,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             }
     }
 
-    class Category(val id: String, val name: String, val fungibles: Long,
+    class Category(val id: String, val name: String, val decimals: Short, val fungibles: Long,
                    val nfts: ArrayList<NFT>)
 
     private fun getCategoryOptions(): ArrayList<LabelWithId> {
@@ -226,6 +226,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             val category = Category(
                 categoryId,
                 tokenMap["name"].toString(),
+                tokenMap["decimals"]!!.toShort(),
                 tokenMap["amount"]!!.toLong(),
                 nfts)
             categories[categoryId] = category

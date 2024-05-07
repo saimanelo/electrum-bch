@@ -16,7 +16,7 @@ class ConcreteTokenMeta(TokenMeta):
         return b''  # Placeholder
 
 # This function is for saving the display name to the metadata.
-def save_token_data(token_id, display_name):
+def save_token_data(token_id, display_name, decimals):
 
     # Initialize TokenMeta class
     config = SimpleConfig()  # Ok to have a locally scoped new instead of config for purposes of instatiating the token meta.
@@ -26,6 +26,7 @@ def save_token_data(token_id, display_name):
     token_id_hex = token_id
     new_display_name = display_name
     token_meta.set_token_display_name(token_id_hex, new_display_name)
+    token_meta.set_token_decimals(token_id_hex, decimals)
     token_meta.save()  # Save to storage
 
 # This function is for fetching a single token display name.  Called when we edit the name on the UI.
@@ -39,6 +40,14 @@ def get_token_name(token_id: str) -> str:
         token_display_name = token_id  # Use token_id as name if no display name is found
 
     return token_display_name
+
+
+def get_token_decimals(token_id: str) -> int:
+    config = SimpleConfig()
+    token_meta = ConcreteTokenMeta(config)
+    decimals = token_meta.get_token_decimals(token_id)
+    return decimals if decimals else 0
+
 
 # This function is for fetching all the token categories and aggregating their fungible amounts and NFT amounts.
 def get_tokens(wallet, category_id_filter=""):
@@ -81,6 +90,11 @@ def get_tokens(wallet, category_id_filter=""):
             elif token_display_name.strip() == "":  # Remove whitespace.
                 token_display_name = token_id
 
+            # Fetch token decimals using token_meta, fall back to 0 if not found
+            token_decimals = token_meta.get_token_decimals(token_id)
+            if token_decimals is None:
+                token_decimals = 0
+
             if len(token_display_name) > 18:  # Shorten the display name to 18 chars.
                 token_display_name = token_display_name[:12] + "..."
 
@@ -88,17 +102,19 @@ def get_tokens(wallet, category_id_filter=""):
             if token_id in token_aggregate:
                 token_aggregate[token_id][0] += token_amount
             else:
-                token_aggregate[token_id] = [token_amount, token_display_name, 0]
+                token_aggregate[token_id] = [token_amount, token_display_name, token_decimals, 0]
                 nft_details[token_id] = []
                 utxos[token_id] = []
             if is_nft:
-                token_aggregate[token_id][2] += 1  # Increment NFT count if this utxo represents an NFT
+                token_aggregate[token_id][3] += 1  # Increment NFT count if this utxo is an NFT
                 nft_details[token_id].append([utxo_id, token_capability, token_commitment])
             utxos[token_id].append(utxo)
 
     # Convert the aggregated token data into the expected list of dictionaries format
-    tokens = [{"tokenName": data[1], "amount": data[0], "nft": data[2], "tokenId": token_id,
-               "nftDetails": nft_details[token_id], "tokenUtxos": utxos[token_id]}
+    tokens = [{"tokenName": data[1], "decimals": data[2],
+               "amount": token_meta.format_amount(token_id, data[0]), "nft": data[3],
+               "tokenId": token_id, "nftDetails": nft_details[token_id],
+               "tokenUtxos": utxos[token_id]}
               for token_id, data in token_aggregate.items()]
 
     return tokens
