@@ -717,7 +717,10 @@ class SendContactsDialog : MenuDialog() {
 
     val sendDialog by lazy { targetFragment as SendDialog }
     val contacts: List<PyObject> by lazy {
-        guiContacts.callAttr("get_contacts", sendDialog.wallet).asList()
+        guiContacts.callAttr("get_contacts", sendDialog.wallet, sendDialog.tokenSend).asList()
+    }
+    val hasAnyContacts: Boolean by lazy {
+        guiContacts.callAttr("get_contacts", sendDialog.wallet, false).asList().isNotEmpty()
     }
 
     override fun onBuildDialog(builder: AlertDialog.Builder, menu: Menu) {
@@ -729,7 +732,11 @@ class SendContactsDialog : MenuDialog() {
 
     override fun onShowDialog() {
         if (contacts.isEmpty()) {
-            toast(R.string.you_dont_have_any_contacts)
+            toast (if (hasAnyContacts) {
+                R.string.you_dont_have_any_token
+            } else {
+                R.string.you_dont_have_any_contacts
+            })
             dismiss()
         }
     }
