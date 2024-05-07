@@ -392,7 +392,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             val ftAmountStr = binding.etFtAmount.text.toString()
             model.tx.refresh(TxArgs(wallet, model.paymentRequest, binding.etAddress.text.toString(),
                 amountBox.amount, binding.btnMax.isChecked, inputs,
-                categoryId, ftAmountStr, nftId, tokenSend, hasNfts, hasFts))
+                categoryId, ftAmountStr, nftId, tokenSend, hasNfts, hasFts, feeSpb * 1000))
         }
     }
 
@@ -440,7 +440,8 @@ class SendDialog : TaskLauncherDialog<Unit>() {
     class TxArgs(val wallet: PyObject, val pr: PyObject?, val addrStr: String,
                  val amount: Long?, val max: Boolean, val inputs: PyObject?,
                  val categoryId: String, val fungibleAmountStr: String, val nft: String,
-                 val isTokenSend: Boolean, val hasNfts: Boolean, val hasFts: Boolean) {
+                 val isTokenSend: Boolean, val hasNfts: Boolean, val hasFts: Boolean,
+                 val feePerKb: Int) {
 
 
         private fun getAddress(): Pair<PyObject, AddressType> {
@@ -476,7 +477,6 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                             }
                         ))
                     } else {
-                        val feePerKb = 1 // TODO
                         val (toAddress, type) = getAddress()
                         addressType = type
                         transaction = guiTokens.callAttr(
