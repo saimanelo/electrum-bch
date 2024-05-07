@@ -190,7 +190,6 @@ def get_tokens(wallet):
             # Truncate the display name to a max of 18 characters  
             if len(token_display_name) > 18:
                 token_display_name = token_display_name[:15] + "..."
-
             # Choose the correct dictionary based on whether the token has a name
             target_dict = named_tokens if token_display_name != token_id else unnamed_tokens
 
@@ -199,6 +198,7 @@ def get_tokens(wallet):
                 target_dict[token_id][0] += token_amount
             else:
                 target_dict[token_id] = [token_amount, token_display_name, 0]
+                token_aggregate[token_id][2] += 1  # Increment NFT count if this utxo is an NFT
 
             # Increment NFT count if applicable
             if is_nft:

@@ -392,13 +392,28 @@ class CategoryPropertiesDialog : DialogFragment() {
             val existingTokenData = guiTokens.callAttr("get_token_name", tokenId).toString()
             // Set the existing data in the EditText
             editTextCategoryDetails.setText(existingTokenData)
+            val tokenDecimals = if (existingTokenDecimals == "0") "" else existingTokenDecimals
+            editTextCategoryDecimals.setText(tokenDecimals)
 
             builder.setView(view)
             builder.setTitle("Category Properties")
             .setPositiveButton("Save") { dialog, id ->
                 val userInput = editTextCategoryDetails.text.toString()
+                val inputDecimals = editTextCategoryDecimals.text.toString()
+                var decimals = if (inputDecimals == "") {
+                    0
+                } else {
+                    try {
+                        inputDecimals.toShort()
+                    } catch (e: NumberFormatException) {
+                        toast(R.string.Invalid_amount)
+                        0
+                    }
+                }
+                if (decimals > 18) {
+                    decimals = 18
                 // Save the data
-                saveTokenData(tokenId, userInput)
+                saveTokenData(tokenId, inputName, decimals)
             }
             .setNegativeButton(android.R.string.cancel, null)
             builder.create()
