@@ -1,0 +1,57 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/tv_message"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="You have no minting utxo. Create one?"
+        android:layout_gravity="center"
+        style="@style/TextAppearance.AppCompat.Medium"
+        />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="20dp">
+        
+  	<TextView
+    android:id="@+id/tv_confirm"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Confirm"
+    android:textAppearance="?attr/textAppearanceSubtitle1"
+    android:layout_marginTop="16dp" 
+    android:gravity="center"
+    android:padding="8dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:textColor="#0000FF"
+    
+            style="@style/TextAppearance.AppCompat.Medium"
+     />
+
+<TextView
+    android:id="@+id/tv_cancel"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="Cancel"
+    android:textAppearance="?attr/textAppearanceSubtitle1"
+    android:layout_marginTop="16dp" 
+    android:gravity="center"
+    android:padding="8dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:textColor="#0000FF" 
+    
+            style="@style/TextAppearance.AppCompat.Medium"
+    />
+
+    </LinearLayout>
+</LinearLayout>
+
