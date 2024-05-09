@@ -18,7 +18,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.fragment.app.DialogFragment
 
-import android.util.Log
 import android.widget.CheckBox
 import android.widget.RadioGroup
 import android.widget.RadioButton
@@ -384,30 +383,51 @@ class CategoryPropertiesDialog : DialogFragment() {
             val builder = AlertDialog.Builder(activity)
             val inflater = activity.layoutInflater
             val view = inflater.inflate(R.layout.token_category_properties, null)
-            val editTextCategoryDetails = view.findViewById<EditText>(R.id.editTextCategoryDetails)
+            val editTextCategoryName = view.findViewById<EditText>(R.id.editTextCategoryName)
+            val editTextCategoryDecimals = view.findViewById<EditText>(R.id.editTextCategoryDecimals)
+
 
             // Retrieve the token ID passed as an argument
             val tokenId = arguments?.getString("token_id") ?: "default_token_id"
-            // Get the existing name from the backend
-            val existingTokenData = guiTokens.callAttr("get_token_name", tokenId).toString()
-            // Set the existing data in the EditText
-            editTextCategoryDetails.setText(existingTokenData)
+            // Get the existing details from the backend
+            val existingTokenName = guiTokens.callAttr("get_token_name", tokenId).toString()
+            val existingTokenDecimals = guiTokens.callAttr("get_token_decimals", tokenId).toString()
+            // Set the existing details in the EditText
+            editTextCategoryName.setText(existingTokenName)
+            // Leave the field blank if decimals is zero
+            val tokenDecimals = if (existingTokenDecimals == "0") "" else existingTokenDecimals
+            editTextCategoryDecimals.setText(tokenDecimals)
 
             builder.setView(view)
             builder.setTitle("Category Properties")
             .setPositiveButton("Save") { dialog, id ->
-                val userInput = editTextCategoryDetails.text.toString()
+                val inputName = editTextCategoryName.text.toString()
+                val inputDecimals = editTextCategoryDecimals.text.toString()
+                var decimals = if (inputDecimals == "") {
+                    0
+                } else {
+                    try {
+                        inputDecimals.toShort()
+                    } catch (e: NumberFormatException) {
+                        toast(R.string.Invalid_amount)
+                        0
+                    }
+                }
+                if (decimals > 18) {
+                    toast(R.string.token_decimals_cannot)
+                    decimals = 18
+                }
                 // Save the data
-                saveTokenData(tokenId, userInput)
+                saveTokenData(tokenId, inputName, decimals)
             }
             .setNegativeButton(android.R.string.cancel, null)
             builder.create()
         } ?: throw IllegalStateException("Activity cannot be null")
     }
 
-    // Call the Python backend to save the updated token name.
-    private fun saveTokenData(tokenId: String, displayName: String) {
-        guiTokens.callAttr("save_token_data", tokenId, displayName)
+    // Call the Python backend to save the updated token details.
+    private fun saveTokenData(tokenId: String, displayName: String, decimals: Short) {
+        guiTokens.callAttr("save_token_data", tokenId, displayName, decimals)
         daemonUpdate.setValue(Unit)  // Needed so the screen refreshes with the updated changes.
     }
 }

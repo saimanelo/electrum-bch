@@ -5,11 +5,32 @@
     android:orientation="vertical"
     android:padding="16dp">
 
-    <EditText
-        android:id="@+id/editTextCategoryDetails"
+    <TextView
+        android:id="@+id/tvNameLabel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Cateogry Name" />
+        android:text="@string/name" />
+
+    <EditText
+        android:id="@+id/editTextCategoryName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:singleLine="true" />
+
+    <TextView
+        android:id="@+id/tvDecimalsLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/decimals" />
+
+    <EditText
+        android:id="@+id/editTextCategoryDecimals"
+        android:inputType="number"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:singleLine="true"
+        android:hint="0" />
 
 </LinearLayout>
 
