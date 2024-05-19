@@ -27,7 +27,6 @@ import subprocess
 import sys
 import threading
 import shutil
-import socket
 import inspect
 from enum import IntEnum, unique
 from typing import Tuple, Optional
@@ -169,9 +168,14 @@ class TorController(PrintError):
     def _read_tor_msg(self):
         try:
             while self._tor_process and not self._tor_process.poll():
-                line = self._tor_process.stdout.readline().decode('utf-8', 'replace').strip()
+                line = self._tor_process.stdout.readline()
                 if not line:
                     break
+
+                line = line.decode('utf-8', 'replace').strip()
+                if not line:
+                    continue
+
                 self._tor_msg_handler(line)
         except:
             self.print_exception("Exception in Tor message reader")
