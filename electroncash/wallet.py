@@ -1698,7 +1698,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                     if ddd is None:
                         dd[prevout_hash] = ddd = {}
                     ddd[prevout_n] = token_data
-                    self.print_error(f"Adding CashTokens txi: {tx_hash} -> {addr} -> {prevout_hash} -> {n} -> {token_data!r}")
+                    self.print_error(f"Adding CashTokens txi: {tx_hash} -> {addr} -> {prevout_hash} -> {prevout_n} -> {token_data!r}")
 
             def find_in_self_txo(prevout_hash: str, prevout_n: int) -> tuple:
                 """Returns a tuple of the (Address, value, tokenData) for a given
