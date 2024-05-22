@@ -277,6 +277,10 @@ def init_cmdline(config_options, server):
         print_stderr("Exposing a single private key can compromise your entire wallet!")
         print_stderr("In particular, DO NOT use 'redeem private key' services proposed by third parties.")
 
+    if cmdname == 'gettransaction' and storage.file_exists() and not server:
+        cmd.requires_wallet = True
+        cmd.requires_network = False
+
     # commands needing password
     if  ( (cmd.requires_wallet and storage.is_encrypted() and server is False)\
        or (cmdname == 'load_wallet' and storage.is_encrypted())\

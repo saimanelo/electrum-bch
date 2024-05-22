@@ -772,6 +772,8 @@ class Commands:
         """Retrieve a transaction. """
         if self.wallet and txid in self.wallet.transactions:
             tx = self.wallet.transactions[txid]
+        elif not self.daemon:
+            raise BaseException("Transaction not in wallet")
         else:
             raw = self.network.synchronous_get(('blockchain.transaction.get', [txid]))
             if raw:
