@@ -54,4 +54,9 @@
         <item>@string/fusions</item>
     </string-array>
 
+    <string-array name="coin_type">
+        <item>@string/bitcoin_cash</item>
+        <item>@string/cashtokens</item>
+    </string-array>
+
 </resources>

@@ -4,10 +4,12 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import androidx.appcompat.app.AlertDialog
 import com.chaquo.python.Kwarg
 import com.chaquo.python.PyObject
-import org.electroncash.electroncash3.databinding.AmountBoxBinding
 import org.electroncash.electroncash3.databinding.RequestDetailBinding
 import org.electroncash.electroncash3.databinding.RequestsBinding
 
@@ -61,8 +63,14 @@ class NewRequestDialog : TaskDialog<PyObject>() {
     }
 
     override fun onPostExecute(result: PyObject) {
+        val tokenRequest = if (arguments != null && arguments!!.containsKey("token_request")) {
+            arguments!!.getBoolean("token_request")
+        } else {
+            false
+        }
         showDialog(listFragment, RequestDialog().apply { arguments = Bundle().apply {
-           putString("address", result.callAttr("to_storage_string").toString())
+            putString("address", result.callAttr("to_storage_string").toString())
+            putBoolean("token_request", tokenRequest)
         }})
     }
 }
@@ -98,14 +106,33 @@ class RequestDialog : DetailDialog() {
     }
     lateinit var amountBox: AmountBox
 
+    // Whether or not this is a bch request or token request dialog
+    val tokenRequest by lazy {
+        if (arguments != null && arguments!!.containsKey("token_request")) {
+            arguments!!.getBoolean("token_request")
+        } else {
+            false
+        }
+    }
+
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = RequestDetailBinding.inflate(LayoutInflater.from(context))
+
+        if (existingRequest == null) {
+            // Only show the dropdown on existing requests to allow the user to see either
+            // address encoding. It can be removed entirely once "is this a token request?"
+            // flag is stored for requests
+            (binding.spnCoinType as View).visibility = View.GONE
+        }
         with (builder) {
             setView(binding.root)
             setNegativeButton(android.R.string.cancel, null)
             setPositiveButton(android.R.string.ok, null)
             if (existingRequest != null) {
                 setNeutralButton(R.string.delete, null)
+                setTitle(R.string.request)
+            } else {
+                setTitle(if (tokenRequest) R.string.request_tokens else R.string.request_bch)
             }
         }
     }
@@ -114,10 +141,13 @@ class RequestDialog : DetailDialog() {
         amountBox = AmountBox(binding.incAmount)
         amountBox.listener = { updateUI() }
 
-        binding.btnCopy.setOnClickListener {
+        binding.imgQR.setOnClickListener {
             copyToClipboard(getUri(), R.string.request_uri)
         }
-        binding.tvAddress.text = address.callAttr("to_ui_string").toString()
+
+        binding.tvAddress.setOnClickListener {
+            copyToClipboard(binding.tvAddress.text, R.string.address)
+        }
 
         binding.etDescription.addAfterTextChangedListener { updateUI() }
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { onOK() }
@@ -127,7 +157,27 @@ class RequestDialog : DetailDialog() {
                 showDialog(this, RequestDeleteDialog(address))
             }
         }
-        updateUI()
+
+        val spinner: Spinner = binding.spnCoinType
+        ArrayAdapter.createFromResource(
+            activity!!,
+            R.array.coin_type,
+            android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinner.adapter = adapter
+        }
+
+        spinner.onItemSelectedListener = object :
+            AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?,
+                                        position: Int, id: Long) {
+                updateUI(position == 1)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+        spinner.setSelection(if (tokenRequest) 1 else 0)
+        updateUI(tokenRequest)
     }
 
     override fun onFirstShowDialog() {
@@ -141,16 +191,24 @@ class RequestDialog : DetailDialog() {
         }
     }
 
-    private fun updateUI() {
+    private fun isTokenRequest(): Boolean {
+        return binding.spnCoinType.selectedItemPosition == 1
+    }
+
+    private fun updateUI(tokenRequest: Boolean = isTokenRequest()) {
         showQR(binding.imgQR, getUri())
+        val addressFormat = if (tokenRequest) "to_token_string" else "to_ui_string"
+        (binding.bchRow as View).visibility = if (tokenRequest) View.GONE else View.VISIBLE
+        binding.tvAddress.text = address.callAttr(addressFormat).toString()
     }
 
     private fun getUri(): String {
-        return libWeb.callAttr("create_URI", address, amountBox.amount, description).toString()
+        return libWeb.callAttr("create_URI", address, amountBox.amount, description,
+                               Kwarg("token", isTokenRequest())).toString()
     }
 
     private fun onOK() {
-        val amount = amountBox.amount
+        val amount = if (isTokenRequest()) 0 else amountBox.amount
         if (amount == null) {
             toast(R.string.Invalid_amount)
         } else {
