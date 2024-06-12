@@ -20,10 +20,10 @@ class ConcreteTokenMeta(TokenMeta):
         return b''  # Placeholder
 
 
-def create_and_sign_mint_transaction(wallet,   fungible_amount, is_nft, nft_capability, password):
+def create_and_sign_genesis_transaction(wallet,   fungible_amount, is_nft, nft_capability, password):
 
     try:
-        eligible_utxos = fetch_eligible_minting_utxos(wallet)
+        eligible_utxos = fetch_eligible_genesis_utxos(wallet)
         utxo_dict = eligible_utxos[0]
     except Exception as e:
         print ("couldn't get an eligible utxo")
@@ -75,7 +75,7 @@ def create_and_sign_new_coin_tx(wallet,password):
 
     config = SimpleConfig()  # Ok to have a locally scoped new instead of config for purposes of instatiating the token meta.
 
-    # Create new coin in case we have no coins eligible for token minting (e.g. no prevout = 0 coins)
+    # Create new coin in case we have no coins eligible for token genesis (e.g. no prevout = 0 coins)
     # Fetch UTXOs suitable for creating a new coin
     utxos = wallet.get_utxos(exclude_frozen=True, mature=True, confirmed_only=False, exclude_slp=True, exclude_tokens=True)
 
@@ -110,22 +110,22 @@ def create_and_sign_new_coin_tx(wallet,password):
     return tx
 
 
-def wallet_has_minting_utxo(wallet):
+def wallet_has_genesis_utxo(wallet):
     # Get the eligible utxos from the wallet layer.
-    eligible_utxos = fetch_eligible_minting_utxos(wallet)
-    # Return Boolean Value showing whether or not the wallet has a minting UTXO.
+    eligible_utxos = fetch_eligible_genesis_utxos(wallet)
+    # Return Boolean Value showing whether or not the wallet has a genesis UTXO.
     if len(eligible_utxos) == 0:
         return False
     else:
         return True
 
 
-def fetch_eligible_minting_utxos(wallet):
+def fetch_eligible_genesis_utxos(wallet):
 
-    # Use the wallet's method to get UTXOs excluding those not suitable for minting tokens
+    # Use the wallet's method to get UTXOs excluding those not suitable for genesis tokens
     utxos = wallet.get_utxos(exclude_frozen=True, mature=True, confirmed_only=False, exclude_slp=True, exclude_tokens=True)
 
-    # Calculate the minimum value required for a UTXO to be eligible for minting a new token
+    # Calculate the minimum value required for a UTXO to be eligible for creating a new token
     min_val = 1310 # Hardcoded for now, based on 800s heuristic dust limit and 310 byte txn.
 
     eligible_utxos = []

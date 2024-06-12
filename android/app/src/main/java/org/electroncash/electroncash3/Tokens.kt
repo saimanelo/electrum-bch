@@ -28,7 +28,7 @@ import androidx.fragment.app.Fragment
 val guiTokens by lazy { guiMod("tokens") }
 
 // This class is for the dialog to confirm that the user wants to create a new UTXO.
-// This is needed if there is no 0-output UTXO which are required for minting.
+// This is needed if there is no 0-output UTXO which are required for token genesis.
 class ConfirmUTXOCreationDialog : DialogFragment() {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
@@ -56,8 +56,8 @@ class ConfirmUTXOCreationDialog : DialogFragment() {
     }
 }
 
-// This clas is for the dialog to specify minting parameters including fungible amount, NFT, etc.
-class TokenMintDialog : DialogFragment() {
+// This class is for the dialog to specify token genesis parameters including fungible amount, NFT, etc.
+class TokenGenesisDialog : DialogFragment() {
 
     private lateinit var etAmount: EditText
     private lateinit var cbNFT: CheckBox
@@ -67,7 +67,7 @@ class TokenMintDialog : DialogFragment() {
         return activity?.let { activity ->
 
             val inflater = activity.layoutInflater
-            val view = inflater.inflate(R.layout.token_dialog_mint, null)
+            val view = inflater.inflate(R.layout.token_dialog_genesis, null)
 
             etAmount = view.findViewById(R.id.etAmount)
             cbNFT = view.findViewById(R.id.cbNFT)
@@ -95,16 +95,16 @@ class TokenMintDialog : DialogFragment() {
             }
             val builder = AlertDialog.Builder(activity)
             builder.setView(view)
-                .setTitle("Mint Token")
+                .setTitle("Create New Token")
                 .setPositiveButton("Submit") { dialog, id ->
-                    submitTokenMint()
+                    submitTokenGenesis()
                 }
                 .setNegativeButton(android.R.string.cancel, null)
             builder.create()
         } ?: throw IllegalStateException("Activity cannot be null")
     }
 
-    private fun submitTokenMint() {
+    private fun submitTokenGenesis() {
         val amount = etAmount.text.toString().toLongOrNull() ?: 0L
         val isNFT = cbNFT.isChecked
         val nftCapability = when (rgNFTCapabilities.checkedRadioButtonId) {
@@ -114,7 +114,7 @@ class TokenMintDialog : DialogFragment() {
             else -> "None"
         }
 
-        // Create a bundle with all the mint parameters, pass this to the password dialog.
+        // Create a bundle with all the genesis parameters, pass this to the password dialog.
         val args = Bundle().apply {
             putLong("amount", amount)
             putBoolean("isNFT", isNFT)
@@ -122,11 +122,11 @@ class TokenMintDialog : DialogFragment() {
         }
 
         // Show the dialog to get the password
-        val mintDialog = SignAndBroadcastMintDialog().apply {
+        val genesisDialog = SignAndBroadcastGenesisDialog().apply {
             arguments = args
         }
 
-        mintDialog.show(requireActivity().supportFragmentManager,"SignAndBroadcastMintDialog")
+        genesisDialog.show(requireActivity().supportFragmentManager,"SignAndBroadcastGenesisDialog")
     }
 
 }
@@ -186,20 +186,20 @@ class SignAndBroadcastPrepUTXODialog : DialogFragment() {
     }
 }
 
-// This class is for the password dialog after minting.
-class SignAndBroadcastMintDialog : DialogFragment() {
+// This class is for the password dialog after genesis.
+class SignAndBroadcastGenesisDialog : DialogFragment() {
     private lateinit var passwordInput: EditText
     private var amount: Long? = null
     private var isNFT: Boolean? = null
     private var nftCapability: String? = null
 
     companion object {
-        private const val TAG = "SignAndBroadCastMintDialog"
+        private const val TAG = "SignAndBroadCastGenesisDialog"
     }
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         return activity?.let { activity ->
             val inflater = activity.layoutInflater
-            val view = inflater.inflate(R.layout.token_mint_dialog_wallet_password, null)
+            val view = inflater.inflate(R.layout.token_genesis_dialog_wallet_password, null)
             passwordInput = view.findViewById(R.id.passwordEditText)
 
             // Unpack arguments
@@ -218,7 +218,7 @@ class SignAndBroadcastMintDialog : DialogFragment() {
             dialog.setOnShowListener {
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                     val password = passwordInput.text.toString()
-                    signAndBroadcastMintTransaction(password, dialog)
+                    signAndBroadcastGenesisTransaction(password, dialog)
                 }
             }
 
@@ -226,9 +226,9 @@ class SignAndBroadcastMintDialog : DialogFragment() {
         } ?: throw IllegalStateException("Activity cannot be null")
     }
 
-    private fun signAndBroadcastMintTransaction(password: String, dialog: AlertDialog) {
+    private fun signAndBroadcastGenesisTransaction(password: String, dialog: AlertDialog) {
         try {
-            val signedTx = guiTokens.callAttr("create_and_sign_mint_transaction", wallet, amount, isNFT, nftCapability, password)
+            val signedTx = guiTokens.callAttr("create_and_sign_genesis_transaction", wallet, amount, isNFT, nftCapability, password)
             if (signedTx != null) {
                 val broadcastResult = daemonModel.network.callAttr("broadcast_transaction", signedTx)
                 if (broadcastResult.asList().get(0).toBoolean()) {
@@ -249,14 +249,14 @@ class SignAndBroadcastMintDialog : DialogFragment() {
 
 }
 
-// Main entry point for minting.
-class TokenMint {
+// Main entry point for token genesis.
+class TokenGenesis {
 
-    // First check if we have a minting UTXO. Then either mint the token with UTXO...
+    // First check if we have a genesis UTXO. Then either create the token with UTXO...
     // Or eventually route to create a UTXO.
-    fun checkAndMintToken(fragment: Fragment) {
-        if (guiTokens.callAttr("wallet_has_minting_utxo", wallet).toBoolean()) {
-            mintTokenWithUtxo(fragment)
+    fun checkAndGenesisToken(fragment: Fragment) {
+        if (guiTokens.callAttr("wallet_has_genesis_utxo", wallet).toBoolean()) {
+            genesisTokenWithUtxo(fragment)
         } else {
             showNoUTXOConfirmationDialog(fragment)
         }
@@ -268,8 +268,8 @@ class TokenMint {
         }.show(fragment.requireActivity().supportFragmentManager, "ConfirmUTXOCreationDialog")
     }
 
-    private fun mintTokenWithUtxo(fragment: Fragment) {
-        TokenMintDialog().show(fragment.requireActivity().supportFragmentManager, "TokenMintDialog")
+    private fun genesisTokenWithUtxo(fragment: Fragment) {
+        TokenGenesisDialog().show(fragment.requireActivity().supportFragmentManager, "TokenGenesisDialog")
     }
 
 
@@ -309,8 +309,8 @@ class TokensFragment : ListFragment(R.layout.tokens, R.id.rvTokens) {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        val tokenMint = TokenMint()
-        binding.btnAdd.setOnClickListener { tokenMint.checkAndMintToken(this) }
+        val tokenGenesis = TokenGenesis()
+        binding.btnAdd.setOnClickListener { tokenGenesis.checkAndGenesisToken(this) }
     }
 
     override fun onCreateAdapter() =
