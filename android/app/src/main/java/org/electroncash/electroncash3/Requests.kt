@@ -118,21 +118,12 @@ class RequestDialog : DetailDialog() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = RequestDetailBinding.inflate(LayoutInflater.from(context))
 
-        if (existingRequest == null) {
-            // Only show the dropdown on existing requests to allow the user to see either
-            // address encoding. It can be removed entirely once "is this a token request?"
-            // flag is stored for requests
-            (binding.spnCoinType as View).visibility = View.GONE
-        }
         with (builder) {
             setView(binding.root)
             setNegativeButton(android.R.string.cancel, null)
             setPositiveButton(android.R.string.ok, null)
             if (existingRequest != null) {
                 setNeutralButton(R.string.delete, null)
-                setTitle(R.string.request)
-            } else {
-                setTitle(if (tokenRequest) R.string.request_tokens else R.string.request_bch)
             }
         }
     }
