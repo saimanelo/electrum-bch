@@ -3,51 +3,74 @@ package org.electroncash.electroncash3
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
 import androidx.appcompat.app.AlertDialog
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.commit
+import androidx.fragment.app.replace
 import com.chaquo.python.Kwarg
 import com.chaquo.python.PyObject
 import org.electroncash.electroncash3.databinding.RequestDetailBinding
-import org.electroncash.electroncash3.databinding.RequestsBinding
 
 
-class RequestsFragment : ListFragment(R.layout.requests, R.id.rvRequests) {
-    private var _binding: RequestsBinding? = null
-    private val binding get() = _binding!!
+class RequestsFragment : Fragment(R.layout.requests), MainFragment {
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        val spinner: Spinner = view.findViewById(R.id.spnReqType)
+        ArrayAdapter.createFromResource(
+            activity!!,
+            R.array.request_type,
+            android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinner.adapter = adapter
+        }
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        super.onCreateView(inflater, container, savedInstanceState)
-        _binding = RequestsBinding.inflate(inflater, container, false)
-        return binding.root
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
-    }
-
-    override fun onListModelCreated(listModel: ListModel) {
-        with (listModel) {
-            trigger.addSource(daemonUpdate)
-            trigger.addSource(settings.getString("base_unit"))
-            data.function = { wallet.callAttr("get_sorted_requests", daemonModel.config)!! }
+        spinner.onItemSelectedListener = object :
+            AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?,
+                                        position: Int, id: Long) {
+                when (position) {
+                    0 -> replaceReqFragment<BchRequestsFragment>()
+                    1 -> replaceReqFragment<TokenRequestsFragment>()
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>) {}
         }
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        binding.btnAdd.setOnClickListener { showDialog(this, NewRequestDialog()) }
+    private inline fun <reified T : Fragment> replaceReqFragment() {
+        requireActivity().supportFragmentManager.commit {
+            setReorderingAllowed(true)
+            replace<T>(R.id.requests_container)
+        }
+    }
+}
+
+
+class RequestModel(wallet: PyObject, val request: PyObject) : ListItemModel(wallet) {
+    val address by lazy { getField("address").toString() }
+    val amount = getField("amount").toLong()
+    val timestamp = formatTime(getField("time").toLong())
+    val description = getField("memo").toString()
+    val status = (app.resources.getStringArray(R.array.payment_status)
+        [getField("status").toInt()])!!
+    val tokenRequest = getNullableBooleanField("tokenreq")
+
+    private fun getField(key: String): PyObject {
+        return request.callAttr("get", key)!!
     }
 
-    override fun onCreateAdapter() =
-        ListAdapter(this, R.layout.request_list, ::RequestModel, ::RequestDialog)
+    private fun getNullableBooleanField(key: String, default: Boolean = false): Boolean {
+        val obj = request.callAttr("get", key)
+        return obj?.toBoolean() ?: default
+    }
+
+    override val dialogArguments by lazy {
+        Bundle().apply { putString("address", address) }
+    }
 }
 
 
@@ -72,24 +95,6 @@ class NewRequestDialog : TaskDialog<PyObject>() {
             putString("address", result.callAttr("to_storage_string").toString())
             putBoolean("token_request", tokenRequest)
         }})
-    }
-}
-
-
-class RequestModel(wallet: PyObject, val request: PyObject) : ListItemModel(wallet) {
-    val address by lazy { getField("address").toString() }
-    val amount = getField("amount").toLong()
-    val timestamp = formatTime(getField("time").toLong())
-    val description = getField("memo").toString()
-    val status = (app.resources.getStringArray(R.array.payment_status)
-                  [getField("status").toInt()])!!
-
-    private fun getField(key: String): PyObject {
-        return request.callAttr("get", key)!!
-    }
-
-    override val dialogArguments by lazy {
-        Bundle().apply { putString("address", address) }
     }
 }
 
@@ -121,7 +126,7 @@ class RequestDialog : DetailDialog() {
         with (builder) {
             setView(binding.root)
             setNegativeButton(android.R.string.cancel, null)
-            setPositiveButton(android.R.string.ok, null)
+            setPositiveButton(R.string.save, null)
             if (existingRequest != null) {
                 setNeutralButton(R.string.delete, null)
             }
@@ -158,16 +163,19 @@ class RequestDialog : DetailDialog() {
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             spinner.adapter = adapter
         }
-
+        spinner.setSelection(if (tokenRequest) 1 else 0)
         spinner.onItemSelectedListener = object :
             AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?,
-                                        position: Int, id: Long) {
+            override fun onItemSelected(
+                parent: AdapterView<*>, view: View?,
+                position: Int, id: Long
+            ) {
                 updateUI(position == 1)
             }
+
             override fun onNothingSelected(parent: AdapterView<*>) {}
         }
-        spinner.setSelection(if (tokenRequest) 1 else 0)
+
         updateUI(tokenRequest)
     }
 
@@ -175,6 +183,7 @@ class RequestDialog : DetailDialog() {
         val request = existingRequest
         if (request != null) {
             val model = RequestModel(wallet, request)
+            binding.spnCoinType.setSelection(if (model.tokenRequest) 1 else 0)
             amountBox.amount = model.amount
             binding.etDescription.setText(model.description)
         } else {
@@ -205,7 +214,8 @@ class RequestDialog : DetailDialog() {
         } else {
             wallet.callAttr(
                 "add_payment_request",
-                wallet.callAttr("make_payment_request", address, amount, description),
+                wallet.callAttr("make_payment_request", address, amount, description,
+                    Kwarg("token_request", isTokenRequest())),
                 daemonModel.config, Kwarg("save", false))
             saveRequests(wallet)
             dismiss()
