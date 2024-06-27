@@ -64,4 +64,10 @@
         <item>@string/cashtokens</item>
     </string-array>
 
+    <string-array name="contact_type">
+        <item>@string/all_contacts</item>
+        <item>@string/bch_only</item>
+        <item>@string/token_aware_contacts</item>
+    </string-array>
+
 </resources>
