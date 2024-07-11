@@ -44,6 +44,8 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             function = { it.invoke() }
         }
         var tokenSend: Boolean = false
+        var hasNfts: Boolean = false
+        var hasFts: Boolean = false
     }
     val model: Model by viewModels()
 
@@ -141,14 +143,15 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                 val newAdapter = ArrayAdapter(
                     context!!, android.R.layout.simple_spinner_dropdown_item, nftLabels)
                 binding.spnNft.setAdapter(newAdapter)
-                binding.nftRow.visibility = if (nftLabels.size > 1) View.VISIBLE else View.GONE
+                model.hasNfts = nftLabels.size > 1
                 var fungibles: String = "0"
                 category?.let {
                     fungibles = it.fungibles
                 }
-                binding.fungiblesRow.visibility = if (fungibles != "0") View.VISIBLE else View.GONE
+                model.hasFts = fungibles != "0"
                 binding.etFtAmount.setText("")
                 refreshTx()
+                updateUI()
 
             }
             override fun onNothingSelected(parent: AdapterView<*>) {}
@@ -398,10 +401,13 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     private fun updateUI() {
         binding.tvAddressLabel.setText(if (model.tokenSend) R.string.Send_to else R.string.Pay_to)
-        (binding.bchRow as View).visibility = if (model.tokenSend) View.GONE else View.VISIBLE
-        for (row in listOf(binding.categoryRow, binding.fungiblesRow, binding.nftRow)) {
-            (row as View).visibility = if (model.tokenSend) View.VISIBLE else View.GONE
+        val showIf = fun(view: View, condition: Boolean) {
+            view.visibility = if (condition) View.VISIBLE else View.GONE
         }
+        showIf(binding.bchRow, !model.tokenSend)
+        showIf(binding.categoryRow, model.tokenSend)
+        showIf(binding.nftRow, model.tokenSend && model.hasNfts)
+        showIf(binding.fungiblesRow, model.tokenSend && model.hasFts)
     }
 
     val feeSpb: Int
@@ -413,12 +419,11 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             val categoryId = selectedCategory?.id ?: ""
             val selectedNft = binding.spnNft.selectedItem as LabelWithId?
             val nftId = selectedNft?.id ?: ""
-            val hasNfts = binding.nftRow.visibility == View.VISIBLE
-            val hasFts = binding.fungiblesRow.visibility == View.VISIBLE
             val ftAmountStr = binding.etFtAmount.text.toString()
             model.tx.refresh(TxArgs(wallet, model.paymentRequest, binding.etAddress.text.toString(),
                 amountBox.amount, binding.btnMax.isChecked, inputs,
-                categoryId, ftAmountStr, nftId, model.tokenSend, hasNfts, hasFts, feeSpb * 1000))
+                categoryId, ftAmountStr, nftId,
+                model.tokenSend, model.hasNfts, model.hasFts, feeSpb * 1000))
         }
     }
 
