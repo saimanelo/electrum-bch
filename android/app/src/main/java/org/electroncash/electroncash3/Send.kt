@@ -116,13 +116,17 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = SendBinding.inflate(LayoutInflater.from(context))
+        buildCategorySpinner()
+        buildNftSpinner()
         if (!unbroadcasted) {
-            buildCategorySpinner()
-            buildNftSpinner()
             builder.setPositiveButton(R.string.send, null)
         } else {
             builder.setTitle(R.string.sign_transaction)
                 .setPositiveButton(R.string.sign, null)
+            binding.tvTitle.visibility = View.GONE
+            binding.header.removeView(binding.spnCoinType)
+            binding.sendRow.addView(binding.spnCoinType)
+            binding.sendRow.visibility = View.VISIBLE
         }
         builder.setView(binding.root)
             .setNegativeButton(android.R.string.cancel, null)
