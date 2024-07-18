@@ -82,8 +82,8 @@ class SendDialog : TaskLauncherDialog<Unit>() {
     }
 
     // Whether or not the dialog started up as a bch send or token send dialog
-    // (use model.tokenSend thereafter)
-    val tokenSend by lazy {
+    // (model.tokenSend reflects the current state)
+    val initialTokenSend by lazy {
         if (arguments != null && arguments!!.containsKey("token_send")) {
             arguments!!.getBoolean("token_send")
         } else {
@@ -399,7 +399,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                 amountBox.requestFocus()
             }
         }
-        model.tokenSend = tokenSend
+        model.tokenSend = initialTokenSend
         refreshTx()
     }
 

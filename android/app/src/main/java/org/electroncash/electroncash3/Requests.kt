@@ -10,6 +10,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import androidx.fragment.app.replace
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.ViewModel
 import com.chaquo.python.Kwarg
 import com.chaquo.python.PyObject
 import org.electroncash.electroncash3.databinding.RequestDetailBinding
@@ -103,6 +105,11 @@ class RequestDialog : DetailDialog() {
     private var _binding: RequestDetailBinding? = null
     private val binding get() = _binding!!
 
+    class Model : ViewModel() {
+        var tokenRequest: Boolean = false
+    }
+    val model: Model by viewModels()
+
     val address by lazy {
         clsAddress.callAttr("from_string", arguments!!.getString("address"))!!
     }
@@ -111,8 +118,9 @@ class RequestDialog : DetailDialog() {
     }
     lateinit var amountBox: AmountBox
 
-    // Whether or not this is a bch request or token request dialog
-    val tokenRequest by lazy {
+    // Whether or not the dialog started up as a bch request or token request dialog
+    // (model.tokenRequest reflects the current state)
+    val initialTokenRequest by lazy {
         if (arguments != null && arguments!!.containsKey("token_request")) {
             arguments!!.getBoolean("token_request")
         } else {
@@ -163,20 +171,20 @@ class RequestDialog : DetailDialog() {
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             spinner.adapter = adapter
         }
-        spinner.setSelection(if (tokenRequest) 1 else 0)
+        spinner.setSelection(if (model.tokenRequest) 1 else 0)
         spinner.onItemSelectedListener = object :
             AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
                 parent: AdapterView<*>, view: View?,
                 position: Int, id: Long
             ) {
-                updateUI(position == 1)
+                model.tokenRequest = (position == 1)
+                updateUI()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>) {}
         }
-
-        updateUI(tokenRequest)
+        updateUI()
     }
 
     override fun onFirstShowDialog() {
@@ -189,33 +197,30 @@ class RequestDialog : DetailDialog() {
         } else {
             amountBox.requestFocus()
         }
+        model.tokenRequest = initialTokenRequest
     }
 
-    private fun isTokenRequest(): Boolean {
-        return binding.spnCoinType.selectedItemPosition == 1
-    }
-
-    private fun updateUI(tokenRequest: Boolean = isTokenRequest()) {
+    private fun updateUI() {
         showQR(binding.imgQR, getUri())
-        val addressFormat = if (tokenRequest) "to_token_string" else "to_ui_string"
-        (binding.bchRow as View).visibility = if (tokenRequest) View.GONE else View.VISIBLE
+        val addressFormat = if (model.tokenRequest) "to_token_string" else "to_ui_string"
+        (binding.bchRow as View).visibility = if (model.tokenRequest) View.GONE else View.VISIBLE
         binding.tvAddress.text = address.callAttr(addressFormat).toString()
     }
 
     private fun getUri(): String {
         return libWeb.callAttr("create_URI", address, amountBox.amount, description,
-                               Kwarg("token", isTokenRequest())).toString()
+                               Kwarg("token", model.tokenRequest)).toString()
     }
 
     private fun onOK() {
-        val amount = if (isTokenRequest()) 0 else amountBox.amount
+        val amount = if (model.tokenRequest) 0 else amountBox.amount
         if (amount == null) {
             toast(R.string.Invalid_amount)
         } else {
             wallet.callAttr(
                 "add_payment_request",
                 wallet.callAttr("make_payment_request", address, amount, description,
-                    Kwarg("token_request", isTokenRequest())),
+                    Kwarg("token_request", model.tokenRequest)),
                 daemonModel.config, Kwarg("save", false))
             saveRequests(wallet)
             dismiss()
