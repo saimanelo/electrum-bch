@@ -11,6 +11,7 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.SeekBar
+import android.widget.Spinner
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.viewModels
@@ -42,6 +43,9 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             notifyIncomplete = false  // Only notify transactions which match the UI state.
             function = { it.invoke() }
         }
+        var tokenSend: Boolean = false
+        var hasNfts: Boolean = false
+        var hasFts: Boolean = false
     }
     val model: Model by viewModels()
 
@@ -77,7 +81,8 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         }
     }
 
-    // Whether or not this is a bch send or token send dialog
+    // Whether or not the dialog started up as a bch send or token send dialog
+    // (use model.tokenSend thereafter)
     val tokenSend by lazy {
         if (arguments != null && arguments!!.containsKey("token_send")) {
             arguments!!.getBoolean("token_send")
@@ -112,18 +117,8 @@ class SendDialog : TaskLauncherDialog<Unit>() {
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = SendBinding.inflate(LayoutInflater.from(context))
         if (!unbroadcasted) {
-            if (tokenSend) {
-                builder.setTitle(R.string.Send_tokens)
-                binding.tvAddressLabel.setText(R.string.Send_to)
-                (binding.bchRow as View).visibility = View.GONE
-                buildCategorySpinner()
-                buildNftSpinner()
-            } else {
-                builder.setTitle(R.string.send)
-                for (row in listOf(binding.categoryRow, binding.fungiblesRow, binding.nftRow)) {
-                    (row as View).visibility = View.GONE
-                }
-            }
+            buildCategorySpinner()
+            buildNftSpinner()
             builder.setPositiveButton(R.string.send, null)
         } else {
             builder.setTitle(R.string.sign_transaction)
@@ -148,14 +143,15 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                 val newAdapter = ArrayAdapter(
                     context!!, android.R.layout.simple_spinner_dropdown_item, nftLabels)
                 binding.spnNft.setAdapter(newAdapter)
-                binding.nftRow.visibility = if (nftLabels.size > 1) View.VISIBLE else View.GONE
+                model.hasNfts = nftLabels.size > 1
                 var fungibles: String = "0"
                 category?.let {
                     fungibles = it.fungibles
                 }
-                binding.fungiblesRow.visibility = if (fungibles != "0") View.VISIBLE else View.GONE
+                model.hasFts = fungibles != "0"
                 binding.etFtAmount.setText("")
                 refreshTx()
+                updateUI()
 
             }
             override fun onNothingSelected(parent: AdapterView<*>) {}
@@ -363,6 +359,30 @@ class SendDialog : TaskLauncherDialog<Unit>() {
              dialog.getButton(AlertDialog.BUTTON_NEUTRAL).visibility = View.GONE
         }
 
+        val spinner: Spinner = binding.spnCoinType
+        ArrayAdapter.createFromResource(
+            activity!!,
+            R.array.coin_type,
+            android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinner.adapter = adapter
+        }
+        spinner.setSelection(if (model.tokenSend) 1 else 0)
+        spinner.onItemSelectedListener = object :
+            AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>, view: View?,
+                position: Int, id: Long
+            ) {
+                model.tokenSend = (position == 1)
+                updateUI()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+        updateUI()
+
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { scanQR(this) }
         model.tx.observe(this, Observer { onTx(it) })
     }
@@ -375,7 +395,19 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                 amountBox.requestFocus()
             }
         }
+        model.tokenSend = tokenSend
         refreshTx()
+    }
+
+    private fun updateUI() {
+        binding.tvAddressLabel.setText(if (model.tokenSend) R.string.Send_to else R.string.Pay_to)
+        val showIf = fun(view: View, condition: Boolean) {
+            view.visibility = if (condition) View.VISIBLE else View.GONE
+        }
+        showIf(binding.bchRow, !model.tokenSend)
+        showIf(binding.categoryRow, model.tokenSend)
+        showIf(binding.nftRow, model.tokenSend && model.hasNfts)
+        showIf(binding.fungiblesRow, model.tokenSend && model.hasFts)
     }
 
     val feeSpb: Int
@@ -387,12 +419,11 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             val categoryId = selectedCategory?.id ?: ""
             val selectedNft = binding.spnNft.selectedItem as LabelWithId?
             val nftId = selectedNft?.id ?: ""
-            val hasNfts = binding.nftRow.visibility == View.VISIBLE
-            val hasFts = binding.fungiblesRow.visibility == View.VISIBLE
             val ftAmountStr = binding.etFtAmount.text.toString()
             model.tx.refresh(TxArgs(wallet, model.paymentRequest, binding.etAddress.text.toString(),
                 amountBox.amount, binding.btnMax.isChecked, inputs,
-                categoryId, ftAmountStr, nftId, tokenSend, hasNfts, hasFts, feeSpb * 1000))
+                categoryId, ftAmountStr, nftId,
+                model.tokenSend, model.hasNfts, model.hasFts, feeSpb * 1000))
         }
     }
 
@@ -652,7 +683,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     override fun onPostExecute(result: Unit) {
         if (arguments != null && arguments!!.containsKey("sweepKeypairs")) {
-            toast(if (tokenSend) R.string.tokens_sent else R.string.payment_sent)
+            toast(if (model.tokenSend) R.string.tokens_sent else R.string.payment_sent)
             closeDialogs(this)
         } else {
             try {
@@ -717,7 +748,7 @@ class SendContactsDialog : MenuDialog() {
 
     val sendDialog by lazy { targetFragment as SendDialog }
     val contacts: List<PyObject> by lazy {
-        guiContacts.callAttr("get_contacts", sendDialog.wallet, sendDialog.tokenSend).asList()
+        guiContacts.callAttr("get_contacts", sendDialog.wallet, sendDialog.model.tokenSend).asList()
     }
     val hasAnyContacts: Boolean by lazy {
         guiContacts.callAttr("get_contacts", sendDialog.wallet, false).asList().isNotEmpty()
