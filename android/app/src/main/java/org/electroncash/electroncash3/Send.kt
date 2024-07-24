@@ -752,10 +752,11 @@ class SendContactsDialog : MenuDialog() {
 
     val sendDialog by lazy { targetFragment as SendDialog }
     val contacts: List<PyObject> by lazy {
-        guiContacts.callAttr("get_contacts", sendDialog.wallet, sendDialog.model.tokenSend).asList()
+        val typeFilter = if (sendDialog.model.tokenSend) 2 else 0
+        guiContacts.callAttr("get_contacts", sendDialog.wallet, typeFilter).asList()
     }
     val hasAnyContacts: Boolean by lazy {
-        guiContacts.callAttr("get_contacts", sendDialog.wallet, false).asList().isNotEmpty()
+        guiContacts.callAttr("get_contacts", sendDialog.wallet, 0).asList().isNotEmpty()
     }
 
     override fun onBuildDialog(builder: AlertDialog.Builder, menu: Menu) {
