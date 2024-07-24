@@ -27,7 +27,7 @@ def get_token_transactions(wallet):
             nft_balance = tokens_balances.get(category_id, {}).get("nfts", 0)
             nft_amount = len(cat_nfts_in) - len(cat_nfts_out)
             nft_amount_str = "{0:+d}".format(nft_amount) if nft_amount else "0"
-            token_name = get_token_name(category_id)
+            token_name = get_token_name(category_id) or category_id
             token_h = TokenHistory(
                 tx_hash, height, conf, timestamp, value, balance, tokens_deltas, tokens_balances,
                 token_name, ft_amount_str, nft_amount_str, str(ft_balance), str(nft_balance))

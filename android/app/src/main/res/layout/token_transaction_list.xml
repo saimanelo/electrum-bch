@@ -44,7 +44,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="@string/category_id"
+            android:text="@string/category"
             app:layout_constraintTop_toBottomOf="@+id/tvTimestamp"
             app:layout_constraintStart_toStartOf="parent"/>
 
