@@ -23,6 +23,7 @@ import com.chaquo.python.PyObject
 import com.chaquo.python.PyObject.fromJava
 import com.google.zxing.integration.android.IntentIntegrator
 import org.electroncash.electroncash3.databinding.SendBinding
+import kotlin.math.pow
 
 
 val libPaymentRequest by lazy { libMod("paymentrequest") }
@@ -148,12 +149,20 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                     context!!, android.R.layout.simple_spinner_dropdown_item, nftLabels)
                 binding.spnNft.setAdapter(newAdapter)
                 model.hasNfts = nftLabels.size > 1
-                var fungibles: String = "0"
+                var fungibles = "0"
                 category?.let {
                     fungibles = it.fungibles
                 }
                 model.hasFts = fungibles != "0"
                 binding.etFtAmount.setText("")
+                val decimals = if (category == null) 0 else {
+                    guiTokens.callAttr("get_token_decimals", category.id).toInt()
+                }
+                var hint = "0"
+                if (decimals > 0) {
+                    hint += "." + "0".repeat(decimals)
+                }
+                binding.etFtAmount.setHint(hint)
                 refreshTx()
                 updateUI()
 
@@ -493,6 +502,17 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             }
         }
 
+        private fun hasFractionalFTs(amountStr: String, categoryId: String): Boolean {
+            if (amountStr.toDoubleOrNull() !in setOf(null, 0.0)) {
+                val amount = amountStr.toDouble()
+                val decimals = guiTokens.callAttr("get_token_decimals", categoryId).toInt()
+                val units = amount * 10.0.pow(decimals)
+                val subunits = units % 1
+                return subunits != 0.0
+            }
+            return false
+        }
+
         fun invoke(): TxResult {
             return try {
                 val addressType: AddressType
@@ -511,6 +531,8 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                                 R.string.please_choose_a_fungible
                             }
                         ))
+                    } else if (hasFractionalFTs(fungibleAmountStr, categoryId)) {
+                        return TxResult(ToastException(R.string.too_many_fungible))
                     } else {
                         val (toAddress, type) = getAddress()
                         addressType = type
@@ -817,7 +839,7 @@ class SendPasswordDialog : PasswordDialog<Unit>() {
     override fun onPostExecute(result: Unit) {
         closeDialogs(sendDialog)
         if (!sendDialog.unbroadcasted) {
-            toast(R.string.payment_sent, Toast.LENGTH_SHORT)
+            toast(if (sendDialog.model.tokenSend) R.string.tokens_sent else R.string.payment_sent, Toast.LENGTH_SHORT)
         } else {
             showDialog(this, SignedTransactionDialog().apply { arguments = Bundle().apply {
                 putString("txHex", tx.toString())
