@@ -259,18 +259,13 @@ class SendDialog : TaskLauncherDialog<Unit>() {
 
     private fun setMaxFungibleAmount() {
         val category = getSelectedCategory()
-        var categoryId = ""
         var amount: String = "0"
         category?.let {
-            categoryId = it.id
             amount = it.fungibles
         }
-        val amountStr = guiTokens.callAttr(
-            "format_fungible_amount", categoryId, amount
-        ).toString()
         try {
             settingAmount = true
-            binding.etFtAmount.setText(amountStr)
+            binding.etFtAmount.setText(amount)
             binding.etFtAmount.setSelection(binding.etFtAmount.text.length)
         } finally {
             settingAmount = false
