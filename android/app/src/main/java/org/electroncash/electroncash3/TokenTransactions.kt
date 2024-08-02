@@ -55,7 +55,7 @@ class TokenTransactionsFragment : ListFragment(R.layout.token_transactions, R.id
 
 class TokenTransactionsAdapter(override val listFragment: ListFragment) : ListAdapter<TokenTransactionModel, TransactionDialog>(
         listFragment, R.layout.token_transaction_list, ::TokenTransactionModel, ::TransactionDialog) {
-    
+
     override var reversed = false
 
     override fun onBindViewHolder(holder: BoundViewHolder<TokenTransactionModel>, position: Int) {

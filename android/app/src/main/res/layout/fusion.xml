@@ -39,7 +39,7 @@
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnFusionSettings"
-        style="@style/FAB.Main"
+        style="@style/FAB.Main.Inner"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintBottom_toBottomOf="parent"
