@@ -62,105 +62,111 @@
             app:layout_constraintVertical_bias="0.0"
             tools:text="@string/test_value"/>
 
-        <TableLayout
+        <LinearLayout
             android:id="@+id/tokenValuesTable"
+            android:gravity="center"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             app:layout_constraintTop_toBottomOf="@+id/tvCategoryIdLabel">
 
-            <TableRow
-                android:orientation="horizontal"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:gravity="center">
+            <TableLayout
+                android:id="@+id/ftTable"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:layout_constraintTop_toBottomOf="@+id/tvCategoryIdLabel">
 
-                <TextView
-                    android:id="@+id/tvFtAmountLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="6dp"
-                    android:text="@string/ft_amount"/>
+                <TableRow>
+                    <TextView
+                        android:id="@+id/tvFtAmountLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:text="@string/ft_amount"/>
 
-                <TextView
-                    android:id="@+id/tvFtAmount"
-                    style="@style/Value"
-                    android:gravity="end"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@{model.ftAmount}"
-                    android:textAppearance="@style/Heavy"
-                    tools:text="@string/test_value"/>
+                    <TextView
+                        android:id="@+id/tvFtAmount"
+                        style="@style/Value"
+                        android:gravity="end"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@{model.ftAmount}"
+                        android:textAppearance="@style/Heavy"
+                        tools:text="@string/test_value"/>
+                </TableRow>
+                <TableRow>
+                    <TextView
+                        android:id="@+id/tvFtBalanceLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:layout_marginEnd="6dp"
+                        android:text="@string/ft_balance"/>
 
-                <TextView
-                    android:id="@+id/tvNftAmountLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginEnd="6dp"
-                    android:text="@string/NFT_amount"/>
+                    <TextView
+                        android:id="@+id/tvFtBalance"
+                        style="@style/Value"
+                        android:gravity="end"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@{model.ftBalance}"
+                        android:textAppearance="@style/Medium"
+                        tools:text="@string/test_value"/>
+                </TableRow>
+            </TableLayout>
 
-                <TextView
-                    android:id="@+id/tvNftAmount"
-                    style="@style/Value"
-                    android:gravity="end"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@{model.nftAmount}"
-                    android:textAppearance="@style/Heavy"
-                    tools:text="@string/test_value"/>
-            </TableRow>
-            <TableRow
-                android:orientation="horizontal"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:gravity="center">
+            <TableLayout
+                android:id="@+id/nftTable"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:layout_constraintTop_toBottomOf="@+id/tvCategoryIdLabel">
 
-                <TextView
-                    android:id="@+id/tvFtBalanceLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    android:layout_marginEnd="6dp"
-                    android:text="@string/ft_balance"/>
+                <TableRow>
+                    <TextView
+                        android:id="@+id/tvNftAmountLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginEnd="6dp"
+                        android:text="@string/NFT_amount"/>
 
-                <TextView
-                    android:id="@+id/tvFtBalance"
-                    style="@style/Value"
-                    android:gravity="end"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@{model.ftBalance}"
-                    android:textAppearance="@style/Medium"
-                    tools:text="@string/test_value"/>
+                    <TextView
+                        android:id="@+id/tvNftAmount"
+                        style="@style/Value"
+                        android:gravity="end"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@{model.nftAmount}"
+                        android:textAppearance="@style/Heavy"
+                        tools:text="@string/test_value"/>
+                </TableRow>
+                <TableRow>
+                    <TextView
+                        android:id="@+id/tvNftBalanceLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginEnd="6dp"
+                        android:text="@string/NFT_balance"/>
 
-                <TextView
-                    android:id="@+id/tvNftBalanceLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginEnd="6dp"
-                    android:text="@string/NFT_balance"/>
-
-                <TextView
-                    android:id="@+id/tvNftBalance"
-                    style="@style/Value"
-                    android:gravity="end"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@{model.nftBalance}"
-                    android:textAppearance="@style/Medium"
-                    tools:text="@string/test_value"/>
-            </TableRow>
-        </TableLayout>
+                    <TextView
+                        android:id="@+id/tvNftBalance"
+                        style="@style/Value"
+                        android:gravity="end"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@{model.nftBalance}"
+                        android:textAppearance="@style/Medium"
+                        tools:text="@string/test_value"/>
+                </TableRow>
+            </TableLayout>
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tvDescription"
             style="@style/Description"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:text="@{model.label}"
             android:textAppearance="@style/Medium"
             android:visibility="@{model.label.isEmpty() ? View.GONE: View.VISIBLE}"

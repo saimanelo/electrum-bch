@@ -19,7 +19,7 @@ def get_token_transactions(wallet):
 
         for category_id, category_delta in h.tokens_deltas.items():
             ft_amount = category_delta.get("fungibles", 0)
-            ft_amount_str = token_meta.format_amount(category_id, ft_amount)
+            ft_amount_str = token_meta.format_amount(category_id, ft_amount, is_diff=True)
             cat_nfts_in = category_delta.get("nfts_in", [])
             cat_nfts_out = category_delta.get("nfts_out", [])
             ft_balance_ = tokens_balances.get(category_id, {}).get("fungibles", 0)

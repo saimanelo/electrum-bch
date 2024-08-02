@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.appcompat.content.res.AppCompatResources
 import com.chaquo.python.PyObject
 import org.electroncash.electroncash3.databinding.TokenTransactionsBinding
@@ -52,10 +53,25 @@ class TokenTransactionsFragment : ListFragment(R.layout.token_transactions, R.id
 }
 
 
-fun TokenTransactionsAdapter(listFragment: ListFragment) =
-    ListAdapter(listFragment, R.layout.token_transaction_list, ::TokenTransactionModel,
-                ::TransactionDialog)
-        .apply { reversed = true }
+class TokenTransactionsAdapter(override val listFragment: ListFragment) : ListAdapter<TokenTransactionModel, TransactionDialog>(
+        listFragment, R.layout.token_transaction_list, ::TokenTransactionModel, ::TransactionDialog) {
+    
+    override var reversed = false
+
+    override fun onBindViewHolder(holder: BoundViewHolder<TokenTransactionModel>, position: Int) {
+        super.onBindViewHolder(holder, position)
+        val showIfNotZero = fun(table: View?, amount: TextView?) {
+            if (table != null && amount != null) {
+                table.visibility = if (amount.text.toString() in listOf("0", "+0"))
+                    View.GONE else View.VISIBLE
+            }
+        }
+        showIfNotZero(holder.itemView.findViewById(R.id.ftTable),
+            holder.itemView.findViewById(R.id.tvFtAmount))
+        showIfNotZero(holder.itemView.findViewById(R.id.nftTable),
+            holder.itemView.findViewById(R.id.tvNftAmount))
+    }
+}
 
 
 class TokenTransactionModel(wallet: PyObject, val txHistory: PyObject) : ListItemModel(wallet) {
