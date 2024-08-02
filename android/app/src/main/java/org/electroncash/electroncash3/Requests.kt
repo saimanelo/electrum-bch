@@ -198,6 +198,7 @@ class RequestDialog : DetailDialog() {
             amountBox.requestFocus()
         }
         model.tokenRequest = initialTokenRequest
+        binding.spnCoinType.setSelection(if (model.tokenRequest) 1 else 0)
     }
 
     private fun updateUI() {

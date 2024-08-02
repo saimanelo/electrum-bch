@@ -404,6 +404,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
             }
         }
         model.tokenSend = initialTokenSend
+        binding.spnCoinType.setSelection(if (model.tokenSend) 1 else 0)
         refreshTx()
     }
 
