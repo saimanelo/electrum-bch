@@ -22,37 +22,29 @@ import android.widget.CheckBox
 import android.widget.RadioGroup
 import android.widget.RadioButton
 
-import android.widget.TextView
 import androidx.fragment.app.Fragment
 
 val guiTokens by lazy { guiMod("tokens") }
 
 // This class is for the dialog to confirm that the user wants to create a new UTXO.
 // This is needed if there is no 0-output UTXO which are required for token genesis.
-class ConfirmUTXOCreationDialog : DialogFragment() {
-
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        return inflater.inflate(R.layout.token_confirm_utxo_creation, container, false)
-    }
-
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-
-        view.findViewById<TextView>(R.id.tv_confirm).setOnClickListener {
-            // User confirms they want to create a new utxo, so call the dialog for signing.
+class ConfirmUTXOCreationDialog : AlertDialogFragment() {
+    override fun onShowDialog() {
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             showSignAndBroadcastPrepUTXODialog()
             dismiss()
         }
+    }
 
-        view.findViewById<TextView>(R.id.tv_cancel).setOnClickListener {
-            // User cancelled the action.
-            dismiss()
-        }
+    override fun onBuildDialog(builder: AlertDialog.Builder) {
+        builder.setTitle(R.string.you_have_no)
+            .setPositiveButton(android.R.string.ok, null)
+            .setNegativeButton(android.R.string.cancel, null)
     }
 
     private fun showSignAndBroadcastPrepUTXODialog() {
-        SignAndBroadcastPrepUTXODialog().show(requireActivity().supportFragmentManager,"SignAndBroadcastPrepUTXODialog")
-
+        SignAndBroadcastPrepUTXODialog().show(
+            requireActivity().supportFragmentManager,"SignAndBroadcastPrepUTXODialog")
     }
 }
 
