@@ -7,14 +7,9 @@ import android.text.Spanned
 import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
 import android.view.LayoutInflater
-import android.view.Menu
-import android.view.MenuInflater
-import android.view.MenuItem
 import android.view.View
-import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.Button
 import android.widget.Spinner
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.viewModels
@@ -179,16 +174,6 @@ class AddressTransactionsDialog() : AlertDialogFragment() {
     private var _binding: BchTransactionsBinding? = null
     private val binding get() = _binding!!
 
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        super.onCreateView(inflater, container, savedInstanceState)
-        _binding = BchTransactionsBinding.inflate(inflater, container, false)
-        return binding.root
-    }
-
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
@@ -198,9 +183,10 @@ class AddressTransactionsDialog() : AlertDialogFragment() {
     }
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
+        _binding = BchTransactionsBinding.inflate(LayoutInflater.from(context))
         with (builder) {
             setTitle(R.string.transactions)
-            setView(R.layout.bch_transactions)
+            setView(binding.root)
         }
     }
 
