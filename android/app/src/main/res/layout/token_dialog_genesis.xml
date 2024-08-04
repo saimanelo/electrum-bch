@@ -9,15 +9,15 @@
         android:id="@+id/etAmount"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Fungible Amount"
-        android:maxLength="15"
-        android:inputType="number" /> 
+        android:hint="@string/Fungible_amount"
+        android:inputType="number"
+        android:maxLength="15" />
 
     <CheckBox
         android:id="@+id/cbNFT"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Is NFT?" />
+        android:text="@string/is_nft" />
 
     <RadioGroup
         android:id="@+id/rgNFTCapabilities"
@@ -29,20 +29,20 @@
             android:id="@+id/rbNone"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="None" />
+            android:text="@string/none" />
 
         <RadioButton
             android:id="@+id/rbMutable"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Mutable" />
+            android:text="@string/mutable" />
 
         <RadioButton
             android:id="@+id/rbMinting"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Minting" />
+            android:text="@string/minting" />
     </RadioGroup>
- 
+
 </LinearLayout>
 

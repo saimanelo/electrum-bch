@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -18,27 +17,27 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="24dp"
+            android:text="@string/request"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            android:text="@string/request"/>
+            app:layout_constraintTop_toTopOf="parent" />
 
         <Spinner
             android:id="@+id/spnCoinType"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_gravity="end"
             android:layout_marginEnd="24dp"
-            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintBaseline_toBaselineOf="@+id/tvTitle"
-            android:layout_gravity="right" />
+            app:layout_constraintEnd_toEndOf="parent" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginLeft="24dp"
-        android:layout_marginRight="24dp">
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_weight="1">
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
@@ -52,7 +51,8 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
-                tools:srcCompat="@drawable/qr_request" />
+                tools:srcCompat="@drawable/qr_request"
+                android:contentDescription="@string/qr_code" />
 
             <TextView
                 android:id="@+id/textView14"
@@ -61,19 +61,18 @@
                 android:layout_marginTop="12dp"
                 android:text="@string/address"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@+id/imgQR"/>
+                app:layout_constraintTop_toBottomOf="@+id/imgQR" />
 
             <TextView
                 android:id="@+id/tvAddress"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="6dp"
                 android:layout_marginStart="6dp"
                 android:textAppearance="@style/Medium"
                 app:layout_constraintBaseline_toBaselineOf="@+id/textView14"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toEndOf="@+id/textView14"
-                tools:text="@string/test_address"/>
+                tools:text="@string/test_address" />
 
             <LinearLayout
                 android:id="@+id/bchRow"
@@ -89,7 +88,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     app:layout_constraintEnd_toEndOf="@+id/tvAddress"
-                    app:layout_constraintStart_toStartOf="@+id/textView14"/>
+                    app:layout_constraintStart_toStartOf="@+id/textView14" />
 
             </LinearLayout>
 
@@ -100,7 +99,7 @@
                 android:layout_marginTop="12dp"
                 android:text="@string/description"
                 app:layout_constraintStart_toStartOf="@+id/bchRow"
-                app:layout_constraintTop_toBottomOf="@+id/bchRow"/>
+                app:layout_constraintTop_toBottomOf="@+id/bchRow" />
 
             <EditText
                 android:id="@+id/etDescription"
@@ -111,7 +110,7 @@
                 app:layout_constraintHorizontal_bias="1.0"
                 app:layout_constraintStart_toStartOf="@+id/textView13"
                 app:layout_constraintTop_toBottomOf="@+id/textView13"
-                tools:text="@string/lorem"/>
+                tools:text="@string/lorem" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </ScrollView>
