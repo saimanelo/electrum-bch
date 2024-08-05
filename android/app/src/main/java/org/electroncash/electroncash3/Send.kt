@@ -171,22 +171,6 @@ class SendDialog : TaskLauncherDialog<Unit>() {
         }
     }
 
-    class NFT(val utxoId: String, val capability: String, val commitment: String) {
-        fun getCapabilityStr(): String {
-            return when (capability) {
-                "mutable" -> app.getString(R.string.mutable)
-                "minting" -> app.getString(R.string.minting)
-                else -> app.getString(R.string.immutable)
-            }
-        }
-
-        val label: String
-            get() {
-                val nftType = getCapabilityStr() + " " + app.getString(R.string.nft)
-                return nftType + if (commitment.isEmpty()) "" else ": $commitment"
-            }
-    }
-
     class Category(val id: String, val name: String, val fungibles: String,
                    val nfts: ArrayList<NFT>)
 

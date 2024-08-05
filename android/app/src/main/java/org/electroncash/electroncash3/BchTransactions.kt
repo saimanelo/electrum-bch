@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.content.res.AppCompatResources
+import androidx.recyclerview.widget.RecyclerView
 import com.chaquo.python.PyObject
 import org.electroncash.electroncash3.databinding.BchTransactionsBinding
 import org.electroncash.electroncash3.databinding.TransactionDetailBinding
@@ -106,6 +107,8 @@ class TransactionDialog : DetailDialog() {
             ?: throw ToastException(R.string.Transaction_not)
     }
     val txInfo by lazy { wallet.callAttr("get_tx_info", tx)!! }
+    val categoryId by lazy { arguments!!.getString("categoryId") ?: "" }
+    val ftAmount by lazy { arguments!!.getString("ftAmount") ?: "0" }
 
     override fun onBuildDialog(builder: AlertDialog.Builder) {
         _binding = TransactionDetailBinding.inflate(LayoutInflater.from(context))
@@ -139,6 +142,39 @@ class TransactionDialog : DetailDialog() {
             binding.tvFee.text = String.format("%s (%s)",
                                        getString(R.string.sats_per, feeSpb),
                                        ltr(formatSatoshisAndUnit(fee)))
+        }
+        binding.categoryId.text = categoryId
+        if (ftAmount in setOf("0", "+0")) {
+            binding.ftAmountBlock.visibility = View.GONE
+        } else {
+            binding.fungibleAmount.text = ftAmount
+        }
+        val nftsIn: MutableList<NFTModel> = ArrayList()
+        val nftsOut: MutableList<NFTModel> = ArrayList()
+        if (categoryId != "") {
+            val nftSrc = guiTokenTransactions.callAttr("get_transaction_nfts", wallet, txid, categoryId)!!.asList()
+            val getNFTs = fun(src: PyObject, dst: MutableList<NFTModel>) {
+                for (nft in src.asList()) {
+                    dst.add(NFTModel(wallet, nft["id"].toString(), nft["commitment"].toString(),
+                                     nft["commitment"].toString()))
+                }
+            }
+            getNFTs(nftSrc[0], nftsIn)
+            getNFTs(nftSrc[1], nftsOut)
+            val prepareRv = fun(nfts: MutableList<NFTModel>, rv: RecyclerView, block: View) {
+                if (nfts.size > 0) {
+                    setupVerticalList(rv)
+                    rv.adapter = BoundAdapter<NFTModel>(R.layout.nft_list).apply { submitList(nfts) }
+                    val height = if (nfts.size > 4) 400 else nfts.size * 100
+                    rv.layoutParams.height = height
+                } else {
+                    block.visibility = View.GONE
+                }
+            }
+            prepareRv(nftsIn, binding.rvNftsReceived, binding.nftsReceivedBlock)
+            prepareRv(nftsOut, binding.rvNftsSent, binding.nftsSentBlock)
+        } else {
+            binding.tokenDetails.visibility = View.GONE
         }
     }
 

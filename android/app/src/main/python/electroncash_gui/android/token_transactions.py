@@ -1,11 +1,12 @@
 from collections import namedtuple
 from electroncash.simple_config import SimpleConfig
+from electroncash.token import OutputData
 from electroncash_gui.android.tokens import ConcreteTokenMeta, get_token_name
 
 TokenHistory = namedtuple("TokenHistory",
                           ("tx_hash", "height", "conf", "timestamp", "amount", "balance",
                            "tokens_deltas", "tokens_balances", "token_name", "ft_amount_str",
-                           "nft_amount_str", "ft_balance", "nft_balance"))
+                           "nft_amount_str", "ft_balance", "nft_balance", "category_id"))
 
 
 def get_token_transactions(wallet):
@@ -30,6 +31,38 @@ def get_token_transactions(wallet):
             token_name = get_token_name(category_id) or category_id
             token_h = TokenHistory(
                 tx_hash, height, conf, timestamp, value, balance, tokens_deltas, tokens_balances,
-                token_name, ft_amount_str, nft_amount_str, str(ft_balance), str(nft_balance))
+                token_name, ft_amount_str, nft_amount_str, str(ft_balance), str(nft_balance), category_id
+            )
             result.append(token_h)
     return result
+
+
+class NFT:
+    def __init__(self, output_data: OutputData):
+        self.id = output_data.id
+        if output_data.is_minting_nft():
+            self.capability = "minting"
+        elif output_data.is_mutable_nft():
+            self.capability = "mutable"
+        else:
+            self.capability = "immutable"
+        self.commitment = output_data.commitment.hex()
+
+
+def get_transaction_nfts(wallet, txid, category_id):
+
+    all_history = wallet.get_history(include_tokens=True, include_tokens_balances=True)
+    nfts_in = []
+    nfts_out = []
+    for h in all_history:
+        tx_hash, _, _, _, _, _, tokens_deltas, _ = h
+        if tokens_deltas and tx_hash == txid:
+            for category_id_, category_delta in h.tokens_deltas.items():
+                if category_id_ == category_id:
+                    nfts_in_src = category_delta.get("nfts_in", [])
+                    for nft in nfts_in_src:
+                        nfts_in.append(NFT(nft[1]))
+                    nfts_out_src = category_delta.get("nfts_out", [])
+                    for nft in nfts_out_src:
+                        nfts_out.append(NFT(nft[2]))
+    return nfts_in, nfts_out

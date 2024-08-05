@@ -3,7 +3,10 @@
     <string name="app_name">Electron Cash</string>
 
     <string name="test_address">qpzry9x8gf2tvdw0s3jn54khce6mua7lcw20ayyn</string>  <!-- Invalid address from cashaddr spec -->
+    <string name="test_category_id">126cac383a721b061cb604dca9a851b406fc5ff481575c25b7ddf3ef2064f15a</string>
     <string name="test_contact">Alice Robertson</string>
+    <string name="test_fee">1 sat/byte (0.00000483 BCH)</string>
+    <string name="test_nft_label">Minting NFT: 13371337</string>
     <string name="test_server_address">electron.example.com:50002</string>
     <string name="test_seed">legal winner thank year wave sausage worth useful legal winner
         thank yellow</string>  <!-- From BIP39 test vectors -->

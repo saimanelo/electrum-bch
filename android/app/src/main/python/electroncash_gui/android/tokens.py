@@ -261,8 +261,6 @@ def make_tx(wallet, config, to_address, fee_rate, category_id, fungibles_str, nf
     spec.non_token_utxos = {get_outpoint_longname(x): x
                             for x in wallet.get_spendable_coins(None, config)}
     fungible_amount = token_meta.parse_amount(category_id, fungibles_str)
-    print(f"Fungible amount: {fungible_amount}")
-    print(f"Fungible amount string: {fungibles_str}")
     spec.send_fungible_amounts = {category_id: fungible_amount}
     spec.send_nfts = set()
     if nft:

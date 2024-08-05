@@ -87,6 +87,7 @@ class TokenTransactionModel(wallet: PyObject, val txHistory: PyObject) : ListIte
     val nftAmount by lazy { get("nft_amount_str")!!.toString() }
     val ftBalance by lazy { get("ft_balance")!!.toString() }
     val nftBalance by lazy { get("nft_balance")!!.toString() }
+    val categoryId by lazy { get("category_id")!!.toString() }
 
     val icon: Drawable by lazy {
         // Support inflation of vector images before API level 21.
@@ -106,6 +107,10 @@ class TokenTransactionModel(wallet: PyObject, val txHistory: PyObject) : ListIte
     }
 
     override val dialogArguments by lazy {
-        Bundle().apply { putString("txid", txid) }
+        Bundle().apply {
+            putString("txid", txid)
+            putString("categoryId", categoryId)
+            putString("ftAmount", ftAmount)
+        }
     }
 }

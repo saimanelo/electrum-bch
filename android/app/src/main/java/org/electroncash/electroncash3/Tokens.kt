@@ -424,3 +424,31 @@ class CategoryPropertiesDialog : DialogFragment() {
     }
 }
 
+
+class NFT(val utxoId: String, val capability: String, val commitment: String) {
+    fun getCapabilityStr(): String {
+        return when (capability) {
+            "mutable" -> app.getString(R.string.mutable)
+            "minting" -> app.getString(R.string.minting)
+            else -> app.getString(R.string.immutable)
+        }
+    }
+
+    val label: String
+        get() {
+            val nftType = getCapabilityStr() + " " + app.getString(R.string.nft)
+            return nftType + if (commitment.isEmpty()) "" else ": $commitment"
+        }
+}
+
+
+class NFTModel(wallet: PyObject, utxoId: String, capability: String, commitment: String)
+    : ListItemModel(wallet) {
+    val nft = NFT(utxoId, capability, commitment)
+    val label: String = nft.label
+
+    override val dialogArguments by lazy {
+        Bundle().apply { putString("nft", label) }
+    }
+}
+
