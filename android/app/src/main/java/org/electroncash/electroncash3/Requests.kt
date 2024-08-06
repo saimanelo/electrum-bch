@@ -188,17 +188,17 @@ class RequestDialog : DetailDialog() {
     }
 
     override fun onFirstShowDialog() {
-        val request = existingRequest
-        if (request != null) {
-            val model = RequestModel(wallet, request)
-            binding.spnCoinType.setSelection(if (model.tokenRequest) 1 else 0)
-            amountBox.amount = model.amount
-            binding.etDescription.setText(model.description)
+        model.tokenRequest = initialTokenRequest
+        if (existingRequest != null) {
+            val requestModel = RequestModel(wallet, existingRequest!!)
+            binding.spnCoinType.setSelection(if (requestModel.tokenRequest) 1 else 0)
+            binding.spnCoinType.setEnabled(false)
+            amountBox.amount = requestModel.amount
+            binding.etDescription.setText(requestModel.description)
         } else {
+            binding.spnCoinType.setSelection(if (model.tokenRequest) 1 else 0)
             amountBox.requestFocus()
         }
-        model.tokenRequest = initialTokenRequest
-        binding.spnCoinType.setSelection(if (model.tokenRequest) 1 else 0)
     }
 
     private fun updateUI() {
