@@ -451,4 +451,3 @@ class NFTModel(wallet: PyObject, utxoId: String, capability: String, commitment:
         Bundle().apply { putString("nft", label) }
     }
 }
-

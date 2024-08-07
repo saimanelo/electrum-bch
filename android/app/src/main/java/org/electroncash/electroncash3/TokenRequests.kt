@@ -48,5 +48,3 @@ class TokenRequestsFragment : ListFragment(R.layout.token_requests, R.id.rvToken
     override fun onCreateAdapter() =
         ListAdapter(this, R.layout.token_request_list, ::RequestModel, ::RequestDialog)
 }
-
-

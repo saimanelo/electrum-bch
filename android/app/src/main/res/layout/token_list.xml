@@ -53,4 +53,3 @@
             app:layout_constraintTop_toBottomOf="@id/tvAmount" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </layout>
-
