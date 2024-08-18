@@ -283,7 +283,7 @@ class YahooFinance(ExchangeBase):
         return CoinGecko(self.on_quotes, self.on_history).get_rates(ccy)
 
     def history_ccys(self):
-        return ['AUD', 'USD']
+        return ['AUD','CAD','CNY','EUR','GBP','INR','KRW','JPY','RUB','USD']
 
     # Historical prices are OK though
     def request_history(self, ccy):
@@ -300,8 +300,8 @@ class YahooFinance(ExchangeBase):
                 return 0
         # average of open,high,low,close prices. interpret garbage data as zero
         return {
-            i['Date']: (safe_float(i.get('Open', 0)) + safe_float(i.get('High', 0))
-                        + safe_float(i.get('Low', 0)) + safe_float(i.get('Close', 0))) / 4
+            i['Date']: (safe_float(i['Open']) + safe_float(i['High'])
+                        + safe_float(i['Low']) + safe_float(i['Close'])) / 4
             for i in history
         }
 
