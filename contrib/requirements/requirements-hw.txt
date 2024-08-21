@@ -1,7 +1,7 @@
 Cython>=0.27,<3
 trezor[hidapi]>=0.13.9
 keepkey>=6.1
-btchip-python
+btchip-python @ https://github.com/EchterAgo/btchip-python/archive/f65cca5dea1cae6031accc961b5754d02c52a106.tar.gz
 hidapi
 protobuf
 pyopenssl>=20.0.0
