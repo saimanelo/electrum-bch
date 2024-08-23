@@ -39,6 +39,12 @@ from electroncash.transaction import TYPE_ADDRESS, get_address_from_output_scrip
 import electroncash.schnorr as schnorr
 
 from google.protobuf.message import DecodeError
+# Try and be compatible with both old protobuf API and new
+try:
+    from google.protobuf.unknown_fields import UnknownFieldSet
+    USE_OLD_API = False
+except ImportError:
+    USE_OLD_API = True
 
 
 class ValidationError(FusionError):
@@ -71,7 +77,10 @@ def proto_strict_parse(msg, blob):
     except DecodeError:
         raise ValidationError("decode error")
     check(msg.IsInitialized(), "missing fields")
-    check(not msg.UnknownFields(), "has extra fields")
+    if USE_OLD_API:
+        check(not msg.UnknownFields(), "has extra fields")
+    else:
+        check(not len(UnknownFieldSet(msg)), "has extra fields")
     # Protobuf silently ignores unwanted repeated tags, and gives no direct way
     # to detect this. This sucks because it means someone could send us a giant
     # message even if we check all fields' lengths. This is the only way to
