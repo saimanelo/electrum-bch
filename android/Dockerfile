@@ -42,6 +42,7 @@ COPY contrib/make_locale contrib/
 COPY electroncash_gui electroncash_gui
 COPY ios/ElectronCash/electroncash_gui/ios_native ios/ElectronCash/electroncash_gui/ios_native
 COPY electroncash_plugins electroncash_plugins
+COPY contrib/electrum-locale contrib/electrum-locale
 
 # The app itself.
 COPY android android
