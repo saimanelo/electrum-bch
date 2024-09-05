@@ -8,6 +8,7 @@ from os.path import isdir, join
 from pathlib import Path
 import requests
 import shlex
+import shutil
 from subprocess import check_call
 import sys
 import zipfile
@@ -114,6 +115,10 @@ for lang in os.listdir(src_dir):
     msg_dst_dir = dst_dir + '/{}/LC_MESSAGES'.format(lang)
     if not os.path.exists(msg_dst_dir):
         os.makedirs(msg_dst_dir)
-    cmd = 'msgfmt --output-file="{0}/electron-cash.mo" "{1}/electron-cash.po"'.format(msg_dst_dir, msg_src_dir)
+    src_file = msg_src_dir + '/electron-cash.po'
+    dst_file = msg_dst_dir + '/electron-cash.mo'
+    cmd = 'msgfmt --output-file="{0}" "{1}"'.format(dst_file, src_file)
+    if use_electrum_locale:
+        shutil.copy(src_file, msg_dst_dir)
     print('Installing', lang)
     run(cmd)
