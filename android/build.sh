@@ -3,7 +3,7 @@ set -eu
 
 cd $(dirname $0)/..
 
-git submodule update contrib/electrum-locale
+git submodule update --init contrib/electrum-locale
 
 docker build -t ec-android -f android/Dockerfile .
 container_name=$(docker create ec-android)
