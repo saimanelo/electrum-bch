@@ -696,7 +696,7 @@ class SendDialog : TaskLauncherDialog<Unit>() {
                 // Verify the transaction is valid before asking for a password.
                 val txResult = model.tx.value!!
                 when (txResult.addressType) {
-                    AddressType.CASH -> throw ToastException(R.string.not_a_cashtoken)
+                    AddressType.CASH -> if (model.tokenSend) throw ToastException(R.string.not_a_cashtoken)
                     AddressType.DUMMY -> throw ToastException(R.string.Invalid_address)
                     AddressType.TOKEN -> {}
                 }
