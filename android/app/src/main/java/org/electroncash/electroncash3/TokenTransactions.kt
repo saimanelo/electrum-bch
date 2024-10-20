@@ -44,9 +44,13 @@ class TokenTransactionsFragment : ListFragment(R.layout.token_transactions, R.id
         binding.btnRequest.setOnClickListener { showDialog(this, NewRequestDialog().apply {
             arguments = Bundle().apply { putBoolean("token_request", true) }
         }) }
-        binding.btnSend.setOnClickListener { showDialog(this, SendDialog().apply {
-            arguments = Bundle().apply { putBoolean("token_send", true) }
-        }) }
+        binding.btnSend.setOnClickListener {
+            try {
+                showDialog(this, SendDialog().apply {
+                    arguments = Bundle().apply { putBoolean("token_send", true) }
+                })
+            } catch (e: ToastException) { e.show() }
+        }
     }
 
     override fun onCreateAdapter() = TokenTransactionsAdapter(this)

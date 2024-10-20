@@ -80,9 +80,6 @@ class NewRequestDialog : TaskDialog<PyObject>() {
     val listFragment by lazy { targetFragment as ListFragment }
 
     override fun doInBackground(): PyObject {
-        if (listFragment.wallet.callAttr("is_watching_only").toBoolean()) {
-            throw ToastException(R.string.this_wallet_is)
-        }
         return listFragment.wallet.callAttr("get_unused_address")
                ?: throw ToastException(R.string.no_more)
     }
