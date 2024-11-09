@@ -512,7 +512,15 @@ class BaseWizard(util.PrintError):
         if seed_type in ['standard', 'electrum']:
             seed = mnemonic.Mnemonic_Electrum('en').make_seed()
         elif seed_type == 'bip39':
-            seed = mnemonic.Mnemonic('en').make_seed()
+            bip39_num_bits = 128
+            bip39_seed_length = self.config.get("bip39_seed_length")
+            if (bip39_seed_length == 15):
+                bip39_num_bits = 160
+            elif (bip39_seed_length == 18):
+                bip39_num_bits = 192
+            elif (bip39_seed_length == 24):
+                bip39_num_bits = 256
+            seed = mnemonic.Mnemonic('en').make_seed(num_bits=bip39_num_bits)
         else:
             # This should never happen.
             raise ValueError('Cannot make seed for unknown seed type ' + str(seed_type))

@@ -4527,7 +4527,47 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.update_status()
         unit_combo.currentIndexChanged.connect(lambda x: on_unit(x, nz))
         gui_widgets.append((unit_label, unit_combo))
-
+        
+        # Bip-39 Number of Seed Words
+        
+        def on_bip39_seed_length_change(x): 
+            # Get the dropdown selection
+            if (x==1):
+                bip39_val_to_config = 15
+            elif (x==2):
+                bip39_val_to_config = 18
+            elif (x==3):
+                bip39_val_to_config = 24
+            else: # x is 0
+                bip39_val_to_config = 12
+            self.config.set_key('bip39_seed_length', bip39_val_to_config, True)
+                  
+        # Set up the Combo Box for seed length
+        msg = _('Number of words to use when generating mnemonic phrases for a new wallet. ')  
+        bip39_label = HelpLabel(_('Seed Length') + ':', msg)
+        bip39_combo = QComboBox()
+        bip39_seed_length_options = ['12','15','18','24']
+        bip39_combo.addItems(bip39_seed_length_options)
+        bip39_val_from_config = self.config.get("bip39_seed_length") 
+        if bip39_val_from_config not in [12,15,18,24]: 
+            bip39_val_from_config = 12
+          
+        # Set the bip39 seed length dropdown selection
+        if (bip39_val_from_config == 15):
+            bip39_combo_index = 1
+        elif (bip39_val_from_config == 18):
+            bip39_combo_index = 2
+        elif (bip39_val_from_config == 24):
+            bip39_combo_index = 3
+        else: # 12 words or catch-all
+            bip39_combo_index = 0
+         
+        # Attach the Bip39 seed length to the widget.
+        bip39_combo.setCurrentIndex(bip39_combo_index)
+        bip39_combo.currentIndexChanged.connect(lambda x: on_bip39_seed_length_change(x))
+        gui_widgets.append((bip39_label, bip39_combo))
+        # ----end of bip39 seed length code
+        
         block_explorers = web.BE_sorted_list()
         msg = _('Choose which online block explorer to use for functions that open a web browser')
         block_ex_label = HelpLabel(_('Online block explorer') + ':', msg)
