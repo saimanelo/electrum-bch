@@ -41,6 +41,7 @@ from . import rpa
 from . import util
 from .address import Address, AddressError
 from .bitcoin import hash_160, COIN, TYPE_ADDRESS
+from .consolidate import AddressConsolidator
 from .i18n import _
 from .plugins import run_hook
 from .wallet import create_new_wallet, restore_wallet_from_text
@@ -49,6 +50,7 @@ from .util import bfh, bh2u, format_satoshis, json_decode, print_error, standard
 from .paymentrequest import PR_PAID, PR_UNCONFIRMED, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .simple_config import SimpleConfig
 from .version import PACKAGE_VERSION
+
 
 known_commands = {}
 
@@ -345,6 +347,24 @@ class Commands:
         """
         sh = Address.from_string(address).to_scripthash_hex()
         return self.network.synchronous_get(('blockchain.scripthash.get_history', [sh]))
+
+    @command('w')
+    def consolidatecoins(self, address):
+        """Minimal CLI implementation for consolidate coins tool.
+        Can be expanded to include additional parameters.
+
+        Currently, takes a single parameter for the address to
+        consolidate and creates 1 or more transaction(s) to a
+        destination of the same address.
+
+        Returns the array of (unsigned) transaction(s) (as hex strings)."""
+        if isinstance(address, str):
+            address = Address.from_string(address)
+        elif not isinstance(address, Address):
+            raise TypeError('address parameter must be either a string or an Address object')
+
+        consolidator = AddressConsolidator(address=address, wallet_instance=self.wallet, output_address=address)
+        return [tx.serialize() for tx in consolidator.iter_transactions()]
 
     @command('w')
     def listunspent(self):
