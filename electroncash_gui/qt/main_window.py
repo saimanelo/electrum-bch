@@ -4564,7 +4564,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
          
         # Attach the Bip39 seed length to the widget.
         bip39_combo.setCurrentIndex(bip39_combo_index)
-        bip39_combo.currentIndexChanged.connect(lambda x: on_bip39_seed_length_change(x))
+        bip39_combo.currentIndexChanged.connect(on_bip39_seed_length_change)
         gui_widgets.append((bip39_label, bip39_combo))
         # ----end of bip39 seed length code
         
