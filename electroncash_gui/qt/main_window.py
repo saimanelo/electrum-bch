@@ -4549,15 +4549,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         bip39_seed_length_options = ['12','15','18','24']
         bip39_combo.addItems(bip39_seed_length_options)
         bip39_val_from_config = self.config.get("bip39_seed_length") 
-        if bip39_val_from_config not in [12,15,18,24]: 
+        if bip39_val_from_config not in [12, 15, 18, 24]: 
             bip39_val_from_config = 12
           
         # Set the bip39 seed length dropdown selection
-        if (bip39_val_from_config == 15):
+        if bip39_val_from_config == 15:
             bip39_combo_index = 1
-        elif (bip39_val_from_config == 18):
+        elif bip39_val_from_config == 18:
             bip39_combo_index = 2
-        elif (bip39_val_from_config == 24):
+        elif bip39_val_from_config == 24:
             bip39_combo_index = 3
         else: # 12 words or catch-all
             bip39_combo_index = 0
