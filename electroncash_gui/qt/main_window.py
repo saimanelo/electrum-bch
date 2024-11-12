@@ -4532,11 +4532,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         
         def on_bip39_seed_length_change(x): 
             # Get the dropdown selection
-            if (x==1):
+            if x == 1:
                 bip39_val_to_config = 15
-            elif (x==2):
+            elif x == 2:
                 bip39_val_to_config = 18
-            elif (x==3):
+            elif x == 3:
                 bip39_val_to_config = 24
             else: # x is 0
                 bip39_val_to_config = 12
