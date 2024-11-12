@@ -514,11 +514,11 @@ class BaseWizard(util.PrintError):
         elif seed_type == 'bip39':
             bip39_num_bits = 128
             bip39_seed_length = self.config.get("bip39_seed_length")
-            if (bip39_seed_length == 15):
+            if bip39_seed_length == 15:
                 bip39_num_bits = 160
-            elif (bip39_seed_length == 18):
+            elif bip39_seed_length == 18:
                 bip39_num_bits = 192
-            elif (bip39_seed_length == 24):
+            elif bip39_seed_length == 24:
                 bip39_num_bits = 256
             seed = mnemonic.Mnemonic('en').make_seed(num_bits=bip39_num_bits)
         else:
