@@ -177,6 +177,7 @@ class RpaManager(ThreadJob):
         params = response.get('params')
         error = response.get('error')
         if error is not None:
+            method = response.get('method')
             self.print_error(f"Got error reply for '{method}' with params: {params}. Error: {error}")
             return
         txid = params[0]
