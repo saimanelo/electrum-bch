@@ -24,11 +24,11 @@ CERT_VALIDITY=1825
 
 # Create a root CA key and self-signed certificate
 openssl genpkey -algorithm RSA -out "$ROOT_FILENAME.key"
-openssl req -x509 -new -key "$ROOT_FILENAME.key" -out "$ROOT_FILENAME.crt" -subj "/CN=$ROOT_NAME" -days $CERT_VALIDITY
+openssl req -x509 -new -key "$ROOT_FILENAME.key" -out "$ROOT_FILENAME.crt" -subj "/CN=$ROOT_NAME" -days $CERT_VALIDITY -addext "keyUsage = keyCertSign"
 
 # Create an untrused root CA key and self-signed certificate
 openssl genpkey -algorithm RSA -out "$UNTRUSTED_ROOT_FILENAME.key"
-openssl req -x509 -new -key "$UNTRUSTED_ROOT_FILENAME.key" -out "$UNTRUSTED_ROOT_FILENAME.crt" -subj "/CN=$UNTRUSTED_ROOT_NAME" -days $CERT_VALIDITY
+openssl req -x509 -new -key "$UNTRUSTED_ROOT_FILENAME.key" -out "$UNTRUSTED_ROOT_FILENAME.crt" -subj "/CN=$UNTRUSTED_ROOT_NAME" -days $CERT_VALIDITY -addext "keyUsage = keyCertSign"
 
 # Generate a certificate for a specific domain
 FILENAME="$OUTDIR/valid.$BASEDOMAIN"
