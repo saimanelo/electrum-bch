@@ -29,8 +29,9 @@
         "s": "50004",
         "t": "50003"
     },
-    "electrs.electroncash.de": {
-        "s": "60002"
+    "fulcrum2.electroncash.de": {
+        "s": "60002",
+        "t": "60001"
     },
     "tbch.loping.net": {
         "s": "60002",
