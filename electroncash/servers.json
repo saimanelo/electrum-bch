@@ -82,9 +82,10 @@
         "t": "50001",
         "version": "1.4"
     },
-    "electrs.electroncash.de": {
+    "fulcrum2.electroncash.de": {
         "pruning": "-",
-        "s": "40002",
+        "s": "50002",
+        "t": "50001",
         "version": "1.4"
     },
     "jktsologn7uprtwn7gsgmwuddj6rxsqmwc2vaug7jwcwzm2bxqnfpwad.onion": {
