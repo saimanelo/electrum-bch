@@ -46,6 +46,7 @@ jobs:
     - name: Archive build
       uses: actions/upload-artifact@v4
       with:
+        name: Electron-Cash-${{ github.ref_name }}.AppImage
         path: dist/Electron-Cash*.AppImage
   build_sdist:
     if: (github.event.inputs.sdist == 'true' || github.event_name == 'schedule')
@@ -82,6 +83,7 @@ jobs:
     - name: Archive build
       uses: actions/upload-artifact@v4
       with:
+        name: Electron-Cash-${{ github.ref_name }}.exe
         path: dist/Electron-Cash*.exe
   build_android:
     if: (github.event.inputs.android == 'true' || github.event_name == 'schedule')
