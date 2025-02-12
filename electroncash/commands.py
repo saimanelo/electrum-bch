@@ -38,6 +38,7 @@ from functools import wraps
 
 from . import bitcoin
 from . import rpa
+from . import token_meta
 from . import util
 from .address import Address, AddressError
 from .bitcoin import hash_160, COIN, TYPE_ADDRESS
@@ -737,6 +738,23 @@ class Commands:
         return self.wallet.export_history(**kwargs)
 
     @command('w')
+    def token_history(self, year=0, use_net=False, timeout=30.0):
+        """Token history. Returns the token history of your wallet."""
+        class BasicTokenMeta(token_meta.TokenMeta):
+            def _icon_to_bytes(self, icon) -> bytes: return b''
+            def _bytes_to_icon(self, buf: bytes) -> bytes: return b''
+            def gen_default_icon(self, token_id_hex: str) -> bytes: return b''
+        tm = BasicTokenMeta(self.config)
+        from_timestamp, to_timestamp = None, None
+        if year > 0:
+            start_date = datetime.datetime(year, 1, 1)
+            end_date = datetime.datetime(year + 1, 1, 1)
+            from_timestamp = time.mktime(start_date.timetuple())
+            to_timestamp = time.mktime(end_date.timetuple())
+        return self.wallet.export_token_history(tm, from_timestamp=from_timestamp, to_timestamp=to_timestamp,
+                                                fetch_missing_meta=use_net, timeout=timeout)
+
+    @command('w')
     def setlabel(self, key, label):
         """Assign a label to an item. Item may be a bitcoin address address or a
         transaction ID"""
@@ -1019,7 +1037,7 @@ command_options = {
     'timeout':     (None, "Timeout in seconds to wait for the overall operation to complete. Defaults to 30.0."),
     'unsigned':    ("-u", "Do not sign transaction"),
     'unused':      (None, "Show only unused addresses"),
-    'use_net':     (None, "Go out to network for accurate fiat value and/or fee calculations for history. If not specified only the wallet's cache is used which may lead to inaccurate/missing fees and/or FX rates."),
+    'use_net':     (None, "Go out to network for accurate fiat value and/or fee calculations and/or token meta-data for history. If not specified only the wallet's cache is used which may lead to inaccurate/missing fees and/or FX rates and/or token meta-data."),
     'wallet_path': (None, "Wallet path(create/restore commands)"),
     'year':        (None, "Show history for a given year"),
 }

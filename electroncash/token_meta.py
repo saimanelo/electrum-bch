@@ -111,7 +111,7 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
 
     @abstractmethod
     def _bytes_to_icon(self, buf: bytes) -> Any:
-        """Reimplement in subclasses to take whatever icon format the platform expects and spit out bytes"""
+        """Reimplement in subclasses to take bytes and spit out whatever icon format the platform expects"""
         pass
 
     @abstractmethod
@@ -146,7 +146,11 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         ret = self.d.get("decimals", {}).get(token_id_hex)
         if isinstance(ret, int):
             return ret
-        return ret
+
+    def has_any_metadata_for(self, token_id_hex: str) -> bool:
+        return (self.get_token_display_name(token_id_hex) is not None
+                or self.get_token_ticker_symbol(token_id_hex) is not None
+                or self.get_token_decimals(token_id_hex) is not None)
 
     def set_token_display_name(self, token_id_hex: str, name: Optional[str]):
         dd = self.d.get("display_names", {})
@@ -193,11 +197,12 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
 
     def format_amount(self, token_or_id: Union[str, token.OutputData, bytes], fungible_amount: int,
                       num_zeros=0, is_diff=False, whitespace=False, precision=None,
-                      append_tokentoshis=False) -> str:
+                      append_tokentoshis=False, decimals=None) -> str:
         """Formats a particular token's amount string, according to that token's metadata spec for decimals.
         If the token is unknown we tread the 'decimals' for that token as '0'."""
-        token_id_hex = self._normalize_to_token_id_hex(token_or_id)
-        decimals = self.get_token_decimals(token_id_hex)
+        if decimals is None:
+            token_id_hex = self._normalize_to_token_id_hex(token_or_id)
+            decimals = self.get_token_decimals(token_id_hex)
         if not isinstance(decimals, int):
             decimals = 0
         return token.format_fungible_amount(fungible_amount, decimal_point=decimals, num_zeros=num_zeros,
@@ -340,7 +345,7 @@ class DownloadedMetaData:
                f" symbol={self.symbol}, icon_ext={self.icon_ext} icon={icon_thing} bytes>"
 
 
-def try_to_download_metadata(wallet, token_id_hex, timeout=30) -> Optional[DownloadedMetaData]:
+def try_to_download_metadata(wallet, token_id_hex, timeout=30, *, skip_icon=False) -> Optional[DownloadedMetaData]:
     """Synchronously find the genesis tx, download metadata if it has properly formed BCMR, and return
     an object describing what was found. May return None on timeout or other error."""
     pushes = try_to_get_bcmr_op_return_pushes(wallet, token_id_hex, timeout=timeout)
@@ -423,7 +428,7 @@ def try_to_download_metadata(wallet, token_id_hex, timeout=30) -> Optional[Downl
                     md.description = description
 
                     uris = dd.get("uris", {})
-                    if uris and isinstance(uris, dict):
+                    if not skip_icon and uris and isinstance(uris, dict):
                         icon_url = uris.get("icon")
                         if icon_url and isinstance(icon_url, str):
 

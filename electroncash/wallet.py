@@ -2113,11 +2113,27 @@ class Abstract_Wallet(PrintError, SPVDelegate):
 
         return h2
 
+    @staticmethod
+    def _format_history_date_str(height, timestamp):
+        if height > 0:
+            return format_time(timestamp) if timestamp is not None else _("unverified")
+        else:
+            return _("unconfirmed")
+
+    def _get_label_safe(self, tx_hash):
+        try:
+            # Defensive programming.. sanitize label. Ensures strings are utf8-encodable.
+            return self.get_label(tx_hash).encode(encoding='utf-8', errors='replace').decode(encoding='utf-8',
+                                                                                             errors='replace')
+        except UnicodeError:
+            self.print_error(f"Warning: could not export label for {tx_hash}, defaulting to ???")
+            return "???"
+
     def export_history(self, domain=None, from_timestamp=None, to_timestamp=None, fx=None,
                        show_addresses=False, decimal_point=8,
                        *, fee_calc_timeout=10.0, download_inputs=False,
                        progress_callback=None, receives_before_sends=False):
-        ''' Export history. Used by RPC & GUI.
+        """Export history. Used by RPC & GUI.
 
         Arg notes:
         - `fee_calc_timeout` is used when computing the fee (which is done
@@ -2145,7 +2161,7 @@ class Abstract_Wallet(PrintError, SPVDelegate):
         Transaction class). As such, it is worthwhile to cache the results in
         self.tx_fees, which gets saved to wallet storage. This is not very
         demanding on storage as even for very large wallets with huge histories,
-        tx_fees does not use more than a few hundred kb of space. '''
+        tx_fees does not use more than a few hundred kb of space."""
         from .util import timestamp_to_datetime
         # we save copies of tx's we deserialize to this temp dict because we do
         # *not* want to deserialize tx's in wallet.transactoins since that
@@ -2234,27 +2250,16 @@ class Abstract_Wallet(PrintError, SPVDelegate):
                 self.print_error(str(e))
                 continue
             item = {
-                'txid'          : tx_hash,
-                'height'        : height,
-                'confirmations' : conf,
-                'timestamp'     : timestamp_safe,
-                'value'         : fmt_amt(value, is_diff=True),
-                'fee'           : fmt_amt(fee, is_diff=False),
-                'balance'       : fmt_amt(balance, is_diff=False),
+                'txid': tx_hash,
+                'height': height,
+                'confirmations': conf,
+                'timestamp': timestamp_safe,
+                'date': self._format_history_date_str(height, timestamp_safe),
+                'label': self._get_label_safe(tx_hash),
+                'value': fmt_amt(value, is_diff=True),
+                'fee': fmt_amt(fee, is_diff=False),
+                'balance': fmt_amt(balance, is_diff=False),
             }
-            if item['height'] > 0:
-                date_str = format_time(timestamp) if timestamp is not None else _("unverified")
-            else:
-                date_str = _("unconfirmed")
-            item['date'] = date_str
-            try:
-                # Defensive programming.. sanitize label.
-                # The below ensures strings are utf8-encodable. We do this
-                # as a paranoia measure.
-                item['label'] = self.get_label(tx_hash).encode(encoding='utf-8', errors='replace').decode(encoding='utf-8', errors='replace')
-            except UnicodeError:
-                self.print_error(f"Warning: could not export label for {tx_hash}, defaulting to ???")
-                item['label'] = "???"
             if show_addresses:
                 tx = get_tx(tx_hash)
                 input_addresses = []
@@ -2276,6 +2281,101 @@ class Abstract_Wallet(PrintError, SPVDelegate):
             out.append(item)
         if progress_callback:
             progress_callback(1.0)  # indicate done, just in case client code expects a 1.0 in order to detect completion
+        return out
+
+    def export_token_history(self, token_meta, domain=None, from_timestamp=None, to_timestamp=None,
+                             *, progress_callback=None, fetch_missing_meta=False, timeout=30.0):
+        """Exports token history. Returns a list of dicts."""
+        from .token_meta import try_to_download_metadata, DownloadedMetaData
+
+        def make_token_nft_dict(token_data):
+            """Helper for loop body"""
+            return {"type": token.get_nft_flag_text(token_data),
+                    "commitment": token_data.commitment.hex()}
+
+        md_cache: Dict[str, DownloadedMetaData] = {}
+
+        def get_token_metadata(category_id: str) -> Tuple[Optional[str], Optional[str], Optional[int]]:
+            """Helper for loop body. Gets metadata from either `token_meta`, or, if fetch_missting_meta=True, from
+            the network (if available)."""
+            if (fetch_missing_meta and category_id not in md_cache
+                    and not token_meta.has_any_metadata_for(category_id)):
+                try:
+                    md = try_to_download_metadata(self, category_id, timeout=timeout, skip_icon=True)
+                except Exception as e:
+                    self.print_error(f"Got exception when trying to download metadata for {category_id}: {repr(e)}")
+                else:
+                    md_cache[category_id] = md
+            name = token_meta.get_token_display_name(category_id)
+            symbol = token_meta.get_token_ticker_symbol(category_id)
+            decimals = token_meta.get_token_decimals(category_id)
+            md = md_cache.get(category_id)
+            if md:
+                if name is None:
+                    name = md.name
+                if symbol is None:
+                    symbol = md.symbol
+                if decimals is None:
+                    decimals = md.decimals
+            return name, symbol, decimals
+
+        h = self.get_history(domain or self.get_addresses(), reverse=True, receives_before_sends=True,
+                             include_tokens=True, include_tokens_balances=True)
+
+        out = []
+        for n, h_item in enumerate(h):
+            tx_hash, height, conf, timestamp, value, balance, tokens_deltas, tokens_balances = h_item
+            if progress_callback:
+                progress_callback(n / len(h))
+            if not tokens_deltas:
+                continue
+            timestamp_safe = timestamp
+            if timestamp is None:
+                timestamp_safe = time.time()  # set it to "now" so below code doesn't explode.
+            if from_timestamp is not None and timestamp_safe < from_timestamp:
+                continue
+            if to_timestamp is not None and timestamp_safe >= to_timestamp:
+                continue
+            date_str = self._format_history_date_str(height, timestamp_safe)
+            label_str = self._get_label_safe(tx_hash)
+
+            for nn, (category_id, category_delta) in enumerate(tokens_deltas.items()):
+                if progress_callback and nn:
+                    progress_callback(n / len(h) + ((1 / len(h)) * (nn / len(tokens_deltas))))
+
+                # Populate token metadata vars
+                token_name, token_symbol, token_decimals = get_token_metadata(category_id)
+                # Populate vars from history
+                fungible_amount = category_delta.get("fungibles", 0)
+                fungible_amount_str = token_meta.format_amount(category_id, fungible_amount,
+                                                               decimals=token_decimals, is_diff=True)
+                cat_nfts_in = category_delta.get("nfts_in", [])
+                cat_nfts_out = category_delta.get("nfts_out", [])
+                bal_fts = tokens_balances.get(category_id, {}).get("fungibles", 0)
+                bal_fts_str = token_meta.format_amount(category_id, bal_fts, decimals=token_decimals)
+                bal_nfts = tokens_balances.get(category_id, {}).get("nfts", 0)
+                nft_amount = len(cat_nfts_in) - len(cat_nfts_out)
+                item = {
+                    "txid": tx_hash,
+                    "height": height,
+                    "confirmations": conf,
+                    "timestamp": timestamp_safe,
+                    "date": date_str,
+                    "label": label_str,
+                    "category_id": category_id,
+                    "token_name": token_name,
+                    "token_symbol": token_symbol,
+                    "token_decimals": token_decimals,
+                    "fungible_amount": fungible_amount_str,
+                    "nft_amount": nft_amount,
+                    "fungible_balance": bal_fts_str,
+                    "nft_balance": bal_nfts,
+                    "nfts_in": [make_token_nft_dict(token_data) for _, token_data in cat_nfts_in],
+                    "nfts_out": [make_token_nft_dict(token_data) for _, _, token_data in cat_nfts_out],
+                }
+                out.append(item)
+        if progress_callback:
+            progress_callback(1.0)
         return out
 
     def get_label(self, tx_hash):

@@ -699,7 +699,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         invoices_menu.addAction(_("Import") + "...", lambda: self.invoice_list.import_invoices())
         hist_menu = wallet_menu.addMenu(_("&History"))
         #hist_menu.addAction(_("Plot"), self.plot_history_dialog).setEnabled(plot_history is not None)
-        hist_menu.addAction(_("Export") + "...", self.export_history_dialog)
+        hist_menu.addAction(_("Export Transaction History") + "...", self.export_history_dialog)
+        hist_menu.addAction(_("Export Token History") + "...", self.export_token_history_dialog)
 
         wallet_menu.addSeparator()
         wallet_menu.addAction(_("&Find"), self.toggle_search, QKeySequence("Ctrl+F"))
@@ -4032,11 +4033,66 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
                                              timeout=timeout,
                                              include_addresses=include_addresses_chk.isChecked())
         except Exception as reason:
-            export_error_label = _("Electron Cash was unable to produce a transaction export.")
-            self.show_critical(export_error_label + "\n" + str(reason), title=_("Unable to export history"))
+            export_error_label = _("Electron Cash was unable to produce a transaction history export.")
+            self.show_critical(export_error_label + "\n" + str(reason), title=_("Unable to export transaction history"))
         else:
             if success:
-                self.show_message(_("Your wallet history has been successfully exported."))
+                self.show_message(_("Your wallet transaction history has been successfully exported."))
+
+    def export_token_history_dialog(self):
+        d = WindowModalDialog(self.top_level_window(), _('Export Token History'))
+        d.setMinimumSize(400, 200)
+        vbox = QVBoxLayout(d)
+        defaultname = os.path.expanduser('~/electron-cash-token-history.csv')
+        select_msg = _('Select file to export your wallet token transactions to')
+        box, filename_e, csv_button = filename_field(self.config, defaultname, select_msg)
+        vbox.addWidget(box)
+        meta_dl_chk = QCheckBox(_("Fetch missing token meta-data from network (slower)"))
+        meta_dl_chk.setChecked(bool(self.wallet.network))
+        meta_dl_chk.setEnabled(bool(self.wallet.network))
+        meta_dl_chk.setToolTip(_("If this is checked, missing BCMR meta-data will fetched from the network.") + "\n"
+                               + _("Data such as token name, symbol, and token decimals will be populated"
+                                   " (if available)."))
+        vbox.addWidget(meta_dl_chk)
+        timeout_w = QWidget()
+        timeout_w.setToolTip(_("The amount of time in seconds to allow for stalled downloading of BCMR data before"
+                               " giving up"))
+        hbox = QHBoxLayout(timeout_w)
+        hbox.setContentsMargins(20, 0, 0, 0)
+        hbox.addWidget(QLabel(_("Timeout:")), 0, Qt.AlignRight)
+        timeout_sb = QSpinBox()
+        timeout_sb.setMinimum(1)
+        timeout_sb.setMaximum(9999)
+        timeout_sb.setSuffix(" " + _("seconds"))
+        timeout_sb.setValue(30)
+        meta_dl_chk.clicked.connect(timeout_w.setEnabled)
+        timeout_w.setEnabled(meta_dl_chk.isChecked())
+        hbox.addWidget(timeout_sb, 0, Qt.AlignLeft)
+        hbox.addStretch(1)
+        vbox.addWidget(timeout_w)
+        vbox.addStretch(1)
+        hbox = Buttons(CancelButton(d), OkButton(d, _('Export')))
+        vbox.addLayout(hbox)
+        run_hook('export_token_history_dialog', self, hbox)
+        self.update()
+        res = d.exec_()
+        d.setParent(None)  # for python GC
+        if not res:
+            return
+        filename = filename_e.text()
+        if not filename:
+            return
+        success = False
+        try:
+            success = self.do_export_token_history(filename, csv_button.isChecked(),
+                                                   fetch_missing_meta=meta_dl_chk.isChecked(),
+                                                   timeout=timeout_sb.value())
+        except Exception as reason:
+            export_error_label = _("Electron Cash was unable to produce a token history export.")
+            self.show_critical(export_error_label + "\n" + str(reason), title=_("Unable to export token history"))
+        else:
+            if success:
+                self.show_message(_("Your wallet token history has been successfully exported."))
 
     def plot_history_dialog(self):
         if plot_history is None:
@@ -4115,6 +4171,53 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
         # kick off the waiting dialog to do all of the above
         dlg = WaitingDialog(self.top_level_window(),
                             _("Exporting history, please wait ..."),
+                            task, on_success, self.on_error, disable_escape_key=True,
+                            auto_exec=False, auto_show=False, progress_bar=True, progress_min=0, progress_max=100)
+        dlg.exec_()
+        # this will block heere in the WaitingDialog event loop... and set success to True if success
+        return success
+
+    def do_export_token_history(self, file_name, is_csv, fetch_missing_meta=False, timeout=30.0):
+        wallet = self.wallet
+        if not wallet:
+            return
+        dlg = None  # this will be set at the bottom of this function
+
+        def task():
+            def update_prog(x):
+                if dlg:
+                    dlg.update_progress(int(x*100))
+            return wallet.export_token_history(self.token_meta, progress_callback=update_prog,
+                                               fetch_missing_meta=fetch_missing_meta, timeout=timeout)
+
+        success = False
+
+        def on_success(history):
+            nonlocal success
+            # ensure encoding to utf-8. Avoid Windows cp1252. See #1453.
+            with open(file_name, "w+", encoding="utf-8") as f:
+                if is_csv:
+                    writer = csv.writer(f, lineterminator='\n')
+                    cols = ["transaction_hash", "label", "confirmations", "timestamp", "category_id", "token_name",
+                            "token_symbol", "token_decimals", "fungible_amount", "nft_amount", "fungible_balance",
+                            "nft_balance"]
+                    writer.writerow(cols)
+                    for item in history:
+                        decimals = item.get('token_decimals')
+                        if decimals is None:  # Distinguish between 0 and None (None is empty string)
+                            decimals = ''
+                        line = [item['txid'], item.get('label') or '', item['confirmations'], item['date'],
+                                item['category_id'], item.get('token_name') or '', item.get('token_symbol') or '',
+                                decimals, item['fungible_amount'], item['nft_amount'], item['fungible_balance'],
+                                item['nft_balance']]
+                        writer.writerow(line)
+                else:
+                    f.write(json.dumps(history, indent=4))
+            success = True
+
+        # kick off the waiting dialog to do all of the above
+        dlg = WaitingDialog(self.top_level_window(),
+                            _("Exporting token history, please wait ..."),
                             task, on_success, self.on_error, disable_escape_key=True,
                             auto_exec=False, auto_show=False, progress_bar=True, progress_min=0, progress_max=100)
         dlg.exec_()
@@ -4527,10 +4630,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             self.update_status()
         unit_combo.currentIndexChanged.connect(lambda x: on_unit(x, nz))
         gui_widgets.append((unit_label, unit_combo))
-        
+
         # Bip-39 Number of Seed Words
-        
-        def on_bip39_seed_length_change(x): 
+
+        def on_bip39_seed_length_change(x):
             # Get the dropdown selection
             if x == 1:
                 bip39_val_to_config = 15
@@ -4541,17 +4644,17 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             else: # x is 0
                 bip39_val_to_config = 12
             self.config.set_key('bip39_seed_length', bip39_val_to_config, True)
-                  
+
         # Set up the Combo Box for seed length
-        msg = _('Number of words to use when generating mnemonic phrases for a new wallet. ')  
+        msg = _('Number of words to use when generating mnemonic phrases for a new wallet. ')
         bip39_label = HelpLabel(_('Seed Length') + ':', msg)
         bip39_combo = QComboBox()
         bip39_seed_length_options = ['12','15','18','24']
         bip39_combo.addItems(bip39_seed_length_options)
-        bip39_val_from_config = self.config.get("bip39_seed_length") 
-        if bip39_val_from_config not in [12, 15, 18, 24]: 
+        bip39_val_from_config = self.config.get("bip39_seed_length")
+        if bip39_val_from_config not in [12, 15, 18, 24]:
             bip39_val_from_config = 12
-          
+
         # Set the bip39 seed length dropdown selection
         if bip39_val_from_config == 15:
             bip39_combo_index = 1
@@ -4561,13 +4664,13 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
             bip39_combo_index = 3
         else: # 12 words or catch-all
             bip39_combo_index = 0
-         
+
         # Attach the Bip39 seed length to the widget.
         bip39_combo.setCurrentIndex(bip39_combo_index)
         bip39_combo.currentIndexChanged.connect(on_bip39_seed_length_change)
         gui_widgets.append((bip39_label, bip39_combo))
         # ----end of bip39 seed length code
-        
+
         block_explorers = web.BE_sorted_list()
         msg = _('Choose which online block explorer to use for functions that open a web browser')
         block_ex_label = HelpLabel(_('Online block explorer') + ':', msg)
