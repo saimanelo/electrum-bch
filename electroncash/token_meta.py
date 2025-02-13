@@ -442,7 +442,7 @@ def _try_to_dl_icon(icon_url: str, *, timeout=30) -> Optional[Tuple[bytes, str]]
     icon = r2.content
     # Figure out the icon extension from the content-type header if present, otherwise fall-back to filename-based ext.
     if r2.headers.get("Content-Type", "").startswith("image/"):
-        icon_ext = r2.headers["Content-Type"][6:]
+        icon_ext = "." + r2.headers["Content-Type"][6:]
         util.print_error(f"Image type from header: {icon_ext}")
     else:
         icon_ext = os.path.splitext(icon_url)[-1]
