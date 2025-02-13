@@ -437,7 +437,10 @@ class TokenList(MyTreeWidget, util.PrintError):
 
                     for utxo in utxo_list:
                         item_key2 = key_prefix + "_" + self.get_outpoint_longname(utxo)
-                        add_utxo_item(nft_parent, utxo, name, item_key2)
+                        new_item = add_utxo_item(nft_parent, utxo, name, item_key2)
+                        if nft_icon:
+                            # Has NFT-specific icon, set it to appear next to category name for this NFT
+                            new_item.setIcon(self.Col.category, nft_icon)
 
                     item.addChild(nft_parent)
 
