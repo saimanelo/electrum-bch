@@ -211,8 +211,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, PrintError):
 
         add_optional_tab(tabs, self.addresses_tab, QIcon(":icons/tab_addresses.png"), _("&Addresses"), "addresses")
         add_optional_tab(tabs, self.utxo_tab, QIcon(":icons/tab_coins.png"), _("Co&ins"), "utxo")
-        add_optional_tab(tabs, self.token_tab, QIcon(":icons/tab_token.svg"), _("Cash&Tokens"), "token", False)
-        add_optional_tab(tabs, self.token_history_tab, QIcon(":icons/tab_token.svg"), _("Token History"), "token_history", False)
+        add_optional_tab(tabs, self.token_tab, QIcon(":icons/tab_token.svg"), _("Cash&Tokens"), "token")
+        add_optional_tab(tabs, self.token_history_tab, QIcon(":icons/tab_token.svg"), _("Token History"), "token_history")
         add_optional_tab(tabs, self.contacts_tab, QIcon(":icons/tab_contacts.png"), _("Con&tacts"), "contacts")
         add_optional_tab(tabs, self.converter_tab, QIcon(":icons/tab_converter.svg"), _("Address Converter"), "converter")
         add_optional_tab(tabs, self.console_tab, QIcon(":icons/tab_console.png"), _("Con&sole"), "console", False)
