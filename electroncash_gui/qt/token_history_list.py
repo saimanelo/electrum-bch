@@ -217,8 +217,22 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                     commitment = token_data.commitment.hex()
                     capability_str = f"{capability} " if len(capability) else ""
                     commitment_suffix = f": {commitment}" if commitment else ""
-                    name = f"{direction} {capability_str}NFT{commitment_suffix}"
+                    # Handle any nft-specific name
+                    nft_name_str = self.token_meta.get_nft_display_name(category_id, commitment)
+                    if not nft_name_str:
+                        # No NFT-specific name, leave this blank
+                        nft_name_str = ''
+                    else:
+                        # Has NFT-specific name, pad with space
+                        nft_name_str += ' '
+                    name = f"{direction} {nft_name_str}{capability_str}NFT{commitment_suffix}"
+
                     nft_item = SortableTreeWidgetItem(['', '', name, '', '', '', '', '', ''])
+                    # Handle any nft-specific icon
+                    nft_icon = self.token_meta.get_icon(category_id, nft_hex=commitment, autogen_if_missing=False)
+                    if nft_icon:
+                        nft_item.setIcon(self.Col.description, nft_icon)
+                    # Set data roles
                     nft_item.setFont(self.Col.description, self.monospaceFont)
                     nft_item.setData(0, self.DataRoles.nft_row, True)
                     nft_item.setData(0, self.DataRoles.outpoint, outpoint_str)

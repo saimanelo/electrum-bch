@@ -72,8 +72,10 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
     def _mk_icon_key(token_id_hex, nft_hex):
         return token_id_hex if not nft_hex else f"{token_id_hex}_{nft_hex}"
 
-    def get_icon(self, token_id_hex: str, *, nft_hex: Optional[str] = None) -> Any:
-        """ Gets the actual icon. On Qt for example this will return a QImage. Intended to be overridden """
+    def get_icon(self, token_id_hex: str, *, nft_hex: Optional[str] = None, autogen_if_missing=True) -> Optional[Any]:
+        """Gets the token-specific (or NFT-specific) icon object. On Qt for example this will return a QIcon.
+        If no real icon is known for this token and/or NFT, returns the default "generated" icon, unless
+        autogen_if_missing=False in which case it returns None."""
         key = self._mk_icon_key(token_id_hex, nft_hex)
         icon = self._icon_cache.get(key)
         if icon:
@@ -82,6 +84,9 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         if buf:
             icon = self._bytes_to_icon(buf)
         if not icon:
+            if not autogen_if_missing:
+                # Special case: Return None to indicate there is no icon known
+                return None
             icon = self.gen_default_icon(token_id_hex)
         assert icon is not None
         self._icon_cache[key] = icon
@@ -152,18 +157,16 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
                 return ret
         return empty
 
-    def get_token_display_name(self, token_id_hex: str, nft_hex: Optional[str] = None) -> Optional[str]:
-        """Returns None if not found or if empty, otherwise returns the display name if found and not empty.
-        Optionally, may return an NFT-specific display name if nft_hex is specified and not empty."""
-        if nft_hex and isinstance(nft_hex, str):
-            ret = self._get_nft_meta(token_id_hex, nft_hex).get("display_name")
-            if ret and isinstance(ret, str):
-                return ret
+    def get_token_display_name(self, token_id_hex: str) -> Optional[str]:
+        """Returns None if not found or if empty, otherwise returns the display name if found and not empty."""
         ret = self.d.get("display_names", {}).get(token_id_hex)
         if isinstance(ret, str):
             return ret
 
-    def get_nft_display_name(self, token_id_hex, nft_hex): return self.get_token_display_name(token_id_hex, nft_hex)
+    def get_nft_display_name(self, token_id_hex: str, nft_hex: str):
+        ret = self._get_nft_meta(token_id_hex, nft_hex).get("display_name")
+        if ret and isinstance(ret, str):
+            return ret
 
     def get_token_ticker_symbol(self, token_id_hex: str) -> Optional[str]:
         ret = self.d.get("tickers", {}).get(token_id_hex)
@@ -176,10 +179,14 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         if isinstance(ret, int):
             return ret
 
-    def has_any_metadata_for(self, token_id_hex: str) -> bool:
+    def has_any_metadata_for(self, token_id_hex: str, nft_hex: Optional[str] = None) -> bool:
+        if nft_hex:
+            return (self.get_nft_display_name(token_id_hex, nft_hex) is not None
+                    or self.get_icon(token_id_hex, nft_hex=nft_hex, autogen_if_missing=False) is not None)
         return (self.get_token_display_name(token_id_hex) is not None
                 or self.get_token_ticker_symbol(token_id_hex) is not None
-                or self.get_token_decimals(token_id_hex) is not None)
+                or self.get_token_decimals(token_id_hex) is not None
+                or self.get_icon(token_id_hex, autogen_if_missing=False) is not None)
 
     def set_token_display_name(self, token_id_hex: str, name: Optional[str]):
         dd = self.d.get("display_names", {})
@@ -269,7 +276,11 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
                                   *, nft: Optional[Union[str, token.OutputData, bytes, bytearray]] = None) -> str:
         token_id_hex = self._normalize_to_token_id_hex(token_or_id)
         nft_hex: Optional[str] = self._normalize_to_nft_hex(nft) if nft else None
-        tn = self.get_token_display_name(token_id_hex, nft_hex)
+        tn = None
+        if nft_hex:
+            tn = self.get_nft_display_name(token_id_hex, nft_hex)
+        if not tn:
+            tn = self.get_token_display_name(token_id_hex)
         if tn:
             tn = tn.strip()
         tn = tn or token_id_hex

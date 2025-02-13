@@ -396,10 +396,21 @@ class TokenList(MyTreeWidget, util.PrintError):
                 else:
                     name = "NFT: " + _("zero-length commitment")
 
+                nft_name = self.token_meta.get_nft_display_name(token_id, commitment_hex)
+                if nft_name:
+                    # Prepend the NFT-specific display-name
+                    name = f"{nft_name} {name}"
+
+                nft_icon: Optional[QtGui.QIcon] = self.token_meta.get_icon(token_id, nft_hex=commitment_hex,
+                                                                           autogen_if_missing=False)
+
                 if len(utxo_list) == 1:
                     utxo = utxo_list[0]
                     item_key = key_prefix + "_" + self.get_outpoint_longname(utxo)
-                    add_utxo_item(item, utxo, name, item_key)
+                    new_item = add_utxo_item(item, utxo, name, item_key)
+                    if nft_icon:
+                        # Has NFT-specific icon known in metadata, set it to appear next to category name for this NFT
+                        new_item.setIcon(self.Col.category, nft_icon)
                 else:
                     item_key = key_prefix + "_nft_" + commitment_hex
                     ft_amt = self.token_meta.format_amount(token_id, sum(u['token_data'].amount for u in utxo_list))
@@ -416,6 +427,9 @@ class TokenList(MyTreeWidget, util.PrintError):
                     nft_parent.setData(0, self.DataRoles.token_id, token_id)
                     nft_parent.setData(0, self.DataRoles.utxos, utxo_list)
                     nft_parent.setData(0, self.DataRoles.nft_utxo, None)
+                    if nft_icon:
+                        # Has NFT-specific icon known in metadata, set it to appear next to category name for this NFT
+                        nft_parent.setIcon(self.Col.category, nft_icon)
                     set_fonts(nft_parent)
                     set_icons_inner(nft_parent, num_minting, num_mutable)
                     if item_key in item_keys_to_re_select:
