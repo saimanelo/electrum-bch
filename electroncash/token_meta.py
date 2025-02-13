@@ -13,7 +13,7 @@ import requests
 import threading
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from electroncash import address, token, util
 from electroncash.simple_config import SimpleConfig
@@ -344,8 +344,94 @@ class DownloadedMetaData:
         return f"<DownloadedMetaData name={self.name} description={self.description} decimals={self.decimals}" \
                f" symbol={self.symbol}, icon_ext={self.icon_ext} icon={icon_thing} bytes>"
 
+    def sanitize(self):
+        """Cleans up some fields for this object to enforce invariants"""
+        try:
+            self.decimals = int(self.decimals)
+        except (ValueError, TypeError):
+            pass
+        self.decimals = min(max(0, self.decimals), 19) if isinstance(self.decimals, int) else 0
+        self.name = self.name[:30] if isinstance(self.name, str) else ""
+        self.description = self.description[:80] if isinstance(self.description, str) else ""
+        self.symbol = self.symbol[:4] if isinstance(self.symbol, str) else ""
 
-def try_to_download_metadata(wallet, token_id_hex, timeout=30, *, skip_icon=False) -> Optional[DownloadedMetaData]:
+
+def _rewrite_if_ipfs(u: str) -> str:
+    """Rewrites any ipfs-style URLs to https using a proxy site that serves such things"""
+    if u.lower().startswith("ipfs://"):
+        parts = u[7:].split('/', 1)
+        last_part = '/' + '/'.join(parts[1:]) if len(parts) >= 2 else ''
+        cid = parts[0]
+        ret = f"https://dweb.link/ipfs/{cid}{last_part}"
+        util.print_error(f"Rewrote \"{u}\" -> \"{ret}\"")
+        return ret
+    else:
+        return u
+
+
+def _try_to_dl_icon(icon_url: str, *, timeout=30) -> Optional[Tuple[bytes, str]]:
+    """Given an icon url, download the icon and return a tuple of (icon_bytes, filename_extension) or None on error"""
+    if not icon_url or not isinstance(icon_url, str):
+        return
+    icon_url = _rewrite_if_ipfs(icon_url)
+    r2 = requests.get(icon_url, timeout=timeout)
+    if not r2.ok:
+        util.print_error(f"Got error downloading icon from {icon_url}: {r2.status_code} {r2.reason}")
+        return
+    util.print_error(f"Downloaded {len(r2.content)} bytes from {icon_url}")
+    icon = r2.content
+    icon_ext = os.path.splitext(icon_url)[-1]
+    return icon, icon_ext
+
+
+PAYTACA_HOST = "bcmr.paytaca.com"
+
+
+def _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=30, *, skip_icon=False) -> Optional[DownloadedMetaData]:
+    """Download metadata from the paytaca indexer"""
+    url = f"https://{PAYTACA_HOST}/api/tokens/{token_id_hex}/"
+    r = requests.get(url, timeout=timeout, allow_redirects=True)
+    if not r.ok:
+        util.print_error(f"Got error requesting url {url}: {r.status_code} {r.reason}")
+        return
+    try:
+        jdoc = json.loads(r.content.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeError) as e:
+        util.print_error(f"Got exception decoding from {url}: {e!r}")
+        return
+    if not isinstance(jdoc, dict):
+        util.print_error(f"Invalid format for JSON content downloaded from {url}, not a dict: {jdoc}")
+        return
+    if "error" in jdoc:
+        util.print_error(f"Got error reply from {url}: {jdoc.get('error')}")
+        return
+    md = DownloadedMetaData()
+    md.name = jdoc.get("name")
+    if not md.name:
+        util.print_error(f'Required key "name" missing or empty in JSON downloaded from {url}')
+        return
+    md.description = jdoc.get("description", "")
+
+    tdict = jdoc.get("token")
+    if not isinstance(tdict, dict) or tdict.get("category") != token_id_hex:
+        util.print_error(f'Invalid "token" dict downloaded from {url}: {tdict}')
+        return
+    md.symbol = tdict.get("symbol", "")
+    md.decimals = tdict.get("decimals", 0)
+
+    # Next, try and download the icons
+    if not skip_icon:
+        udict = jdoc.get("uris")
+        if isinstance(udict, dict) and "icon" in udict:
+            icon_url = udict.get("icon")
+            res = _try_to_dl_icon(icon_url, timeout=timeout)
+            if res:
+                md.icon, md.icon_ext = res
+    md.sanitize()
+    return md
+
+
+def _try_to_dl_from_blockchain(wallet, token_id_hex, *, timeout=30, skip_icon=False) -> Optional[DownloadedMetaData]:
     """Synchronously find the genesis tx, download metadata if it has properly formed BCMR, and return
     an object describing what was found. May return None on timeout or other error."""
     pushes = try_to_get_bcmr_op_return_pushes(wallet, token_id_hex, timeout=timeout)
@@ -359,18 +445,7 @@ def try_to_download_metadata(wallet, token_id_hex, timeout=30, *, skip_icon=Fals
         except UnicodeError as e:
             util.print_error(f"Failed to decode url: {url!r} as utf-8, skipping...")
 
-        def rewrite_if_ipfs(u: str) -> str:
-            if u.lower().startswith("ipfs://"):
-                parts = u[7:].split('/', 1)
-                last_part = '/' + '/'.join(parts[1:]) if len(parts) >= 2 else ''
-                cid = parts[0]
-                ret = f"https://dweb.link/ipfs/{cid}{last_part}"
-                util.print_error(f"Rewrote \"{u}\" -> \"{ret}\"")
-                return ret
-            else:
-                return u
-
-        url = rewrite_if_ipfs(url)
+        url = _rewrite_if_ipfs(url)
         if not url.lower().startswith("https://"):
             url = "https://" + url
         r = requests.get(url, timeout=timeout)
@@ -402,24 +477,16 @@ def try_to_download_metadata(wallet, token_id_hex, timeout=30, *, skip_icon=Fals
                     dd = d[t]
                     tok = dd.get("token", {})
                     if not tok or not isinstance(tok, dict):
-                        util.print_error(f"Expected a 'token' dict in identity {identity}:{t}  from {url}")
+                        util.print_error(f'Expected a "token" dict in identity {identity}:{t} from {url}')
                         continue
                     cat = tok.get("category", "")
                     if cat != token_id_hex:
                         util.print_error(f"Skipping category {cat}")
                         continue
                     decimals = tok.get("decimals", 0)
-                    try:
-                        decimals = int(decimals)
-                    except (ValueError, TypeError):
-                        pass
-                    decimals = min(max(0, decimals), 19) if isinstance(decimals, int) else 0
                     name = dd.get("name", "")
-                    name = name[:30] if isinstance(name, str) else ""
                     description = dd.get("description", "")
-                    description = description[:80] if isinstance(description, str) else ""
                     symbol = tok.get("symbol", "")
-                    symbol = symbol[:4] if isinstance(symbol, str) else ""
 
                     md = DownloadedMetaData()
                     md.decimals = decimals
@@ -430,17 +497,36 @@ def try_to_download_metadata(wallet, token_id_hex, timeout=30, *, skip_icon=Fals
                     uris = dd.get("uris", {})
                     if not skip_icon and uris and isinstance(uris, dict):
                         icon_url = uris.get("icon")
-                        if icon_url and isinstance(icon_url, str):
-
-                            icon_url = rewrite_if_ipfs(icon_url)
-                            r2 = requests.get(icon_url, timeout=timeout)
-                            if r2.ok:
-                                util.print_error(f"Downloaded {len(r2.content)} bytes from {icon_url}")
-                                md.icon = r2.content
-                                md.icon_ext = os.path.splitext(icon_url)[-1]
-                            else:
-                                util.print_error(f"Got error downloading icon from {icon_url}: {r2.status_code}"
-                                                 f" {r2.reason}")
+                        res = _try_to_dl_icon(icon_url, timeout=timeout)
+                        if res:
+                            md.icon, md.icon_ext = res
+                    md.sanitize()
                     return md
         else:
             util.print_error(f"Got error requesting url {url}: {r.status_code} {r.reason}")
+
+
+def try_to_download_metadata(wallet, token_id_hex, timeout=30, *, skip_icon=False,
+                             use_indexers=True, use_blockchain=True) -> Optional[DownloadedMetaData]:
+    """Tries to get BCMR metadata given a token_id_hex (category id). First, tries the paytaca indexer (faster),
+    then if that fails, falls-back to blockchain-based BCMR metadata resolution. Will return None on failure.
+    Be sure to catch exceptions as this may raise an exception from the `requests` module."""
+    assert use_indexers or use_blockchain, "Must specify at least one of: use_indexers, use_blockchain"
+
+    # First, try paytaca indexer (faster)
+    if use_indexers:
+        md = _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=timeout, skip_icon=skip_icon)
+        if md is not None:
+            util.print_error(f"Success in downloading token metadata from {PAYTACA_HOST} for:"
+                             f" {token_id_hex} ({md.name})")
+            return md
+
+    # If indexer fails, try the blockchain (slower)
+    if use_blockchain:
+        util.print_error(f"Falling-back to slower blockchain method to retrieve BCMR data for: {token_id_hex} ...")
+        md = _try_to_dl_from_blockchain(wallet, token_id_hex, timeout=timeout, skip_icon=skip_icon)
+        if md is not None:
+            util.print_error(f"Success in downloading token metadata from blockchain for: {token_id_hex} ({md.name})")
+            return md
+
+    util.print_error(f"Failed to retrieve metadata for: {token_id_hex}")
