@@ -6,10 +6,14 @@
 # License: MIT
 """ Encapsulation and handling of token metadata -- Qt-specific functions """
 
+import os
+
+from typing import Optional
+
 from electroncash.token_meta import TokenMeta
 from .utils import qblockies
 
-from PyQt5.QtCore import QBuffer, QByteArray, QIODevice
+from PyQt5.QtCore import QBuffer, QByteArray, QDir, QIODevice, QTemporaryFile
 from PyQt5.QtGui import QColor, QIcon, QPixmap
 
 
@@ -38,3 +42,14 @@ class TokenMetaQt(TokenMeta):
     def _icon_ext(self) -> str:
         """Override"""
         return "png"
+
+    def convert_downloaded_icon(self, icon_data: bytes, icon_ext: str) -> Optional[QIcon]:
+        """Reimplemented from super"""
+        if icon_ext and not icon_ext.startswith('.'):
+            icon_ext = f".{icon_ext}"
+        # e.g.: /path/to/tmp/XXXXXX.svg
+        f = QTemporaryFile(os.path.join(QDir.tempPath(), "XXXXXX") + (icon_ext or ''))
+        if f.open():
+            f.write(icon_data)
+            f.flush()
+            return QIcon(f.fileName())

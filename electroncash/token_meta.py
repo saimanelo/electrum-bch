@@ -130,6 +130,10 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         """Reimplement in subclasses to generate a default icon for a token_id if the icon file is missing"""
         pass
 
+    def convert_downloaded_icon(self, icon_data: bytes, icon_ext: str) -> Any:
+        """Reimplement in subclasses to convert the downloaded icon byte buffer into a platform-specific format"""
+        return self._bytes_to_icon(icon_data)
+
     def _write_icon_file(self, filepath: str, buf: Optional[bytes]):
         with self.lock:
             try:
