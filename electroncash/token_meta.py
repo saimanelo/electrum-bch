@@ -141,7 +141,13 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         if nft_hex and isinstance(nft_hex, str):
             ret = self.d.get("nfts", empty).get(token_id_hex, empty).get(nft_hex, empty)
             if ret is empty and create_if_missing:
-                ret = self.d["nfts"][token_id_hex][nft_hex] = {}
+                dict_by_token_id = self.d.get("nfts")
+                if dict_by_token_id is None:
+                    self.d["nfts"] = dict_by_token_id = {}
+                dict_by_nft_id = dict_by_token_id.get(token_id_hex)
+                if dict_by_nft_id is None:
+                    dict_by_nft_id = dict_by_token_id[token_id_hex] = {}
+                ret = dict_by_nft_id[nft_hex] = {}
             if isinstance(ret, dict):
                 return ret
         return empty
