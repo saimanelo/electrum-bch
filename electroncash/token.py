@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # -*- mode: python3 -*-
-# This file (c) 2022-2023 Calin Culianu <calin.culianu@gmail.com>
+# This file (c) 2022-2025 Calin Culianu <calin.culianu@gmail.com>
 # Part of the Electron Cash SPV Wallet
 # License: MIT
 """Encapsulation of Cash Token data in a transaction output"""
@@ -35,19 +35,26 @@ class Capability(IntEnum):
 class OutputData:
     __slots__ = ("id", "bitfield", "amount", "commitment")
 
-    def __init__(self, id: Union[bytes, str] = b'\x00' * 32, amount: int = 1, commitment: Union[bytes, str] = b'',
-                 bitfield: Union[int, str, bytes] = Structure.HasAmount):
+    def __init__(self, id: Union[bytes, bytearray, str] = b'\x00' * 32, amount: int = 1,
+                 commitment: Union[bytes, bytearray, str] = b'',
+                 bitfield: Union[int, str, bytes, bytearray] = Structure.HasAmount):
         if isinstance(id, str):
             # Convert from hex and reverse
             id = bytes.fromhex(id)[::-1]
+        elif isinstance(id, bytearray):
+            # Support bytearray arg
+            id = bytes(id)
         if isinstance(commitment, str):
             # Convert from hex, don't reverse
             commitment = bytes.fromhex(commitment)
+        elif isinstance(commitment, bytearray):
+            # Support bytearray arg
+            commitment = bytes(commitment)
         if isinstance(bitfield, str):
             # Convert from hex (must be 1 byte hex)
             assert len(bitfield) == 2
             bitfield = bytes.fromhex(bitfield)[0]
-        elif isinstance(bitfield, bytes):
+        elif isinstance(bitfield, (bytes, bytearray)):
             # Convert from bytes (must be length 1)
             assert len(bitfield) == 1
             bitfield = bitfield[0]

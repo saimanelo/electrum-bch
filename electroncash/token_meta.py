@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # -*- mode: python3 -*-
-# This file (c) 2023 Calin Culianu <calin.culianu@gmail.com>
+# This file (c) 2023-2025 Calin Culianu <calin.culianu@gmail.com>
 # Part of the Electron Cash SPV Wallet
 # License: MIT
 """ Encapsulation and handling of token metadata """
@@ -68,29 +68,35 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         util.make_dir(path)
         assert os.path.exists(path) and os.path.isdir(path)
 
-    def get_icon(self, token_id_hex: str) -> Any:
+    @staticmethod
+    def _mk_icon_key(token_id_hex, nft_hex):
+        return token_id_hex if not nft_hex else f"{token_id_hex}_{nft_hex}"
+
+    def get_icon(self, token_id_hex: str, *, nft_hex: Optional[str] = None) -> Any:
         """ Gets the actual icon. On Qt for example this will return a QImage. Intended to be overridden """
-        icon = self._icon_cache.get(token_id_hex)
+        key = self._mk_icon_key(token_id_hex, nft_hex)
+        icon = self._icon_cache.get(key)
         if icon:
             return icon
-        buf = self._read_icon_file(self._icon_filepath(token_id_hex))
+        buf = self._read_icon_file(self._icon_filepath(key))
         if buf:
             icon = self._bytes_to_icon(buf)
         if not icon:
             icon = self.gen_default_icon(token_id_hex)
         assert icon is not None
-        self._icon_cache[token_id_hex] = icon
+        self._icon_cache[key] = icon
         return icon
 
-    def _icon_filepath(self, token_id_hex: str) -> str:
-        return os.path.join(self.icons_path, token_id_hex) + "." + self._icon_ext
+    def _icon_filepath(self, token_id_hex: str, *, nft_hex: Optional[str] = None) -> str:
+        key = self._mk_icon_key(token_id_hex, nft_hex)
+        return os.path.join(self.icons_path, key) + "." + self._icon_ext
 
-    def set_icon(self, token_id_hex: str, icon: Any):
-        fname = self._icon_filepath(token_id_hex)
+    def set_icon(self, token_id_hex: str, icon: Any, *, nft_hex: Optional[str] = None):
+        fname = self._icon_filepath(token_id_hex, nft_hex=nft_hex)
         buf = (icon is not None and self._icon_to_bytes(icon)) or None
         self._write_icon_file(fname, buf)
         if icon is not None:
-            self._icon_cache[token_id_hex] = icon
+            self._icon_cache[self._mk_icon_key(token_id_hex, nft_hex)] = icon
 
     @property
     def _icon_ext(self) -> str:
@@ -130,11 +136,28 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
             with open(filepath, "wb") as f:
                 f.write(buf)
 
-    def get_token_display_name(self, token_id_hex: str) -> Optional[str]:
-        """Returns None if not found or if empty, otherwise returns the display name if found and not empty"""
+    def _get_nft_meta(self, token_id_hex: str, nft_hex: str, create_if_missing=False) -> dict:
+        empty = {}
+        if nft_hex and isinstance(nft_hex, str):
+            ret = self.d.get("nfts", empty).get(token_id_hex, empty).get(nft_hex, empty)
+            if ret is empty and create_if_missing:
+                ret = self.d["nfts"][token_id_hex][nft_hex] = {}
+            if isinstance(ret, dict):
+                return ret
+        return empty
+
+    def get_token_display_name(self, token_id_hex: str, nft_hex: Optional[str] = None) -> Optional[str]:
+        """Returns None if not found or if empty, otherwise returns the display name if found and not empty.
+        Optionally, may return an NFT-specific display name if nft_hex is specified and not empty."""
+        if nft_hex and isinstance(nft_hex, str):
+            ret = self._get_nft_meta(token_id_hex, nft_hex).get("display_name")
+            if ret and isinstance(ret, str):
+                return ret
         ret = self.d.get("display_names", {}).get(token_id_hex)
         if isinstance(ret, str):
             return ret
+
+    def get_nft_display_name(self, token_id_hex, nft_hex): return self.get_token_display_name(token_id_hex, nft_hex)
 
     def get_token_ticker_symbol(self, token_id_hex: str) -> Optional[str]:
         ret = self.d.get("tickers", {}).get(token_id_hex)
@@ -163,6 +186,14 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
                 self.d["display_names"] = dd
         self.dirty = True
 
+    def set_nft_display_name(self, token_id_hex: str, nft_hex: str, name: Optional[str]):
+        dd = self._get_nft_meta(token_id_hex, nft_hex, create_if_missing=True)
+        if name is None:
+            dd.pop("display_name", None)
+        elif isinstance(name, str):
+            dd["display_name"] = str(name)
+        self.dirty = True
+
     def set_token_ticker_symbol(self, token_id_hex: str, ticker: Optional[str]):
         dd = self.d.get("tickers", {})
         if ticker is None:
@@ -186,16 +217,26 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
         self.dirty = True
 
     @staticmethod
-    def _normalize_to_token_id_hex(token_or_id: Union[str, token.OutputData, bytes]) -> str:
+    def _normalize_to_token_id_hex(token_or_id: Union[str, token.OutputData, bytes, bytearray]) -> str:
         assert isinstance(token_or_id, (str, bytes, bytearray, token.OutputData))
         if isinstance(token_or_id, str):
             return token_or_id
-        elif isinstance(token_or_id (bytes, bytearray)):
-            return token_or_id.hex()
+        elif isinstance(token_or_id, (bytes, bytearray)):
+            return token_or_id[::-1].hex()  # reverse
         else:
             return token_or_id.id_hex
 
-    def format_amount(self, token_or_id: Union[str, token.OutputData, bytes], fungible_amount: int,
+    @staticmethod
+    def _normalize_to_nft_hex(nft: Union[str, token.OutputData, bytes, bytearray]) -> str:
+        assert isinstance(nft, (str, token.OutputData, bytes, bytearray))
+        if isinstance(nft, str):
+            return nft
+        elif isinstance(nft, (bytes, bytearray)):
+            return nft.hex()  # don't reverse
+        else:
+            return nft.commitment.hex()  # don't reverse
+
+    def format_amount(self, token_or_id: Union[str, token.OutputData, bytes, bytearray], fungible_amount: int,
                       num_zeros=0, is_diff=False, whitespace=False, precision=None,
                       append_tokentoshis=False, decimals=None) -> str:
         """Formats a particular token's amount string, according to that token's metadata spec for decimals.
@@ -209,7 +250,7 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
                                             precision=precision, is_diff=is_diff, whitespaces=whitespace,
                                             append_tokentoshis=append_tokentoshis)
 
-    def parse_amount(self, token_or_id: Union[str, token.OutputData, bytes], val: str) -> int:
+    def parse_amount(self, token_or_id: Union[str, token.OutputData, bytes, bytearray], val: str) -> int:
         """Inverse of above"""
         token_id_hex = self._normalize_to_token_id_hex(token_or_id)
         decimals = self.get_token_decimals(token_id_hex)
@@ -217,10 +258,12 @@ class TokenMeta(util.PrintError, metaclass=ABCMeta):
             decimals = 0
         return token.parse_fungible_amount(val, decimal_point=decimals)
 
-    def format_token_display_name(self, token_or_id: Union[str, token.OutputData, bytes],
-                                  format_str="{token_name} ({token_symbol})"):
+    def format_token_display_name(self, token_or_id: Union[str, token.OutputData, bytes, bytearray],
+                                  format_str="{token_name} ({token_symbol})",
+                                  *, nft: Optional[Union[str, token.OutputData, bytes, bytearray]] = None) -> str:
         token_id_hex = self._normalize_to_token_id_hex(token_or_id)
-        tn = self.get_token_display_name(token_id_hex)
+        nft_hex: Optional[str] = self._normalize_to_nft_hex(nft) if nft else None
+        tn = self.get_token_display_name(token_id_hex, nft_hex)
         if tn:
             tn = tn.strip()
         tn = tn or token_id_hex
@@ -374,22 +417,32 @@ def _try_to_dl_icon(icon_url: str, *, timeout=30) -> Optional[Tuple[bytes, str]]
     if not icon_url or not isinstance(icon_url, str):
         return
     icon_url = _rewrite_if_ipfs(icon_url)
-    r2 = requests.get(icon_url, timeout=timeout)
+    r2 = requests.get(icon_url, timeout=timeout, allow_redirects=True)
     if not r2.ok:
         util.print_error(f"Got error downloading icon from {icon_url}: {r2.status_code} {r2.reason}")
         return
     util.print_error(f"Downloaded {len(r2.content)} bytes from {icon_url}")
     icon = r2.content
-    icon_ext = os.path.splitext(icon_url)[-1]
+    # Figure out the icon extension from the content-type header if present, otherwise fall-back to filename-based ext.
+    if r2.headers.get("Content-Type", "").startswith("image/"):
+        icon_ext = r2.headers["Content-Type"][6:]
+        util.print_error(f"Image type from header: {icon_ext}")
+    else:
+        icon_ext = os.path.splitext(icon_url)[-1]
+        util.print_error(f"Image type from filename: {icon_ext}")
     return icon, icon_ext
 
 
 PAYTACA_HOST = "bcmr.paytaca.com"
 
 
-def _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=30, *, skip_icon=False) -> Optional[DownloadedMetaData]:
+def _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=30, *, skip_icon=False,
+                                    nft_hex=None) -> Optional[DownloadedMetaData]:
     """Download metadata from the paytaca indexer"""
-    url = f"https://{PAYTACA_HOST}/api/tokens/{token_id_hex}/"
+    if not nft_hex:
+        url = f"https://{PAYTACA_HOST}/api/tokens/{token_id_hex}/"
+    else:
+        url = f"https://{PAYTACA_HOST}/api/tokens/{token_id_hex}/{nft_hex}"
     r = requests.get(url, timeout=timeout, allow_redirects=True)
     if not r.ok:
         util.print_error(f"Got error requesting url {url}: {r.status_code} {r.reason}")
@@ -412,21 +465,46 @@ def _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=30, *, skip_icon=False
         return
     md.description = jdoc.get("description", "")
 
+    # Handle NFT-specific metadata
+    nft_icon_override = None
+    if nft_hex and "type_metadata" in jdoc:
+        ndict = jdoc["type_metadata"]
+        if isinstance(ndict, dict):
+            nft_name = ndict.get("name")
+            if isinstance(nft_name, str):
+                md.name = nft_name
+            nft_desc = ndict.get("description")
+            if isinstance(nft_desc, str):
+                md.description = nft_desc
+            nft_uris = ndict.get("uris")
+            if isinstance(nft_uris, dict):
+                nft_icon = nft_uris.get("icon")
+                if nft_icon and isinstance(nft_icon, str):
+                    nft_icon_override = nft_icon
+
     tdict = jdoc.get("token")
     if not isinstance(tdict, dict) or tdict.get("category") != token_id_hex:
         util.print_error(f'Invalid "token" dict downloaded from {url}: {tdict}')
         return
     md.symbol = tdict.get("symbol", "")
     md.decimals = tdict.get("decimals", 0)
+    if nft_hex and "decimals" not in tdict:
+        # Hack to get the "decimals" from the NFT parent if missing in child NFT results
+        util.print_error(f'Missing "decimals" for NFT, downloading parent info for: {token_id_hex} ...')
+        md2 = _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=timeout, skip_icon=True, nft_hex=None)
+        if md2:
+            md.decimals = md2.decimals
 
-    # Next, try and download the icons
+    # Next, try and download the icon
     if not skip_icon:
-        udict = jdoc.get("uris")
-        if isinstance(udict, dict) and "icon" in udict:
-            icon_url = udict.get("icon")
-            res = _try_to_dl_icon(icon_url, timeout=timeout)
-            if res:
-                md.icon, md.icon_ext = res
+        icon_url = nft_icon_override or None
+        if not icon_url:
+            udict = jdoc.get("uris")
+            if isinstance(udict, dict) and "icon" in udict:
+                icon_url = udict["icon"]
+        res = _try_to_dl_icon(icon_url, timeout=timeout)
+        if res:
+            md.icon, md.icon_ext = res
     md.sanitize()
     return md
 
@@ -507,22 +585,25 @@ def _try_to_dl_from_blockchain(wallet, token_id_hex, *, timeout=30, skip_icon=Fa
 
 
 def try_to_download_metadata(wallet, token_id_hex, timeout=30, *, skip_icon=False,
-                             use_indexers=True, use_blockchain=True) -> Optional[DownloadedMetaData]:
+                             use_indexers=True, use_blockchain=True,
+                             nft_hex: Optional[str] = None) -> Optional[DownloadedMetaData]:
     """Tries to get BCMR metadata given a token_id_hex (category id). First, tries the paytaca indexer (faster),
     then if that fails, falls-back to blockchain-based BCMR metadata resolution. Will return None on failure.
     Be sure to catch exceptions as this may raise an exception from the `requests` module."""
     assert use_indexers or use_blockchain, "Must specify at least one of: use_indexers, use_blockchain"
+    assert not nft_hex or use_indexers, "Must specify use_indexers=True if trying to get metadata for an nft"
 
     # First, try paytaca indexer (faster)
     if use_indexers:
-        md = _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=timeout, skip_icon=skip_icon)
+        md = _try_to_dl_from_paytaca_indexer(token_id_hex, timeout=timeout, skip_icon=skip_icon,
+                                             nft_hex=nft_hex)
         if md is not None:
             util.print_error(f"Success in downloading token metadata from {PAYTACA_HOST} for:"
                              f" {token_id_hex} ({md.name})")
             return md
 
     # If indexer fails, try the blockchain (slower)
-    if use_blockchain:
+    if use_blockchain and not nft_hex:
         util.print_error(f"Falling-back to slower blockchain method to retrieve BCMR data for: {token_id_hex} ...")
         md = _try_to_dl_from_blockchain(wallet, token_id_hex, timeout=timeout, skip_icon=skip_icon)
         if md is not None:
