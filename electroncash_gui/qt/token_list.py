@@ -36,7 +36,7 @@ from electroncash import token, util
 from electroncash.i18n import _, ngettext
 from .main_window import ElectrumWindow
 from .util import ColorScheme, MONOSPACE_FONT, MyTreeWidget, rate_limited, SortableTreeWidgetItem
-from .token_meta import TokenMetaQt
+from .token_meta import TokenMetaQt, do_update_token_meta
 
 
 class TokenList(MyTreeWidget, util.PrintError):
@@ -522,10 +522,14 @@ class TokenList(MyTreeWidget, util.PrintError):
 
         if num_selected > 0:
 
+            token_id_hex = None
+
             if len(unique_token_ids_selected_that_may_be_frozen_or_unfrozen) == 1:
                 token_id_hex = list(unique_token_ids_selected_that_may_be_frozen_or_unfrozen)[0]
                 menu.addAction(self.token_meta.get_icon(token_id_hex),
                                _("Category Properties") + "...", lambda: self.on_edit_metadata(token_id_hex))
+
+            nft_hex = None
 
             if num_selected == 1:
                 # Single selection
@@ -551,13 +555,21 @@ class TokenList(MyTreeWidget, util.PrintError):
                         # NFT child item
                         if col == self.Col.category:
                             alt_column_title = _("NFT Commitment")
-                            alt_copy_text = nft_utxo['token_data'].commitment.hex()
+                            alt_copy_text = nft_hex = nft_utxo['token_data'].commitment.hex()
                             copy_text = nft_utxo['token_data'].id_hex
                         if copy_text == '-':
                             copy_text = None
                     else:
                         # Top-level item
                         pass
+
+                    if token_id_hex and self.parent.network:
+                        if nft_hex:
+                            menu.addAction(_("Fetch NFT Metadata"),
+                                           lambda: do_update_token_meta(self.parent, token_id_hex, nft_hex=nft_hex))
+                        else:
+                            menu.addAction(_("Fetch Category Metadata"),
+                                           lambda: do_update_token_meta(self.parent, token_id_hex))
 
                     if insert_cat_title and insert_cat_text:
                         menu.addAction(_("Copy {}").format(insert_cat_title), lambda: do_copy(insert_cat_text))

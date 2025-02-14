@@ -34,7 +34,7 @@ from electroncash.i18n import _, ngettext
 from electroncash.util import profiler, PrintError
 
 from .token_list import TokenList
-from .token_meta import TokenMetaQt
+from .token_meta import TokenMetaQt, do_update_token_meta
 from .util import MONOSPACE_FONT, MyTreeWidget, rate_limited, SortableTreeWidgetItem
 
 
@@ -333,12 +333,27 @@ class TokenHistoryList(MyTreeWidget, PrintError):
                         description = item.text(self.Col.description).strip()
                         commitment = item.data(0, self.DataRoles.commitment)
                         outpoint = item.data(0, self.DataRoles.outpoint)
+                        if commitment:
+                            # NFT-only: Add the "Fetch Metadata" menu item before any copy items
+                            token_id_hex = category_id
+                            if not token_id_hex:
+                                if item.parent():
+                                    token_id_hex = item.parent().data(0, self.DataRoles.category_id)
+                            if token_id_hex:
+                                menu.addAction(_("Fetch NFT Metadata"),
+                                               lambda: do_update_token_meta(self.parent, token_id_hex,
+                                                                            nft_hex=commitment))
                         if description:
                             menu.addAction(_("Copy {}").format(_("NFT Description")), lambda: do_copy(description[2:]))
                         if commitment:
                             menu.addAction(_("Copy {}").format(_("NFT Commitment")), lambda: do_copy(commitment))
                         menu.addAction(_("Copy Outpoint").format(_("Outpoint")), lambda: do_copy(outpoint))
-                    elif copy_text:
+                    elif category_id:
+                        # Category-only: Add the "Fetch Metadata" menu item before any copy items
+                        menu.addAction(_("Fetch Category Metadata"),
+                                       lambda: do_update_token_meta(self.parent, category_id))
+
+                    if not nft_row and copy_text:
                         menu.addAction(_("Copy {}").format(column_title), lambda: do_copy(copy_text))
                         if col == self.Col.category and category_id:
                             action_text = _("Copy Category ID")
