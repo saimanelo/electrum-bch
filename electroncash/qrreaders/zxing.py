@@ -28,7 +28,7 @@ try:
     import zxingcpp
 except ModuleNotFoundError:
     import sys
-    print("\n\nzxing-cpp module missing. Please try installing it with: python3 -m pip install 'zxing-cpp>=2.2.0'"
+    print("\n\nzxing-cpp module missing. Please try installing it with: python3 -m pip install 'zxing-cpp>=2.3.0'"
           " --user\n\n", file=sys.stderr)
     raise
 
