@@ -1,6 +1,6 @@
 Cython>=0.27,<3
 trezor[hidapi]>=0.13.9
-keepkey>=6.1
+keepkey @ https://github.com/zquestz/python-keepkey/archive/3efc32c5c2c02d1a52663c0fd97bc656227affdd.tar.gz
 btchip-python
 hidapi
 protobuf
