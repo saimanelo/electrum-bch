@@ -113,9 +113,7 @@ mkdir -p "$CACHEDIR/pip_cache"
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-pip.txt"
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-build-appimage.txt"
 CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements.txt"
-CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --only-binary PyQt5,PyQt5-Qt5 --cache-dir "$CACHEDIR/pip_cache" -r <(filter_deps /zxing-cpp/ < "$CONTRIB/deterministic-build/requirements-binaries.txt")
-# zxing-cpp 2.2.1 with patch for reproducible build, see https://github.com/zxing-cpp/zxing-cpp/pull/730
-CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --only-binary cmake --cache-dir "$CACHEDIR/pip_cache" git+https://github.com/EchterAgo/zxing-cpp.git@3ac618250672db83e7a37b4e43fe6f72b88756d4#subdirectory=wrappers/python
+CFLAGS="-g0" "$python" -m pip install --no-deps --no-warn-script-location --no-binary :all: --only-binary PyQt5,PyQt5-Qt5 --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-binaries.txt"
 # Temporary fix for hidapi incompatibility with Cython 3
 # See https://github.com/trezor/cython-hidapi/issues/155
 # We use PIP_CONSTRAINT as an environment variable instead of command line flag because it gets passed to subprocesses
