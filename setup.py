@@ -196,13 +196,15 @@ setup(
             'libsecp256k1*',
             'libzbar*',
             'locale/*/LC_MESSAGES/electron-cash.mo',
-            'tor/bin/*'
+            'tor/bin/*',
+            'paymentrequest.proto'
         ],
         'electroncash_plugins.shuffle_deprecated': [
             'servers.json'
         ],
         'electroncash_plugins.fusion': [
-            '*.svg', '*.png'
+            '*.svg', '*.png',
+            'protobuf/fusion.proto'
         ],
         # On Linux and Windows this means adding electroncash_gui/qt/data/*.ttf
         # On Darwin we don't use that font, so we don't add it to save space.
