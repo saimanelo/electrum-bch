@@ -44,7 +44,6 @@
 ## Contributing :handshake:
 
 Contributions are always welcome! Here’s how you can help:
-- **Report Bugs:** Open an [issue](https://github.com/YourUsername/ElectrumBCH/issues) with details.
 - **Propose Features:** Share your ideas in an issue or a pull request.
 - **Make Pull Requests:** Fork the repo, make changes, and submit a PR.
 
