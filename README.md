@@ -3,7 +3,7 @@
 [![Release](https://img.shields.io/github/v/release/saimanelo/electrum-bch?style=flat-square)](https://github.com/saimanelo/electrum-bch/releases/tag/v1.3.4)
 [![License](https://img.shields.io/github/license/saimanelo/electrum-bch?style=flat-square)](https://github.com/saimanelo/electrum-bch/blob/main/LICENCE)
 [![Python](https://img.shields.io/badge/Python-3.7%2B-blue.svg?style=flat-square)](https://www.python.org/)
-![Platform](https://img.shields.io/badge/Platform-Windows%20|%20macOS%20|%20Linux-lightgrey.svg?style=flat-square)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-orange.svg?style=flat-square)](https://github.com/saimanelo/electrum-bch/releases/tag/v1.3.4)
 
 > A Python-based Bitcoin Cash wallet with a focus on speed, security, and simplicity.
 
