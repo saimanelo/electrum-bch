@@ -21,7 +21,7 @@
 
 1. **Clone** the repository:
     ```bash
-    git clone https://github.com/YourUsername/ElectrumBCH.git
+    git clone https://github.com/saimanelo/ElectrumBCH.git
     ```
 2. **Navigate** to the project directory:
     ```bash
