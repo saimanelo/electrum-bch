@@ -25,7 +25,7 @@
     ```
 2. **Navigate** to the project directory:
     ```bash
-    cd ElectrumBCH
+    cd Electrum-BCH
     ```
 3. **Install** the dependencies:
     ```bash
