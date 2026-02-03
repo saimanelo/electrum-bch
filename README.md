@@ -21,7 +21,7 @@
 
 1. **Clone** the repository:
     ```bash
-    git clone https://github.com/saimanelo/ElectrumBCH.git
+    git clone https://github.com/saimanelo/Electrum-BCH.git
     ```
 2. **Navigate** to the project directory:
     ```bash
@@ -50,6 +50,8 @@ Contributions are always welcome! Here’s how you can help:
 For major changes, please open a discussion first to ensure your ideas align with the project’s goals.
 
 ## License :scroll:
+
+Official website: https://electrum-bch.org/
 
 This project is licensed under the [MIT License](LICENSE).
 
